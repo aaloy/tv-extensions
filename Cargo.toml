@@ -18,10 +18,10 @@ path = "src/lib.rs"
 [dependencies]
 # Turbo Vision without its terminal: `default-features = false` drops the
 # `native` feature (crossterm and arboard), so this crate builds for
-# wasm32-wasip1. The path is for development next to the core checkout;
-# the controller switches it to a git rev once core's host-driven hooks are
-# pushed.
-turbo-vision = { path = "../turbo-vision-wasm", default-features = false }
+# wasm32-wasip1. Pinned to core's `wasm-host-driven` branch until a
+# turbo-vision release carries the host-driven hooks (`Backend::is_host_driven`,
+# `Application::step`, `Table::column_offsets`).
+turbo-vision = { git = "https://github.com/aovestdipaperino/turbo-vision-4-rust", rev = "eae2cc843ed9744f8d5ece9571d3c2bcbedf602d", default-features = false }
 
 [lints.rust]
 missing_docs = "warn"
