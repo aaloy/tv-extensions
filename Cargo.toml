@@ -1,0 +1,31 @@
+[package]
+name = "tv-extensions"
+version = "0.1.0"
+edition = "2024"
+authors = ["Enzo Lombardi <enzinol@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/aovestdipaperino/tv-extensions"
+description = "Extensions for turbo-vision: host-driven applications for embedders such as WASM guests, and a table grid with column separators"
+keywords = ["tui", "turbo-vision", "wasm"]
+categories = ["command-line-interface", "wasm"]
+readme = "README.md"
+exclude = ["website/*", ".superpowers/*"]
+
+[lib]
+name = "tv_extensions"
+path = "src/lib.rs"
+
+[dependencies]
+# Turbo Vision without its terminal: `default-features = false` drops the
+# `native` feature (crossterm and arboard), so this crate builds for
+# wasm32-wasip1. The path is for development next to the core checkout;
+# the controller switches it to a git rev once core's host-driven hooks are
+# pushed.
+turbo-vision = { path = "../turbo-vision-wasm", default-features = false }
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

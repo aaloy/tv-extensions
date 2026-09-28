@@ -1,0 +1,67 @@
+site_name: tv-extensions
+site_description: Host-driven apps and a separator grid for turbo-vision
+site_author: Enzo Lombardi
+repo_url: https://github.com/aovestdipaperino/tv-extensions
+repo_name: aovestdipaperino/tv-extensions
+copyright: "&copy; 2026 Enzo Lombardi &middot; MIT licensed"
+
+# The pages are the repository's own docs/, so the site and the markdown
+# on GitHub never drift apart.
+docs_dir: ../docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow system
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Host-driven apps: host.md
+  - Grid: grid.md
