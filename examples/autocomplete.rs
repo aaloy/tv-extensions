@@ -1,13 +1,24 @@
 //! Autocomplete Example
-//! Demonstrates tv-extensions' `AutoComplete` in its two modes, side by
-//! side in one dialog:
-//! - Country requires a match (`require_match(true)`): the value must be
-//!   one of the countries. OK will not close the dialog while the field is
-//!   empty or holds anything else; an error line appears under the field
-//!   until it is fixed. Leaving the field fixes the spelling of a match
-//!   ("méxico" becomes "México").
-//! - Fruit takes free text (the default): the list only suggests, and any
-//!   text is kept.
+//! Demonstrates tv-extensions' `AutoComplete` and its two validation rules,
+//! which combine freely:
+//! - `required(true)`: the field may not be left blank.
+//! - `require_match(true)`: text that is not blank must be one of the items.
+//!
+//! The dialog has one field per combination that adds a rule:
+//! - Country, required and from the list: a country must be chosen.
+//! - Fruit, from the list but optional: blank is fine, anything else must
+//!   be a listed fruit.
+//! - City, required but free text: anything except blank; the list only
+//!   suggests.
+//!
+//! With neither rule, the default, any text is kept, blank included.
+//!
+//! OK checks the fields in order and stops at the first that breaks its
+//! rule, as Turbo Vision dialogs do: the dialog stays open and that field
+//! shows an error line under itself until it is edited. Fix it and press
+//! OK again to check the next. Leaving a field
+//! that must match fixes the spelling of a match ("méxico" becomes
+//! "México").
 //!
 //! Run with:
 //!   `cargo run --example autocomplete --features native`
@@ -23,7 +34,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use turbo_vision::app::Application;
-use turbo_vision::core::command::CM_OK;
+use turbo_vision::core::command::{CM_CANCEL, CM_OK};
 use turbo_vision::core::geometry::Rect;
 use turbo_vision::views::GroupLike;
 use turbo_vision::views::button::ButtonBuilder;
@@ -113,11 +124,34 @@ fn fruits() -> Vec<String> {
     .collect()
 }
 
+fn cities() -> Vec<String> {
+    [
+        "Amsterdam",
+        "Barcelona",
+        "Berlin",
+        "Bilbao",
+        "Lisboa",
+        "London",
+        "Madrid",
+        "Málaga",
+        "Palma",
+        "Paris",
+        "Porto",
+        "Roma",
+        "Sevilla",
+        "Valencia",
+        "Wien",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
+}
+
 fn main() -> turbo_vision::core::error::Result<()> {
     let mut app = Application::new()?;
 
     let (width, height) = app.terminal.size();
-    let (w, h) = (62, 20);
+    let (w, h) = (62, 22);
     let x = (width - w).max(0) / 2;
     let y = (height - h).max(0) / 2;
     let mut dialog = DialogBuilder::new()
@@ -127,40 +161,56 @@ fn main() -> turbo_vision::core::error::Result<()> {
 
     dialog.add(StaticText::new(
         Rect::new(2, 1, 58, 2),
-        "Country must come from the list; fruit can be anything.",
+        "OK checks each field against the rule on its right.",
     ));
 
-    // Strict: only a listed country. Each field's list opens below it, so
-    // the fields leave room for it (Country shows up to six rows).
-    dialog.add(StaticText::new(Rect::new(2, 3, 12, 4), "Country:"));
-    let country = Rc::new(RefCell::new(String::new()));
-    dialog.add(StaticText::new(Rect::new(44, 3, 58, 4), "(from list)"));
-    dialog.add(
-        AutoCompleteBuilder::new()
-            .bounds(Rect::new(12, 3, 42, 4))
-            .items(countries())
-            .data(country.clone())
-            .require_match(true)
-            .error_message("Choose a country from the list")
-            .build(),
-    );
+    // Each field leaves four rows below it: the error line and a list of up
+    // to three suggestions.
+    let mut row = 3;
+    let mut field = |label: &str, rule: &str, field: AutoCompleteBuilder| {
+        let data = Rc::new(RefCell::new(String::new()));
+        dialog.add(StaticText::new(Rect::new(2, row, 12, row + 1), label));
+        dialog.add(StaticText::new(Rect::new(44, row, 60, row + 1), rule));
+        dialog.add(
+            field
+                .bounds(Rect::new(12, row, 42, row + 1))
+                .data(data.clone())
+                .max_drop_rows(3)
+                .build(),
+        );
+        row += 5;
+        data
+    };
 
-    // Free text: the list only suggests.
-    dialog.add(StaticText::new(Rect::new(2, 11, 12, 12), "Fruit:"));
-    let fruit = Rc::new(RefCell::new(String::new()));
-    dialog.add(StaticText::new(Rect::new(44, 11, 58, 12), "(free text)"));
-    dialog.add(
+    // Required, and from the list: a country must be chosen.
+    let country = field(
+        "Country:",
+        "(required, list)",
         AutoCompleteBuilder::new()
-            .bounds(Rect::new(12, 11, 42, 12))
+            .items(countries())
+            .required(true)
+            .require_match(true)
+            .required_message("Choose a country")
+            .match_message("Choose a country from the list"),
+    );
+    // From the list, but optional: blank is fine.
+    let fruit = field(
+        "Fruit:",
+        "(optional, list)",
+        AutoCompleteBuilder::new()
             .items(fruits())
-            .data(fruit.clone())
-            .max_drop_rows(4)
-            .build(),
+            .require_match(true),
+    );
+    // Required, but free text: the list only suggests.
+    let city = field(
+        "City:",
+        "(required, any)",
+        AutoCompleteBuilder::new().items(cities()).required(true),
     );
 
     dialog.add(
         ButtonBuilder::new()
-            .bounds(Rect::new(17, 16, 29, 18))
+            .bounds(Rect::new(17, 18, 29, 20))
             .title("~O~K")
             .command(CM_OK)
             .default(true)
@@ -168,9 +218,9 @@ fn main() -> turbo_vision::core::error::Result<()> {
     );
     dialog.add(
         ButtonBuilder::new()
-            .bounds(Rect::new(33, 16, 45, 18))
+            .bounds(Rect::new(33, 18, 45, 20))
             .title("Cancel")
-            .command(turbo_vision::core::command::CM_CANCEL)
+            .command(CM_CANCEL)
             .build(),
     );
 
@@ -180,8 +230,9 @@ fn main() -> turbo_vision::core::error::Result<()> {
 
     if result == CM_OK {
         println!("OK");
-        println!("Country (from list): {}", country.borrow());
-        println!("Fruit (free text):   {}", fruit.borrow());
+        println!("Country (required, list): {}", country.borrow());
+        println!("Fruit (optional, list):   {}", fruit.borrow());
+        println!("City (required, any):     {}", city.borrow());
     } else {
         println!("Canceled");
     }

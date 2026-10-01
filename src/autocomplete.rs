@@ -29,75 +29,75 @@
 //! Clicking a suggestion accepts it, clicking the field opens the list, and
 //! the list closes when the field loses focus.
 //!
-//! # Free text or a forced choice
+//! # Validation
 //!
-//! By default the field keeps whatever is typed; the list only helps.
-//! With [`AutoComplete::set_require_match`] (or
-//! [`AutoCompleteBuilder::require_match`]) the value must be one of the
-//! items, like Borland's `TStringLookupValidator`:
+//! Two independent rules decide what `valid()` accepts, so what OK (or
+//! Enter) in a dialog lets through. Both are off by default:
 //!
-//! - A value is required. `valid()` refuses an empty field or text that is
-//!   not an item, so OK (or Enter) does not close the dialog. The field then
-//!   shows an error line under itself ("Choose a value from the list", set
-//!   with [`AutoComplete::set_error_message`]) until the value is fixed, and
-//!   the list opens on the closest matches. Cancel always closes.
-//! - Unknown text is left as typed, so the user sees what to fix. Leaving
-//!   the field only turns text that matches an item, ignoring case, into the
-//!   item's exact spelling ("méxico" becomes "México").
+//! - [`required`](AutoCompleteBuilder::required): the field may not be
+//!   blank.
+//! - [`require_match`](AutoCompleteBuilder::require_match): text that is not
+//!   blank must be one of the items (ignoring case), like Borland's
+//!   `TStringLookupValidator`.
+//!
+//! | `required` | `require_match` | Blank | Text not in the list | An item |
+//! |---|---|---|---|---|
+//! | no | no | ok | ok | ok |
+//! | yes | no | refused | ok | ok |
+//! | no | yes | ok | refused | ok |
+//! | yes | yes | refused | refused | ok |
+//!
+//! When the value is refused, the dialog stays open and the field shows an
+//! error line under itself, in Borland's error colours, until the text is
+//! edited or a suggestion picked: "A value is required" for a blank
+//! required field, "Choose a value from the list" for text that is not an
+//! item (change them with [`AutoCompleteBuilder::required_message`] and
+//! [`AutoCompleteBuilder::match_message`]). For text that is not an item,
+//! the list also opens on the closest matches. Cancel always closes. As in
+//! any Turbo Vision dialog, OK stops at the first field that refuses, so a
+//! second faulty field reports on the next OK.
+//!
+//! Unknown text is left as typed, so the user sees what to fix. Leaving a
+//! field that must match only fixes the spelling of a match ("méxico"
+//! becomes "México").
 //!
 //! # Example
 //!
-//! The two modes differ only in `require_match`. Here both fields get the
-//! same unknown name, "Kiwi", and lose focus; then the dialog asks them
-//! whether OK may close it:
+//! The same texts, checked as OK would check them, under each pair of
+//! rules:
 //!
 //! ```
 //! use std::{cell::RefCell, rc::Rc};
 //! use turbo_vision::core::command::CM_OK;
-//! use turbo_vision::core::event::Event;
 //! use turbo_vision::core::geometry::Rect;
 //! use turbo_vision::views::View;
 //! use tv_extensions::AutoCompleteBuilder;
 //!
-//! let fruits = ["Apple", "Banana", "Cherry"];
-//! let field = |data: &Rc<RefCell<String>>, require_match| {
+//! // Would OK accept `text` in a field with these rules?
+//! let ok = |required, require_match, text: &str| {
 //!     AutoCompleteBuilder::new()
 //!         .bounds(Rect::new(2, 2, 32, 3))
-//!         .items(fruits)
-//!         .data(data.clone())
+//!         .items(["Apple", "Banana", "Cherry"])
+//!         .data(Rc::new(RefCell::new(text.to_string())))
+//!         .required(required)
 //!         .require_match(require_match)
 //!         .build()
-//! };
-//! // Type `text` into a focused field, then move the focus away.
-//! let type_and_leave = |auto: &mut dyn View, text: &str| {
-//!     auto.set_focus(true);
-//!     for ch in text.chars() {
-//!         auto.handle_event(&mut Event::keyboard(ch as u16));
-//!     }
-//!     auto.set_focus(false);
-//!     auto.handle_event(&mut Event::broadcast(0)); // the next event settles it
+//!         .valid(CM_OK)
 //! };
 //!
-//! // Free text (the default): whatever is typed is kept.
-//! let free = Rc::new(RefCell::new(String::new()));
-//! let mut free_field = field(&free, false);
-//! type_and_leave(&mut free_field, "Kiwi");
-//! assert_eq!(*free.borrow(), "Kiwi");
-//! assert!(free_field.valid(CM_OK));
-//!
-//! // Must match: the value must be one of the items.
-//! let strict = Rc::new(RefCell::new(String::new()));
-//! let mut strict_field = field(&strict, true);
-//! type_and_leave(&mut strict_field, "Kiwi");
-//! assert!(!strict_field.valid(CM_OK)); // OK refused...
-//! assert!(strict_field.shows_error()); // ...with the error line under the field
-//! type_and_leave(&mut strict_field, "banana");
-//! assert_eq!(*strict.borrow(), "Banana"); // the item's own spelling
-//! assert!(strict_field.valid(CM_OK));
+//! // No rules (the default): anything, blank included.
+//! assert!(ok(false, false, "") && ok(false, false, "Kiwi"));
+//! // Required: anything but blank; the list only suggests.
+//! assert!(!ok(true, false, "") && ok(true, false, "Kiwi"));
+//! // Must match: blank, or one of the items.
+//! assert!(ok(false, true, "") && !ok(false, true, "Kiwi") && ok(false, true, "banana"));
+//! // Both: one of the items.
+//! assert!(!ok(true, true, "") && !ok(true, true, "Kiwi") && ok(true, true, "Banana"));
 //! ```
 //!
-//! `examples/autocomplete.rs` puts both modes in one dialog, where OK is
-//! refused, with the error line, until the strict field holds an item.
+//! `examples/autocomplete.rs` has a dialog with one field per rule
+//! combination; press OK with fields blank or holding unlisted text to see
+//! the error lines.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -128,9 +128,13 @@ const LIST_MATCH: u8 = 6;
 /// unmapped colour; the error line is drawn in it.
 const ERROR_ATTR: u8 = 0xCF;
 
-/// The error line's text unless [`AutoComplete::set_error_message`] says
-/// otherwise.
-const DEFAULT_ERROR_MESSAGE: &str = "Choose a value from the list";
+/// The error line for an empty required field, unless
+/// [`AutoComplete::set_required_message`] says otherwise.
+const DEFAULT_REQUIRED_MESSAGE: &str = "A value is required";
+
+/// The error line for text that is not an item, unless
+/// [`AutoComplete::set_match_message`] says otherwise.
+const DEFAULT_MATCH_MESSAGE: &str = "Choose a value from the list";
 
 /// Palette inside a dialog: the field maps like `InputLine`, the list like
 /// `ListBox` (26 normal, 27 selected, 28 the divider colour for matches).
@@ -196,16 +200,23 @@ fn find_match(haystack: &str, needle: &str) -> Option<usize> {
     hay.windows(pat.len()).position(|w| w == pat.as_slice())
 }
 
-/// What the field accepts, and whether a refused value is being reported.
+/// What `valid()` checks. The two rules are independent: with neither,
+/// anything goes, blank included.
+#[derive(Debug, Default, Clone, Copy)]
+struct Rules {
+    /// The field may not be blank.
+    required: bool,
+    /// Text that is not blank must be one of the items.
+    must_match: bool,
+}
+
+/// Why `valid()` refused the value; picks the error line's message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Mode {
-    /// Any text (the default).
-    Free,
-    /// The value must be one of the items.
-    MustMatch,
-    /// As `MustMatch`, and `valid()` refused the value: the error line shows
-    /// until it is edited or a suggestion is picked.
-    Refused,
+enum Refusal {
+    /// Blank, but required.
+    Empty,
+    /// Not blank, and not one of the items.
+    NotInList,
 }
 
 /// A text field that filters `items` to the ones matching the typed text,
@@ -235,10 +246,14 @@ pub struct AutoComplete {
     top: usize,
     /// Command broadcast when a suggestion is accepted. Zero sends none.
     on_select: CommandId,
-    mode: Mode,
+    rules: Rules,
+    /// Set while `valid()` has refused the value: the error line shows until
+    /// the text is edited or a suggestion is picked.
+    refused: Option<Refusal>,
     /// The text was edited since it was last settled.
     dirty: bool,
-    error_message: String,
+    required_message: String,
+    match_message: String,
 }
 
 impl AutoComplete {
@@ -265,9 +280,11 @@ impl AutoComplete {
             highlighted: 0,
             top: 0,
             on_select: 0,
-            mode: Mode::Free,
+            rules: Rules::default(),
+            refused: None,
             dirty: false,
-            error_message: DEFAULT_ERROR_MESSAGE.to_string(),
+            required_message: DEFAULT_REQUIRED_MESSAGE.to_string(),
+            match_message: DEFAULT_MATCH_MESSAGE.to_string(),
         };
         auto.cursor_pos = char_len(&auto.text.borrow());
         auto.refilter();
@@ -297,28 +314,36 @@ impl AutoComplete {
         self.on_select = command;
     }
 
-    /// Whether the value must be one of the items (default false, free
-    /// text). See the module docs for what strict mode does.
-    pub fn set_require_match(&mut self, require_match: bool) {
-        self.mode = if require_match {
-            Mode::MustMatch
-        } else {
-            Mode::Free
-        };
-        self.sync_height();
+    /// Whether the field may be left blank (default false: blank is
+    /// allowed). A required field refuses blank in `valid()`.
+    pub fn set_required(&mut self, required: bool) {
+        self.rules.required = required;
     }
 
-    /// The error line shown when strict mode refuses the value (default
+    /// Whether text that is not blank must be one of the items (default
+    /// false: any text). Blank is still allowed unless the field is also
+    /// [required](Self::set_required).
+    pub fn set_require_match(&mut self, require_match: bool) {
+        self.rules.must_match = require_match;
+    }
+
+    /// The error line when a required field is blank (default "A value is
+    /// required"). It is cut to the field's width.
+    pub fn set_required_message(&mut self, message: impl Into<String>) {
+        self.required_message = message.into();
+    }
+
+    /// The error line when the text is not one of the items (default
     /// "Choose a value from the list"). It is cut to the field's width.
-    pub fn set_error_message(&mut self, message: impl Into<String>) {
-        self.error_message = message.into();
+    pub fn set_match_message(&mut self, message: impl Into<String>) {
+        self.match_message = message.into();
     }
 
     /// True while the error line is showing: `valid()` refused the value
     /// and it has not been edited or picked since.
     #[must_use]
     pub fn shows_error(&self) -> bool {
-        self.mode == Mode::Refused
+        self.refused.is_some()
     }
 
     /// Replace the suggestion list and re-filter against the current text.
@@ -365,12 +390,12 @@ impl AutoComplete {
         self.items.iter().find(|item| same_text(item, text))
     }
 
-    /// Tidy the text after editing: in strict mode, text naming an item
-    /// takes the item's spelling. Anything else stays as typed, for
+    /// Tidy the text after editing: when it must match, text naming an
+    /// item takes the item's spelling. Anything else stays as typed, for
     /// `valid()` to report.
     fn settle(&mut self) {
         self.dirty = false;
-        if self.mode == Mode::Free {
+        if !self.rules.must_match {
             return;
         }
         let text = self.value();
@@ -380,15 +405,25 @@ impl AutoComplete {
     }
 
     fn hide_error(&mut self) {
-        if self.mode == Mode::Refused {
-            self.mode = Mode::MustMatch;
+        if self.refused.take().is_some() {
             self.sync_height();
         }
     }
 
     /// Rows under the field taken by the error line: one or none.
     fn error_rows(&self) -> usize {
-        usize::from(self.mode == Mode::Refused)
+        usize::from(self.refused.is_some())
+    }
+
+    /// What the rules say about `text`: `None` when it passes.
+    fn check(&self, text: &str) -> Option<Refusal> {
+        if text.is_empty() {
+            self.rules.required.then_some(Refusal::Empty)
+        } else if self.rules.must_match && self.exact_item(text).is_none() {
+            Some(Refusal::NotInList)
+        } else {
+            None
+        }
     }
 
     /// Put `value` in the field with the cursor at its end.
@@ -673,12 +708,16 @@ impl AutoComplete {
         }
     }
 
-    fn draw_error(&self, terminal: &mut Terminal) {
+    fn draw_error(&self, terminal: &mut Terminal, refusal: Refusal) {
+        let message = match refusal {
+            Refusal::Empty => &self.required_message,
+            Refusal::NotInList => &self.match_message,
+        };
         let width = self.width();
         let attr = Attr::from_u8(ERROR_ATTR);
         let mut row = DrawBuffer::new(width);
         row.move_char(0, ' ', attr, width);
-        for (i, ch) in self.error_message.chars().take(width).enumerate() {
+        for (i, ch) in message.chars().take(width).enumerate() {
             row.move_char(i, ch, attr, 1);
         }
         write_line_to_terminal(terminal, 0, 1, &row);
@@ -854,8 +893,8 @@ impl View for AutoComplete {
         }
         let text = self.text.borrow().clone();
         self.draw_field(terminal, &text);
-        if self.mode == Mode::Refused {
-            self.draw_error(terminal);
+        if let Some(refusal) = self.refused {
+            self.draw_error(terminal, refusal);
         }
         if self.open {
             self.draw_list(terminal, &text);
@@ -880,28 +919,28 @@ impl View for AutoComplete {
         }
     }
 
-    /// In strict mode, refuse to end the dialog (except with Cancel) unless
-    /// the text is one of the items. Matches Borland's `TInputLine::valid`
-    /// with a `TStringLookupValidator`.
+    /// Refuse to end the dialog (except with Cancel) while the text breaks
+    /// the field's rules: blank when required, or not an item when it must
+    /// match. Matches Borland's `TInputLine::valid` with a validator
+    /// (`TStringLookupValidator` for the match rule).
     fn valid(&mut self, command: CommandId) -> bool {
-        if command == CM_CANCEL || self.mode == Mode::Free {
+        if command == CM_CANCEL {
             return true;
         }
+        self.settle();
         let text = self.value();
-        if let Some(item) = self.exact_item(&text).cloned() {
-            self.replace_text(item);
-            self.dirty = false;
+        let Some(refusal) = self.check(&text) else {
             self.hide_error();
             self.close_list();
             return true;
-        }
+        };
         // Borland's validator shows a message box here, but `valid()` has no
         // access to the application to run one (core's own validators leave
         // `error()` empty for that reason). The field draws the error under
         // itself instead, which stays visible while the focus is on the OK
-        // button, and opens the list on what does match.
-        self.mode = Mode::Refused;
-        if self.is_focused() && !text.is_empty() {
+        // button; for unknown text it also opens the list on what does match.
+        self.refused = Some(refusal);
+        if refusal == Refusal::NotInList && self.is_focused() {
             self.refilter();
             self.open_list();
         }
@@ -944,8 +983,10 @@ pub struct AutoCompleteBuilder {
     min_chars: usize,
     max_drop_rows: usize,
     on_select: CommandId,
+    required: bool,
     require_match: bool,
-    error_message: Option<String>,
+    required_message: Option<String>,
+    match_message: Option<String>,
 }
 
 impl AutoCompleteBuilder {
@@ -960,8 +1001,10 @@ impl AutoCompleteBuilder {
             min_chars: 1,
             max_drop_rows: 6,
             on_select: 0,
+            required: false,
             require_match: false,
-            error_message: None,
+            required_message: None,
+            match_message: None,
         }
     }
 
@@ -1014,6 +1057,13 @@ impl AutoCompleteBuilder {
         self
     }
 
+    /// See [`AutoComplete::set_required`].
+    #[must_use]
+    pub fn required(mut self, required: bool) -> Self {
+        self.required = required;
+        self
+    }
+
     /// See [`AutoComplete::set_require_match`].
     #[must_use]
     pub fn require_match(mut self, require_match: bool) -> Self {
@@ -1021,10 +1071,17 @@ impl AutoCompleteBuilder {
         self
     }
 
-    /// See [`AutoComplete::set_error_message`].
+    /// See [`AutoComplete::set_required_message`].
     #[must_use]
-    pub fn error_message(mut self, message: impl Into<String>) -> Self {
-        self.error_message = Some(message.into());
+    pub fn required_message(mut self, message: impl Into<String>) -> Self {
+        self.required_message = Some(message.into());
+        self
+    }
+
+    /// See [`AutoComplete::set_match_message`].
+    #[must_use]
+    pub fn match_message(mut self, message: impl Into<String>) -> Self {
+        self.match_message = Some(message.into());
         self
     }
 
@@ -1044,9 +1101,13 @@ impl AutoCompleteBuilder {
         auto.set_min_chars(self.min_chars);
         auto.set_max_drop_rows(self.max_drop_rows);
         auto.set_on_select(self.on_select);
+        auto.set_required(self.required);
         auto.set_require_match(self.require_match);
-        if let Some(message) = self.error_message {
-            auto.set_error_message(message);
+        if let Some(message) = self.required_message {
+            auto.set_required_message(message);
+        }
+        if let Some(message) = self.match_message {
+            auto.set_match_message(message);
         }
         auto
     }
@@ -1352,13 +1413,64 @@ mod tests {
         assert!(!auto.valid(turbo_vision::core::command::CM_OK));
     }
 
+    /// `valid(CM_OK)` for each text, under the given rules.
+    fn verdicts(required: bool, must_match: bool) -> [bool; 3] {
+        ["", "Kiwi", "banana"].map(|text| {
+            let mut auto = AutoCompleteBuilder::new()
+                .bounds(Rect::new(0, 0, 20, 1))
+                .items(fruits())
+                .data(Rc::new(RefCell::new(text.to_string())))
+                .required(required)
+                .require_match(must_match)
+                .build();
+            auto.valid(turbo_vision::core::command::CM_OK)
+        })
+    }
+
     #[test]
-    fn strict_mode_requires_a_value() {
-        let (mut auto, data) = strict("");
+    fn required_and_require_match_combine() {
+        //                       blank  "Kiwi" "banana"
+        assert_eq!(verdicts(false, false), [true, true, true]);
+        assert_eq!(verdicts(true, false), [false, true, true]);
+        assert_eq!(verdicts(false, true), [true, false, true]);
+        assert_eq!(verdicts(true, true), [false, false, true]);
+    }
+
+    #[test]
+    fn a_required_field_refuses_blank_with_its_own_message() {
+        let mut auto = AutoCompleteBuilder::new()
+            .bounds(Rect::new(0, 0, 30, 1))
+            .items(fruits())
+            .required(true)
+            .build();
+        assert!(!auto.valid(turbo_vision::core::command::CM_OK));
+        assert_eq!(auto.refused, Some(Refusal::Empty));
+        assert_eq!(auto.bounds().height(), 2, "field and error line");
+        auto.set_focus(true);
+        type_str(&mut auto, "x");
+        assert!(!auto.shows_error(), "typing clears it");
+    }
+
+    #[test]
+    fn must_match_alone_allows_blank() {
+        let (mut auto, data) = strict("Cherry");
+        let mut ev = key(KB_BACKSPACE); // everything is selected on focus
+        auto.handle_event(&mut ev);
         blur(&mut auto);
         assert_eq!(*data.borrow(), "");
+        assert!(auto.valid(turbo_vision::core::command::CM_OK));
+    }
+
+    #[test]
+    fn required_and_must_match_refuse_blank_as_empty_not_unlisted() {
+        let mut auto = AutoCompleteBuilder::new()
+            .bounds(Rect::new(0, 0, 30, 1))
+            .items(fruits())
+            .required(true)
+            .require_match(true)
+            .build();
         assert!(!auto.valid(turbo_vision::core::command::CM_OK));
-        assert!(auto.shows_error());
+        assert_eq!(auto.refused, Some(Refusal::Empty));
     }
 
     #[test]
@@ -1412,13 +1524,16 @@ mod tests {
     }
 
     #[test]
-    fn the_error_message_can_be_changed() {
+    fn the_error_messages_can_be_changed() {
         let auto = AutoCompleteBuilder::new()
             .bounds(Rect::new(0, 0, 20, 1))
+            .required(true)
             .require_match(true)
-            .error_message("Tria un país")
+            .required_message("Cal un valor")
+            .match_message("Tria un país")
             .build();
-        assert_eq!(auto.error_message, "Tria un país");
+        assert_eq!(auto.required_message, "Cal un valor");
+        assert_eq!(auto.match_message, "Tria un país");
     }
 
     #[test]

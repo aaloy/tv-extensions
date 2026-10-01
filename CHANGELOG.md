@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `autocomplete`: `AutoComplete` and `AutoCompleteBuilder`, a text field
+  that filters a suggestion list as you type and highlights the matched
+  text. Keyboard and mouse selection, ASCII and Latin-1 input, colours from
+  the owner's palette (dialog or window), and an optional `on_select`
+  broadcast. Validation with two independent rules, both off by
+  default: `required` (not blank) and `require_match` (text that is not
+  blank must be an item). `valid()` refuses a value that breaks them, so a
+  dialog's OK cannot close on it, and the field shows an error line
+  (`required_message` / `match_message`) until it is fixed. From the
+  standalone `tvauto` crate. Example: `autocomplete`.
+
 ## [0.3.1] - 2026-10-02
 
 Requires turbo-vision 4.0.2, which sends the cursor to the backend on
@@ -34,14 +49,6 @@ Tracks turbo-vision 4.0 from crates.io. Forwards the `screenshot` feature.
 
 ### Added
 
-- `autocomplete`: `AutoComplete` and `AutoCompleteBuilder`, a text field
-  that filters a suggestion list as you type and highlights the matched
-  text. Keyboard and mouse selection, ASCII and Latin-1 input, colours from
-  the owner's palette (dialog or window), and an optional `on_select`
-  broadcast. Free text by default; `require_match` requires a value from
-  the items: `valid()` refuses anything else, so a dialog's OK cannot close
-  on it, and the field shows an error line (`error_message`) until it is
-  fixed. From the standalone `tvauto` crate. Example: `autocomplete`.
 - `host`: host-driven applications for an embedder that owns the screen and
   the event loop (a WASM guest such as a plank frame) — `HostBackend`,
   `HostInput`, `pump`. Builds without turbo-vision's `native` feature, so

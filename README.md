@@ -74,36 +74,47 @@ match popup_menu(&mut app.terminal, position, menu) {
 
 A text field that filters a suggestion list as you type, with the matched text highlighted. Up/Down or the mouse pick a suggestion, Enter accepts it, Esc closes the list. Matching ignores case and accepts Latin-1 letters such as `é` or `ñ`. Always available, no feature flag. [docs/autocomplete.md](docs/autocomplete.md) has the rest.
 
-It works in one of two ways:
+Two independent rules, both off by default, decide what a dialog's OK accepts:
 
-- **Free text** (the default): the list only suggests; whatever is typed is kept.
-- **Must match** (`require_match(true)`): a value from the list is required, like Borland's `TStringLookupValidator`. A dialog's OK is refused while the field is empty or holds anything else, and an error line ("Choose a value from the list", or your own text via `error_message`) appears under the field until it is fixed. Leaving the field fixes the spelling of a match (`méxico` → `México`).
+- `required(true)`: the field may not be blank.
+- `require_match(true)`: text that is not blank must be one of the items, like Borland's `TStringLookupValidator`.
+
+| `required` | `require_match` | Accepts |
+|---|---|---|
+| no | no | anything, blank included (free text) |
+| yes | no | anything but blank; the list only suggests |
+| no | yes | blank, or one of the items |
+| yes | yes | one of the items |
+
+A refused value keeps the dialog open and shows an error line under the field ("A value is required" or "Choose a value from the list", or your own text via `required_message` / `match_message`) until it is fixed. Leaving a field that must match fixes the spelling of a match (`méxico` → `México`).
 
 ```rust
 use std::{cell::RefCell, rc::Rc};
 use turbo_vision::core::geometry::Rect;
 use tv_extensions::AutoCompleteBuilder;
 
-// Free text: the list suggests, any text is kept
-let fruit = Rc::new(RefCell::new(String::new()));
-let fruit_field = AutoCompleteBuilder::new()
-    .bounds(Rect::new(12, 11, 42, 12))
-    .items(["Apple", "Banana", "Cherry"])
-    .data(fruit.clone())
-    .build();
-
-// Must match: only a listed country
+// A country must be chosen: required, and from the list
 let country = Rc::new(RefCell::new(String::new()));
 let country_field = AutoCompleteBuilder::new()
     .bounds(Rect::new(12, 3, 42, 4))
     .items(["Austria", "Australia", "México"])
     .data(country.clone())
+    .required(true)
     .require_match(true)
-    .error_message("Choose a country from the list")
+    .match_message("Choose a country from the list")
+    .build();
+
+// Optional, but if given it must be a listed fruit
+let fruit = Rc::new(RefCell::new(String::new()));
+let fruit_field = AutoCompleteBuilder::new()
+    .bounds(Rect::new(12, 8, 42, 9))
+    .items(["Apple", "Banana", "Cherry"])
+    .data(fruit.clone())
+    .require_match(true)
     .build();
 ```
 
-`cargo run --example autocomplete --features native` shows both in one dialog.
+`cargo run --example autocomplete --features native` shows the combinations in one dialog.
 
 ## Key translation
 
