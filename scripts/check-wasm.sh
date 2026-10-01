@@ -5,3 +5,4 @@
 set -e
 cd "$(dirname "$0")/.."
 cargo check --lib --target wasm32-wasip1
+cargo check --lib --features csv --target wasm32-wasip1

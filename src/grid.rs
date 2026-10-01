@@ -150,7 +150,7 @@ impl Grid {
 
     /// The text of the focused cell ([`Table::selected_cell`]).
     #[must_use]
-    pub fn selected_cell(&self) -> Option<&str> {
+    pub fn selected_cell(&self) -> Option<String> {
         self.table.selected_cell()
     }
 

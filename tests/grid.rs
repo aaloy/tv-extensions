@@ -211,7 +211,7 @@ fn the_forwarded_table_api_reaches_the_inner_table() {
     let mut g = grid();
     assert_eq!(g.row_count(), 3);
     assert_eq!(g.columns().len(), 3);
-    assert_eq!(g.selected_cell(), Some("b1"));
+    assert_eq!(g.selected_cell(), Some(String::from("b1")));
     g.set_selected_row(2);
     g.set_selected_col(0);
     assert_eq!(g.table().selected_row(), Some(2));
