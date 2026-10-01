@@ -72,7 +72,7 @@ match popup_menu(&mut app.terminal, position, menu) {
 
 ## AutoComplete
 
-A text field that filters a suggestion list as you type, with the matched text highlighted. Up/Down or the mouse pick a suggestion, Enter accepts it, Esc closes the list. Matching ignores case and accepts Latin-1 letters such as `é` or `ñ`. While the list is open the field's bounds grow over it, so add the field after any sibling the list may cover. Always available, no feature flag. Run `cargo run --example autocomplete --features native` to try it.
+A text field that filters a suggestion list as you type, with the matched text highlighted. Up/Down or the mouse pick a suggestion, Enter accepts it, Esc closes the list. Matching ignores case and accepts Latin-1 letters such as `é` or `ñ`. Free text by default; with `require_match(true)` the value must be one of the items — leaving the field snaps it to the item's spelling or back to the last valid choice, and `valid()` keeps the dialog's OK from closing it on anything else (like Borland's `TStringLookupValidator`). While the list is open the field's bounds grow over it, so add the field after any sibling the list may cover. Always available, no feature flag. Run `cargo run --example autocomplete --features native` to try it.
 
 ```rust
 use std::{cell::RefCell, rc::Rc};
@@ -84,6 +84,7 @@ let field = AutoCompleteBuilder::new()
     .bounds(Rect::new(16, 2, 46, 3))
     .items(["Austria", "Australia", "Belgium"])
     .data(country.clone())
+    .require_match(true) // only a listed country; omit for free text
     .build();
 assert!(!field.is_open());
 ```

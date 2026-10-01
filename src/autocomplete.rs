@@ -29,6 +29,21 @@
 //! Clicking a suggestion accepts it, clicking the field opens the list, and
 //! the list closes when the field loses focus.
 //!
+//! # Free text or a forced choice
+//!
+//! By default the field keeps whatever is typed; the list only helps.
+//! With [`AutoComplete::set_require_match`] (or
+//! [`AutoCompleteBuilder::require_match`]) the value must be one of the
+//! items, like Borland's `TStringLookupValidator`:
+//!
+//! - Leaving the field turns text that matches an item, ignoring case, into
+//!   that item's exact spelling, and puts anything else back to the last
+//!   accepted value. An empty field is allowed and means "no choice".
+//! - `valid()` refuses an unknown value, so OK (or Enter) does not close
+//!   the dialog while the field holds one. The list opens on the closest
+//!   matches instead, since there is no message box to show. Cancel always
+//!   closes.
+//!
 //! # Example
 //!
 //! ```
@@ -48,7 +63,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use turbo_vision::core::command::CommandId;
+use turbo_vision::core::command::{CM_CANCEL, CommandId};
 use turbo_vision::core::draw::DrawBuffer;
 use turbo_vision::core::event::{
     Event, EventType, KB_BACKSPACE, KB_DEL, KB_DOWN, KB_END, KB_ENTER, KB_ESC, KB_ESC_ESC, KB_HOME,
@@ -116,6 +131,11 @@ fn lower(c: char) -> char {
     c.to_lowercase().next().unwrap_or(c)
 }
 
+/// True when `a` and `b` are the same text, ignoring case.
+fn same_text(a: &str, b: &str) -> bool {
+    a.chars().map(lower).eq(b.chars().map(lower))
+}
+
 /// Case-insensitive position (in chars) of `needle` inside `haystack`, if any.
 fn find_match(haystack: &str, needle: &str) -> Option<usize> {
     if needle.is_empty() {
@@ -156,6 +176,13 @@ pub struct AutoComplete {
     top: usize,
     /// Command broadcast when a suggestion is accepted. Zero sends none.
     on_select: CommandId,
+    /// When set, the value must be one of `items` (or empty).
+    require_match: bool,
+    /// The last value known to be acceptable, restored when strict mode
+    /// rejects what was typed.
+    accepted: String,
+    /// The text was edited since it was last accepted.
+    dirty: bool,
 }
 
 impl AutoComplete {
@@ -182,7 +209,11 @@ impl AutoComplete {
             highlighted: 0,
             top: 0,
             on_select: 0,
+            require_match: false,
+            accepted: String::new(),
+            dirty: false,
         };
+        auto.accepted = auto.value();
         auto.cursor_pos = char_len(&auto.text.borrow());
         auto.refilter();
         auto
@@ -211,6 +242,12 @@ impl AutoComplete {
         self.on_select = command;
     }
 
+    /// Whether the value must be one of the items (default false, free
+    /// text). See the module docs for what strict mode does.
+    pub fn set_require_match(&mut self, require_match: bool) {
+        self.require_match = require_match;
+    }
+
     /// Replace the suggestion list and re-filter against the current text.
     pub fn set_items(&mut self, items: Vec<String>) {
         self.items = items;
@@ -235,10 +272,52 @@ impl AutoComplete {
     /// on, so closing there would drop the list under the very click that
     /// picks from it. This runs on the next event or draw instead, which
     /// still hides the list before a field that lost focus is drawn again.
+    /// The same deferral applies to settling edited text (see `settle`):
+    /// doing it on that transient focus loss would undo text the user is
+    /// still typing whenever they click in their own field.
     fn close_if_blurred(&mut self) {
-        if self.open && !self.is_focused() {
+        if self.is_focused() {
+            return;
+        }
+        if self.open {
             self.close_list();
         }
+        if self.dirty {
+            self.settle();
+        }
+    }
+
+    /// The item `text` names, ignoring case.
+    fn exact_item(&self, text: &str) -> Option<&String> {
+        self.items.iter().find(|item| same_text(item, text))
+    }
+
+    /// Accept the text after editing: as typed in free mode; in strict mode
+    /// as the matching item's spelling, or back to the last accepted value.
+    fn settle(&mut self) {
+        self.dirty = false;
+        let text = self.value();
+        let resolved = if !self.require_match || text.is_empty() {
+            Some(text)
+        } else {
+            self.exact_item(&text).cloned()
+        };
+        let value = resolved.unwrap_or_else(|| self.accepted.clone());
+        self.replace_text(value.clone());
+        self.accepted = value;
+    }
+
+    /// Put `value` in the field with the cursor at its end.
+    fn replace_text(&mut self, value: String) {
+        if *self.text.borrow() == value {
+            return;
+        }
+        self.cursor_pos = char_len(&value);
+        *self.text.borrow_mut() = value;
+        self.clear_selection();
+        self.first_pos = 0;
+        self.make_cursor_visible();
+        self.refilter();
     }
 
     /// Recompute `filtered` from `items` against the current text, and
@@ -335,6 +414,8 @@ impl AutoComplete {
             .and_then(|&i| self.items.get(i))
             .cloned();
         if let Some(chosen) = chosen {
+            self.accepted.clone_from(&chosen);
+            self.dirty = false;
             self.cursor_pos = char_len(&chosen);
             *self.text.borrow_mut() = chosen;
             self.sel_start = 0;
@@ -559,6 +640,7 @@ impl AutoComplete {
                 }
                 self.make_cursor_visible();
                 self.refilter();
+                self.dirty = true;
             }
             KB_DEL => {
                 if self.has_selection() {
@@ -572,6 +654,7 @@ impl AutoComplete {
                 }
                 self.make_cursor_visible();
                 self.refilter();
+                self.dirty = true;
             }
             KB_LEFT | KB_RIGHT | KB_HOME | KB_END => {
                 let len = char_len(&self.text.borrow());
@@ -593,6 +676,7 @@ impl AutoComplete {
                 }
                 self.make_cursor_visible();
                 self.refilter();
+                self.dirty = true;
             }
         }
         true
@@ -686,6 +770,31 @@ impl View for AutoComplete {
         }
     }
 
+    /// In strict mode, refuse to end the dialog (except with Cancel) while
+    /// the text is not one of the items. Matches Borland's `TInputLine::valid`
+    /// with a `TStringLookupValidator`.
+    fn valid(&mut self, command: CommandId) -> bool {
+        if command == CM_CANCEL || !self.require_match {
+            return true;
+        }
+        let text = self.value();
+        if text.is_empty() {
+            return true;
+        }
+        if let Some(item) = self.exact_item(&text).cloned() {
+            self.replace_text(item.clone());
+            self.accepted = item;
+            self.dirty = false;
+            self.close_list();
+            return true;
+        }
+        // Core's validators have no message box to report with; showing
+        // what does match tells the user why the dialog stayed open.
+        self.refilter();
+        self.open_list();
+        false
+    }
+
     fn get_palette(&self) -> Option<Palette> {
         Some(Palette::from_slice(self.palette_slice()))
     }
@@ -721,6 +830,7 @@ pub struct AutoCompleteBuilder {
     min_chars: usize,
     max_drop_rows: usize,
     on_select: CommandId,
+    require_match: bool,
 }
 
 impl AutoCompleteBuilder {
@@ -735,6 +845,7 @@ impl AutoCompleteBuilder {
             min_chars: 1,
             max_drop_rows: 6,
             on_select: 0,
+            require_match: false,
         }
     }
 
@@ -787,6 +898,13 @@ impl AutoCompleteBuilder {
         self
     }
 
+    /// See [`AutoComplete::set_require_match`].
+    #[must_use]
+    pub fn require_match(mut self, require_match: bool) -> Self {
+        self.require_match = require_match;
+        self
+    }
+
     /// Build the field.
     ///
     /// # Panics
@@ -803,6 +921,7 @@ impl AutoCompleteBuilder {
         auto.set_min_chars(self.min_chars);
         auto.set_max_drop_rows(self.max_drop_rows);
         auto.set_on_select(self.on_select);
+        auto.set_require_match(self.require_match);
         auto
     }
 
@@ -1063,5 +1182,140 @@ mod tests {
         auto.handle_event(&mut ev);
         assert_eq!(ev.what, EventType::Broadcast);
         assert_eq!(ev.command, 777);
+    }
+
+    /// A field as it sits in a dialog: focused, with `initial` as its value.
+    fn strict(initial: &str) -> (AutoComplete, Rc<RefCell<String>>) {
+        let data = Rc::new(RefCell::new(initial.to_string()));
+        let mut auto = AutoCompleteBuilder::new()
+            .bounds(Rect::new(0, 0, 20, 1))
+            .items(fruits())
+            .data(data.clone())
+            .require_match(true)
+            .build();
+        auto.set_focus(true);
+        (auto, data)
+    }
+
+    /// Leave the field: focus goes elsewhere and the next event arrives.
+    fn blur(auto: &mut AutoComplete) {
+        auto.set_focus(false);
+        let mut ev = Event::broadcast(1);
+        auto.handle_event(&mut ev);
+    }
+
+    #[test]
+    fn free_text_is_kept_by_default() {
+        let (mut auto, data) = make();
+        type_str(&mut auto, "Durian");
+        blur(&mut auto);
+        assert_eq!(*data.borrow(), "Durian");
+        assert!(auto.valid(turbo_vision::core::command::CM_OK));
+    }
+
+    #[test]
+    fn strict_mode_puts_unknown_text_back_on_leaving() {
+        let (mut auto, data) = strict("Cherry");
+        type_str(&mut auto, "Durian");
+        blur(&mut auto);
+        assert_eq!(*data.borrow(), "Cherry");
+    }
+
+    #[test]
+    fn strict_mode_takes_the_items_spelling_on_leaving() {
+        let (mut auto, data) = strict("");
+        type_str(&mut auto, "bLUEberry");
+        blur(&mut auto);
+        assert_eq!(*data.borrow(), "Blueberry");
+    }
+
+    #[test]
+    fn strict_mode_reverts_to_the_last_chosen_suggestion() {
+        let (mut auto, data) = strict("");
+        type_str(&mut auto, "ban");
+        let mut ev = key(KB_ENTER);
+        auto.handle_event(&mut ev);
+        assert_eq!(*data.borrow(), "Banana");
+        type_str(&mut auto, "zzz"); // field still focused: appends
+        blur(&mut auto);
+        assert_eq!(*data.borrow(), "Banana");
+    }
+
+    #[test]
+    fn strict_mode_allows_an_empty_field() {
+        let (mut auto, data) = strict("Cherry");
+        let mut ev = key(KB_BACKSPACE); // everything is selected on focus
+        auto.handle_event(&mut ev);
+        blur(&mut auto);
+        assert_eq!(*data.borrow(), "");
+        assert!(auto.valid(turbo_vision::core::command::CM_OK));
+    }
+
+    #[test]
+    fn strict_valid_refuses_unknown_text_and_shows_the_matches() {
+        use turbo_vision::core::command::{CM_CANCEL, CM_OK};
+        let (mut auto, data) = strict("");
+        type_str(&mut auto, "berr");
+        let mut ev = key(KB_ESC); // close the list, keep the text
+        auto.handle_event(&mut ev);
+        assert!(!auto.valid(CM_OK));
+        assert!(auto.is_open(), "the matches are shown as the error");
+        assert_eq!(*data.borrow(), "berr", "the text is left to fix");
+        assert!(auto.valid(CM_CANCEL));
+    }
+
+    #[test]
+    fn strict_valid_accepts_an_item_in_any_case() {
+        let (mut auto, data) = strict("");
+        type_str(&mut auto, "cherry");
+        let mut ev = key(KB_ESC);
+        auto.handle_event(&mut ev);
+        assert!(auto.valid(turbo_vision::core::command::CM_OK));
+        assert_eq!(*data.borrow(), "Cherry");
+    }
+
+    #[test]
+    fn strict_dialog_will_not_close_on_ok_while_the_field_holds_unknown_text() {
+        // The modal loop closes a dialog only when `valid(end_state)` holds;
+        // the dialog asks every child.
+        use turbo_vision::core::command::{CM_CANCEL, CM_OK};
+        use turbo_vision::views::dialog::Dialog;
+        let mut dialog = Dialog::new(Rect::new(0, 0, 40, 12), "Pick");
+        let data = Rc::new(RefCell::new(String::new()));
+        let mut auto = AutoComplete::new(Rect::new(5, 2, 25, 3), fruits(), data.clone());
+        auto.set_require_match(true);
+        dialog.add(auto);
+        dialog.set_initial_focus();
+        type_str(&mut dialog, "kiwi");
+        assert!(!dialog.valid(CM_OK));
+        assert!(dialog.valid(CM_CANCEL));
+        for _ in 0..4 {
+            let mut ev = key(KB_BACKSPACE);
+            dialog.handle_event(&mut ev);
+        }
+        type_str(&mut dialog, "apple");
+        assert!(dialog.valid(CM_OK));
+        assert_eq!(*data.borrow(), "Apple");
+    }
+
+    #[test]
+    fn strict_mode_keeps_typed_text_through_a_click_in_the_field() {
+        // A click makes the group clear and restore the field's focus;
+        // that must not count as leaving it.
+        let mut group = Group::new(Rect::new(0, 0, 40, 12));
+        let data = Rc::new(RefCell::new(String::new()));
+        let mut auto = AutoComplete::new(Rect::new(5, 2, 25, 3), fruits(), data.clone());
+        auto.set_require_match(true);
+        group.add(auto);
+        group.set_initial_focus();
+        type_str(&mut group, "bl");
+        let mut ev = Event::mouse(
+            EventType::MouseDown,
+            Point::new(6, 2),
+            MB_LEFT_BUTTON,
+            false,
+        );
+        group.handle_event(&mut ev);
+        assert_eq!(*data.borrow(), "bl");
     }
 }
