@@ -4,8 +4,12 @@
 //! the session, each frame is copied cell by cell to the screen.
 //!
 //! Run with:
+//!   `cargo run --example csv_edit --features csv,native -- path/to/file.csv`
 //!   `cargo run --example csv_edit --features csv,native -- [DIR] [FILE.csv]`
-//! DIR defaults to the current directory; with no FILE a new document opens.
+//! A single argument is split into a directory and a file name at its last
+//! path separator (so `a/b.csv` opens `b.csv` in `a`, and a bare `b.csv`
+//! opens it in the current directory); `DIR FILE` still works as two
+//! arguments. With no file name, a new document opens.
 
 // (C) 2026 - Enzo Lombardi
 
@@ -16,10 +20,71 @@ use turbo_vision::core::event::EventType;
 use turbo_vision::terminal::Terminal;
 use tv_extensions::csv::{FsDisk, Session};
 
+/// Splits the command-line arguments into `(dir, file)`: two arguments are
+/// `DIR FILE` as-is; a single argument is a path, split at its last path
+/// separator (`.../a/b.csv` -> `(".../a", "b.csv")`, `b.csv` -> `(".", "b.csv")`);
+/// no arguments means `(".", "")`, a new document in the current directory.
+fn dir_and_file(mut args: impl Iterator<Item = String>) -> (String, String) {
+    let first = args.next();
+    let second = args.next();
+    match (first, second) {
+        (Some(dir), Some(file)) => (dir, file),
+        (Some(path), None) => {
+            let p = std::path::Path::new(&path);
+            match p.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+                Some(parent) => (
+                    parent.to_string_lossy().into_owned(),
+                    p.file_name()
+                        .map_or_else(String::new, |f| f.to_string_lossy().into_owned()),
+                ),
+                None => (".".to_string(), path),
+            }
+        }
+        (None, _) => (".".to_string(), String::new()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dir_and_file;
+
+    fn split(args: &[&str]) -> (String, String) {
+        dir_and_file(args.iter().map(ToString::to_string))
+    }
+
+    #[test]
+    fn no_arguments_is_a_new_document_here() {
+        assert_eq!(split(&[]), (".".to_string(), String::new()));
+    }
+
+    #[test]
+    fn a_single_bare_name_opens_it_here() {
+        assert_eq!(split(&["file.csv"]), (".".to_string(), "file.csv".to_string()));
+    }
+
+    #[test]
+    fn a_single_path_is_split_at_its_last_separator() {
+        assert_eq!(
+            split(&["a/b.csv"]),
+            ("a".to_string(), "b.csv".to_string())
+        );
+        assert_eq!(
+            split(&["dir/sub/file.csv"]),
+            ("dir/sub".to_string(), "file.csv".to_string())
+        );
+    }
+
+    #[test]
+    fn dir_and_file_arguments_still_work() {
+        assert_eq!(
+            split(&["dir", "file.csv"]),
+            ("dir".to_string(), "file.csv".to_string())
+        );
+    }
+}
+
 fn main() -> io::Result<()> {
-    let mut args = std::env::args().skip(1);
-    let dir = args.next().unwrap_or_else(|| ".".into());
-    let file = args.next().unwrap_or_default();
+    let (dir, file) = dir_and_file(std::env::args().skip(1));
 
     let mut terminal = Terminal::init().map_err(io::Error::other)?;
     let (w, h) = terminal.size();
