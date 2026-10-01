@@ -57,5 +57,9 @@ csv = []
 missing_docs = "warn"
 unsafe_code = "forbid"
 
+[[example]]
+name = "csv_edit"
+required-features = ["csv", "native"]
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
