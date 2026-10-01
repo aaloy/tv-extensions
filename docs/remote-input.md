@@ -29,15 +29,12 @@ tv_extensions::remote_input::enable_from_env(&mut terminal)?;
 The listener binds to `127.0.0.1` only, so it is reachable from the local
 machine but not from the network.
 
-> **With a turbo-vision whose `Application::new` still reads
-> `TV_REMOTE_KEYS` itself** (true of the core revision this crate currently
-> pins), don't also call `enable_from_env` after `Application::new()`: core
-> already bound that port, and the second bind fails with `AddrInUse`. Either
-> let core's own listener serve `TV_REMOTE_KEYS`, or unset the variable
-> before constructing the `Application` and call [`enable`] or
-> `enable_from_env` yourself afterward. Once core stops reading
-> `TV_REMOTE_KEYS` itself, this module's `enable_from_env` is the only
-> listener and the conflict goes away.
+> **With turbo-vision 3.x, whose `Application::new` read `TV_REMOTE_KEYS`
+> itself**, calling `enable_from_env` after `Application::new()` would try
+> to bind the same port a second time and fail with `AddrInUse`. From
+> turbo-vision 4.0 (the version this crate now depends on), core no longer
+> reads `TV_REMOTE_KEYS` itself, so this module's `enable_from_env` is the
+> only listener and the conflict does not arise.
 
 ## Protocol
 

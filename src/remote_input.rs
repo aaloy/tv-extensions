@@ -155,14 +155,12 @@ fn port_from(value: Option<String>) -> Option<u16> {
 /// Returns `Ok(false)`, doing nothing, when the variable is unset or not a
 /// port number.
 ///
-/// With a turbo-vision whose `Application::new` already reads
-/// `TV_REMOTE_KEYS` itself and binds its own listener on that port (true of
-/// the pinned core revision this crate depends on today), calling this
-/// function afterward tries to bind the same port a second time and gets
-/// `AddrInUse`. Either don't call `enable_from_env` with such a core, or
-/// unset `TV_REMOTE_KEYS` before `Application::new` and set it again (or
-/// call [`enable`] directly) afterward. A core revision that has had its
-/// own remote input removed does not have this conflict.
+/// With turbo-vision 3.x, whose `Application::new` read `TV_REMOTE_KEYS`
+/// itself and bound its own listener on that port, calling this function
+/// afterward would try to bind the same port a second time and get
+/// `AddrInUse`. From turbo-vision 4.0, core no longer reads
+/// `TV_REMOTE_KEYS`, so this module's `enable_from_env` is the only
+/// listener and that conflict does not arise.
 ///
 /// # Errors
 ///

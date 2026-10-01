@@ -2,6 +2,14 @@
 
 Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 
+## Getting started
+
+```toml
+[dependencies]
+turbo-vision = { version = "4.0", default-features = false }
+tv-extensions = "0.2"
+```
+
 ## Why a separate crate
 
 Turbo Vision's core is a port of a framework whose design was settled in 1990, and it earns its keep by staying small and stable. Host-driven embedding (in a host such as a plank WASM frame, where the host owns the screen and the event loop) and the extra widgets and protocols above are newer and still-moving use cases, each with its own pace of change, so keeping them here lets them change and version on their own. Core carries only the public API and the small set of hooks this crate builds on: `Backend::is_host_driven` and `Application::step` for host-driven embedding, plus `Terminal::event_injector`, the capture hook, `Terminal::write_raw`, and the public `InputParser` that the remote-input, graphics and SSH modules write and read through.

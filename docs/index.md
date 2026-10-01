@@ -12,15 +12,9 @@ The crate depends on turbo-vision without its `native` feature, so it builds for
 
 ```toml
 [dependencies]
-turbo-vision = { git = "https://github.com/aovestdipaperino/turbo-vision-4-rust", rev = "6d299279b71cf8fdefec60c3f52da1d04e8afcbf", default-features = false }
-tv-extensions = { git = "https://github.com/aovestdipaperino/tv-extensions" }
+turbo-vision = { version = "4.0", default-features = false }
+tv-extensions = "0.2"
 ```
-
-The `rev` must match the commit tv-extensions itself pins in its
-`Cargo.toml` — a different `turbo-vision` version here gives Cargo two
-separate copies of the crate (one straight from `crates.io` or another
-commit, one pulled in transitively by tv-extensions), which do not share
-types with each other.
 
 A host-driven application never runs its own loop. The host pushes events into a `HostInput`, calls `pump` once per frame, and reads the finished cells out of the terminal buffer:
 

@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-10-01
+
+Tracks turbo-vision 4.0 from crates.io. Forwards the `screenshot` feature.
 
 ### Added
 
@@ -45,10 +47,10 @@
 
 ### Changed
 
-- `tv-extensions` now tracks turbo-vision `main` (pinned by commit, not by
-  release), to carry the host-driven hooks (`Backend::is_host_driven`,
-  `Application::step`) this crate depends on, ahead of a core release that
-  includes them.
+- `tv-extensions` now depends on turbo-vision 4.0 from crates.io, which
+  carries the host-driven hooks (`Backend::is_host_driven`,
+  `Application::step`) this crate depends on, and forwards core's
+  `screenshot` feature.
 - `tv-extensions` is now the home for every niche feature that left
   turbo-vision core: the CSV editor, the logging window, Kitty/ANSI
   graphics, remote input, SSH, `ScrollPane` and popup menus, plus

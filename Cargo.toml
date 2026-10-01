@@ -17,9 +17,9 @@ path = "src/lib.rs"
 
 [dependencies]
 # Turbo Vision without its terminal by default (`native` off), so the crate
-# builds for wasm32-wasip1. Pinned to a core `main` commit that carries the
-# plan-1 hooks until a release does.
-turbo-vision = { git = "https://github.com/aovestdipaperino/turbo-vision-4-rust", rev = "6d299279b71cf8fdefec60c3f52da1d04e8afcbf", default-features = false }
+# builds for wasm32-wasip1. From crates.io now that 4.0 carries the
+# host-driven hooks this crate depends on.
+turbo-vision = { version = "4.0", default-features = false }
 tracing = { version = "0.1", optional = true }
 base64 = { version = "0.22", optional = true }
 chrono = { version = "0.4.45", optional = true }
@@ -34,7 +34,7 @@ ssh-key = { version = "0.6", optional = true }
 unicode-width = { version = "0.1", optional = true }
 
 [dev-dependencies]
-turbo-vision = { git = "https://github.com/aovestdipaperino/turbo-vision-4-rust", rev = "6d299279b71cf8fdefec60c3f52da1d04e8afcbf", default-features = false, features = ["test-util"] }
+turbo-vision = { version = "4.0", default-features = false, features = ["test-util"] }
 tempfile = "3"
 # Used by the kitty_biorhythm example only; not part of the library's API.
 chrono = "0.4.45"
@@ -53,6 +53,8 @@ remote-input = ["native", "dep:log"]
 ssh = ["native", "dep:russh", "dep:russh-keys", "dep:async-trait", "dep:parking_lot", "dep:tokio", "dep:rand", "dep:ssh-key", "dep:log"]
 # The CSV table editor.
 csv = []
+# PNG screenshots of the terminal buffer, forwarded from turbo-vision core.
+screenshot = ["turbo-vision/screenshot"]
 
 [lints.rust]
 missing_docs = "warn"
