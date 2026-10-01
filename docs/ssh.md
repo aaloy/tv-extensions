@@ -38,6 +38,10 @@ cargo run --example ssh_server --features ssh
 ssh -p 2222 user@localhost
 ```
 
+The `ssh_server` example does not install a `log` logger, so any `log`
+output from the SSH layer (including from `remote_input`, if also enabled)
+goes nowhere unless the hosting application installs one of its own.
+
 `run_ssh_server(addr, factory)` is a shorthand for `SshServerConfig::new()`
 with a generated key plus `SshServer::new(..).run()`, for a server with no
 further configuration.
