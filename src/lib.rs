@@ -14,6 +14,8 @@
 //! - [`keys`]: key events from key names such as "ctrl-s" or "enter", the
 //!   form a host that is not a terminal reports keys in.
 //! - [`csv`] (feature `csv`): a CSV table editor, host-driven like [`host`].
+//! - [`log`] (feature `log`): a scrolling output pane and a window that
+//!   shows `tracing` events in it.
 //!
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
@@ -22,6 +24,8 @@
 pub mod csv;
 pub mod host;
 pub mod keys;
+#[cfg(feature = "log")]
+pub mod log;
 pub mod popup_menu;
 pub mod scroll_pane;
 

@@ -31,6 +31,7 @@ parking_lot = { version = "0.12", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 rand = { version = "0.8", optional = true }
 ssh-key = { version = "0.6", optional = true }
+unicode-width = { version = "0.1", optional = true }
 
 [dev-dependencies]
 turbo-vision = { git = "https://github.com/aovestdipaperino/turbo-vision-4-rust", rev = "6d299279b71cf8fdefec60c3f52da1d04e8afcbf", default-features = false, features = ["test-util"] }
@@ -41,7 +42,7 @@ default = []
 # A real terminal (crossterm, OS clipboard) in turbo-vision.
 native = ["turbo-vision/native"]
 # LogWindow and TerminalWidget, with a tracing subscriber.
-log = ["dep:tracing"]
+log = ["dep:tracing", "dep:chrono", "dep:unicode-width"]
 # Kitty graphics images and ANSI-art backgrounds.
 graphics = ["dep:base64"]
 # Ctrl+F12 PNG and F12 ANSI screen captures.
