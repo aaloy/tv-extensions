@@ -1,18 +1,21 @@
 //! Autocomplete Example
-//! Demonstrates tv-extensions' `AutoComplete`: text fields that filter a
-//! suggestion list as you type, with the matched text highlighted.
+//! Demonstrates tv-extensions' `AutoComplete` in its two modes, side by
+//! side in one dialog:
+//! - Country requires a match (`require_match(true)`): the value must be
+//!   one of the countries. OK will not close the dialog while the field is
+//!   empty or holds anything else; an error line appears under the field
+//!   until it is fixed. Leaving the field fixes the spelling of a match
+//!   ("méxico" becomes "México").
+//! - Fruit takes free text (the default): the list only suggests, and any
+//!   text is kept.
 //!
 //! Run with:
-//!   cargo run --example autocomplete --features native
+//!   `cargo run --example autocomplete --features native`
 //!
 //! Type to filter (accented Latin-1 letters work too); Up/Down move the
 //! highlight, Enter or a click accepts a suggestion, Esc closes the list.
-//! Tab moves between the fields.
-//!
-//! The two fields show the two modes. Country requires a match: leave it
-//! holding text that is not a country and it goes back to the last one
-//! chosen (typing "méxico" becomes "México"). Fruit takes free text: the
-//! list only suggests.
+//! Tab moves between the fields and buttons. The values are printed when
+//! the dialog closes.
 
 // (C) 2026 - Antoni Aloy
 
@@ -20,15 +23,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use turbo_vision::app::Application;
-use turbo_vision::core::command::CM_QUIT;
-use turbo_vision::core::event::KB_ESC_ESC;
+use turbo_vision::core::command::CM_OK;
 use turbo_vision::core::geometry::Rect;
-use turbo_vision::core::status_data::StatusItemBuilder;
 use turbo_vision::views::GroupLike;
+use turbo_vision::views::button::ButtonBuilder;
+use turbo_vision::views::dialog::DialogBuilder;
 use turbo_vision::views::static_text::StaticText;
-use turbo_vision::views::status_line::StatusLine;
-use turbo_vision::views::window::WindowBuilder;
-use tv_extensions::{AutoComplete, AutoCompleteBuilder};
+use tv_extensions::AutoCompleteBuilder;
 
 fn countries() -> Vec<String> {
     [
@@ -116,57 +117,74 @@ fn main() -> turbo_vision::core::error::Result<()> {
     let mut app = Application::new()?;
 
     let (width, height) = app.terminal.size();
-    app.set_status_line(StatusLine::new(
-        Rect::new(0, height - 1, width, height),
-        vec![
-            StatusItemBuilder::new()
-                .text("~Alt-X~ Exit")
-                .key("Alt+X")
-                .command(CM_QUIT)
-                .build(),
-            StatusItemBuilder::new()
-                .text("~Esc-Esc~ Exit")
-                .key_code(KB_ESC_ESC)
-                .command(CM_QUIT)
-                .build(),
-        ],
-    ));
-
-    let mut window = WindowBuilder::new()
-        .bounds(Rect::new(10, 2, 66, 22))
-        .title("AutoComplete")
+    let (w, h) = (62, 20);
+    let x = (width - w).max(0) / 2;
+    let y = (height - h).max(0) / 2;
+    let mut dialog = DialogBuilder::new()
+        .bounds(Rect::new(x, y, x + w, y + h))
+        .title("Order")
         .build();
 
-    // An open list grows its field's bounds downward (up to six rows here),
-    // so each field leaves that much room before the next one.
-    window.add(StaticText::new(Rect::new(2, 2, 16, 3), "Country:"));
-    let country = Rc::new(RefCell::new(String::new()));
-    let mut country_field =
-        AutoComplete::new(Rect::new(16, 2, 46, 3), countries(), country.clone());
-    country_field.set_require_match(true);
-    window.add(country_field);
-    window.add(StaticText::new(Rect::new(47, 2, 54, 3), "(list)"));
+    dialog.add(StaticText::new(
+        Rect::new(2, 1, 58, 2),
+        "Country must come from the list; fruit can be anything.",
+    ));
 
-    window.add(StaticText::new(Rect::new(2, 10, 16, 11), "Fruit:"));
-    window.add(StaticText::new(Rect::new(47, 10, 54, 11), "(free)"));
-    let fruit = Rc::new(RefCell::new(String::new()));
-    window.add(
+    // Strict: only a listed country. Each field's list opens below it, so
+    // the fields leave room for it (Country shows up to six rows).
+    dialog.add(StaticText::new(Rect::new(2, 3, 12, 4), "Country:"));
+    let country = Rc::new(RefCell::new(String::new()));
+    dialog.add(StaticText::new(Rect::new(44, 3, 58, 4), "(from list)"));
+    dialog.add(
         AutoCompleteBuilder::new()
-            .bounds(Rect::new(16, 10, 46, 11))
-            .items(fruits())
-            .data(fruit.clone())
-            .max_drop_rows(5)
+            .bounds(Rect::new(12, 3, 42, 4))
+            .items(countries())
+            .data(country.clone())
+            .require_match(true)
+            .error_message("Choose a country from the list")
             .build(),
     );
 
-    window.set_initial_focus();
-    app.desktop.add(window);
+    // Free text: the list only suggests.
+    dialog.add(StaticText::new(Rect::new(2, 11, 12, 12), "Fruit:"));
+    let fruit = Rc::new(RefCell::new(String::new()));
+    dialog.add(StaticText::new(Rect::new(44, 11, 58, 12), "(free text)"));
+    dialog.add(
+        AutoCompleteBuilder::new()
+            .bounds(Rect::new(12, 11, 42, 12))
+            .items(fruits())
+            .data(fruit.clone())
+            .max_drop_rows(4)
+            .build(),
+    );
 
-    app.run();
+    dialog.add(
+        ButtonBuilder::new()
+            .bounds(Rect::new(17, 16, 29, 18))
+            .title("~O~K")
+            .command(CM_OK)
+            .default(true)
+            .build(),
+    );
+    dialog.add(
+        ButtonBuilder::new()
+            .bounds(Rect::new(33, 16, 45, 18))
+            .title("Cancel")
+            .command(turbo_vision::core::command::CM_CANCEL)
+            .build(),
+    );
 
-    // Shared values are read back after the app exits
-    println!("Country: {}", country.borrow());
-    println!("Fruit:   {}", fruit.borrow());
+    dialog.set_initial_focus();
+    let result = dialog.execute(&mut app);
+    drop(app); // restore the terminal before printing
+
+    if result == CM_OK {
+        println!("OK");
+        println!("Country (from list): {}", country.borrow());
+        println!("Fruit (free text):   {}", fruit.borrow());
+    } else {
+        println!("Canceled");
+    }
 
     Ok(())
 }
