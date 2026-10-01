@@ -7,8 +7,6 @@
 //!   screen and the event loop (a WASM guest such as a plank frame). Push
 //!   events into a [`HostInput`], call [`pump`] once per frame, read the
 //!   terminal buffer.
-//! - [`capture`] (feature `capture`): Ctrl+F12 PNG and F12 ANSI screen
-//!   captures, installed on the terminal's capture hook.
 //! - [`scroll_pane`]: [`ScrollPane`], a scrolling viewport over a virtual
 //!   area larger than its screen bounds (TV Tool Box style).
 //! - [`popup_menu`]: modal context menus and check-mark menu items, reusing
@@ -27,8 +25,6 @@
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
 
-#[cfg(feature = "capture")]
-pub mod capture;
 #[cfg(feature = "csv")]
 pub mod csv;
 #[cfg(feature = "graphics")]
