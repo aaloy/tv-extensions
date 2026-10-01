@@ -23,6 +23,7 @@ use turbo_vision::views::label::LabelBuilder;
 use turbo_vision::views::status_line::StatusLine;
 use turbo_vision::views::window::WindowBuilder;
 use tv_extensions::graphics::KittyImage;
+use tv_extensions::graphics::kitty::clear_kitty_images;
 
 /// Generate a gray-on-gray pattern PNG
 /// Creates a subtle checkerboard/texture pattern
@@ -301,13 +302,13 @@ fn main() -> turbo_vision::core::error::Result<()> {
             turbo_vision::views::view::dispatch_to_child(&mut app.desktop, &mut event);
 
             if event.what == EventType::Command && event.command == CM_QUIT {
-                let _ = app.terminal.clear_kitty_images();
+                let _ = clear_kitty_images(&mut app.terminal);
                 app.running = false;
             }
         }
     }
 
-    let _ = app.terminal.clear_kitty_images();
+    let _ = clear_kitty_images(&mut app.terminal);
     app.terminal.shutdown()?;
 
     Ok(())

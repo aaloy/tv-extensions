@@ -14,6 +14,7 @@ use turbo_vision::terminal::Terminal;
 /// This is a heuristic check based on the `TERM` environment variable
 /// and known terminal capabilities. Returns `true` for terminals known
 /// to support Kitty graphics (kitty, wezterm, ghostty, etc.).
+#[must_use]
 pub fn supports_kitty_graphics() -> bool {
     // Check TERM environment variable for known Kitty-compatible terminals
     if let Ok(term) = std::env::var("TERM") {

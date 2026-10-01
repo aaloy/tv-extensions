@@ -28,6 +28,7 @@ use turbo_vision::views::label::LabelBuilder;
 use turbo_vision::views::status_line::StatusLine;
 use turbo_vision::views::window::WindowBuilder;
 use tv_extensions::graphics::KittyImage;
+use tv_extensions::graphics::kitty::{clear_kitty_images, supports_kitty_graphics};
 
 // Command IDs for this demo
 const CM_RELOAD: CommandId = 1000;
@@ -200,7 +201,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
     let mut app = Application::new()?;
 
     // Check if terminal supports Kitty graphics
-    let supports_kitty = app.terminal.supports_kitty_graphics();
+    let supports_kitty = supports_kitty_graphics();
 
     let (width, height) = app.terminal.size();
 
@@ -315,14 +316,14 @@ fn main() -> turbo_vision::core::error::Result<()> {
                 match event.command {
                     CM_QUIT => {
                         // Clear Kitty images before exiting
-                        let _ = app.terminal.clear_kitty_images();
+                        let _ = clear_kitty_images(&mut app.terminal);
                         app.running = false;
                     }
                     CM_RELOAD => {
                         // Would reload the image here
                     }
                     CM_CLEAR => {
-                        let _ = app.terminal.clear_kitty_images();
+                        let _ = clear_kitty_images(&mut app.terminal);
                     }
                     _ => {}
                 }
@@ -331,7 +332,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
     }
 
     // Cleanup
-    let _ = app.terminal.clear_kitty_images();
+    let _ = clear_kitty_images(&mut app.terminal);
     app.terminal.shutdown()?;
 
     Ok(())
