@@ -16,12 +16,16 @@
 //! - [`csv`] (feature `csv`): a CSV table editor, host-driven like [`host`].
 //! - [`log`] (feature `log`): a scrolling output pane and a window that
 //!   shows `tracing` events in it.
+//! - [`graphics`] (feature `graphics`): ANSI-art backgrounds and bitmap
+//!   images over the Kitty graphics protocol.
 //!
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
 
 #[cfg(feature = "csv")]
 pub mod csv;
+#[cfg(feature = "graphics")]
+pub mod graphics;
 pub mod host;
 pub mod keys;
 #[cfg(feature = "log")]
