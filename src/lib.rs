@@ -13,10 +13,13 @@
 //!   the framework's `MenuBox`.
 //! - [`keys`]: key events from key names such as "ctrl-s" or "enter", the
 //!   form a host that is not a terminal reports keys in.
+//! - [`csv`] (feature `csv`): a CSV table editor, host-driven like [`host`].
 //!
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
 
+#[cfg(feature = "csv")]
+pub mod csv;
 pub mod host;
 pub mod keys;
 pub mod popup_menu;
