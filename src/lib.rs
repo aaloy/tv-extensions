@@ -13,14 +13,20 @@
 //!   reusing the framework's `MenuBox`.
 //! - [`keys`]: key events from key names such as "ctrl-s" or "enter", the
 //!   form a host that is not a terminal reports keys in.
-//! - [`csv`] (feature `csv`): a CSV table editor, host-driven like [`host`].
-//! - [`log`] (feature `log`): a scrolling output pane and a window that
+//! - `csv` (feature `csv`): a CSV table editor, host-driven like [`host`].
+//! - `log` (feature `log`): a scrolling output pane and a window that
 //!   shows `tracing` events in it.
-//! - [`graphics`] (feature `graphics`): ANSI-art backgrounds and bitmap
+//! - `graphics` (feature `graphics`): ANSI-art backgrounds and bitmap
 //!   images over the Kitty graphics protocol.
-//! - [`remote_input`] (feature `remote-input`): key chords typed over TCP,
+//! - `remote_input` (feature `remote-input`): key chords typed over TCP,
 //!   for automation.
-//! - [`ssh`] (feature `ssh`): serving a turbo-vision application over SSH.
+//! - `ssh` (feature `ssh`): serving a turbo-vision application over SSH.
+//!
+//! The four feature-gated module names above are plain code spans, not
+//! links: with any one feature off, the module does not exist to link to,
+//! and an intra-doc link that resolves only with that feature enabled would
+//! make `cargo doc` (built with the crate's default, empty feature set)
+//! warn about a broken link.
 //!
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
