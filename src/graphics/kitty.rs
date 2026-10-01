@@ -135,16 +135,18 @@ mod tests {
     #[test]
     fn delete_kitty_image_sends_the_delete_command() {
         let (mut terminal, written) = recording_terminal();
+        written.lock().unwrap().clear();
         delete_kitty_image(&mut terminal, 7).unwrap();
         let sent = String::from_utf8(written.lock().unwrap().clone()).unwrap();
-        assert!(sent.contains("a=d") && sent.contains("i=7"), "{sent:?}");
+        assert_eq!(sent, "\x1b_Ga=d,d=I,i=7,q=2;\x1b\\");
     }
 
     #[test]
     fn clear_kitty_images_sends_the_delete_all_command() {
         let (mut terminal, written) = recording_terminal();
+        written.lock().unwrap().clear();
         clear_kitty_images(&mut terminal).unwrap();
         let sent = String::from_utf8(written.lock().unwrap().clone()).unwrap();
-        assert!(sent.contains("a=d") && sent.contains("d=A"), "{sent:?}");
+        assert_eq!(sent, "\x1b_Ga=d,d=A,q=2;\x1b\\");
     }
 }
