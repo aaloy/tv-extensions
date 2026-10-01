@@ -61,8 +61,8 @@ struct State {
     closing: Option<String>,
     /// The name last saved to, cleared by the next change.
     last_saved: Option<String>,
-    /// Set at load when the doc's first header cell is `#`: a grid the
-    /// server owns the shape and name of.
+    /// Set at load, when `Session::open_bridged` is used and the doc's
+    /// first header cell is `#`: a bridged grid, whose shape a host owns.
     bridged: bool,
 }
 
@@ -106,10 +106,10 @@ fn interior_bounds(window: Rect) -> (Rect, Rect) {
     (Rect::new(0, 0, iw, ih - 1), Rect::new(0, ih - 1, iw, ih))
 }
 
-/// The key hints the menus show. plank is macOS-only, and a stock Mac
-/// terminal types Option as a character (no Alt+X), has no Insert key, and
-/// keeps F10 behind fn, so each hint names the Control chord a Mac keyboard
-/// can type. The PC keys (Alt+X, Ins, Del, Ctrl+Ins, Ctrl+Del) still work.
+/// The key hints the menus show. A stock Mac terminal types Option as a
+/// character (no Alt+X), has no Insert key, and keeps F10 behind fn, so
+/// each hint also names the Control chord a Mac keyboard can type. The PC
+/// keys (Alt+X, Ins, Del, Ctrl+Ins, Ctrl+Del) still work.
 fn menu_bar(width: i16) -> MenuBar {
     let item = |text: &str, command: CommandId, shortcut: Option<&str>| {
         let b = MenuItemBuilder::new().text(text).command(command);
@@ -202,10 +202,35 @@ fn load(arg: &str, disk: &dyn Disk) -> (CsvDoc, Option<String>, String) {
 impl Session {
     /// A session over `arg` (empty for a new document) on a `w` x `h` screen.
     ///
+    /// Never enters the bridged-grid mode (see [`Session::open_bridged`]):
+    /// New, Open, Save As and column edits are always available here, even
+    /// when the loaded file's first header cell happens to be `#`.
+    ///
     /// # Panics
     /// Never in practice: a `HostBackend` terminal cannot fail to build.
     #[must_use]
     pub fn open(w: u16, h: u16, arg: &str, disk: Box<dyn Disk>) -> Self {
+        Self::new(w, h, arg, disk, false)
+    }
+
+    /// A session over `arg` (empty for a new document) on a `w` x `h`
+    /// screen, that may enter the bridged-grid mode: when the loaded
+    /// document's first header cell is `#`, the grid is a bridged grid
+    /// whose shape a host owns, and New, Open, Save As and column edits
+    /// (insert/delete/rename) are refused with a message instead of run,
+    /// and deleting a row asks for confirmation first.
+    ///
+    /// # Panics
+    /// Never in practice: a `HostBackend` terminal cannot fail to build.
+    #[must_use]
+    pub fn open_bridged(w: u16, h: u16, arg: &str, disk: Box<dyn Disk>) -> Self {
+        Self::new(w, h, arg, disk, true)
+    }
+
+    /// Shared body of [`Session::open`] and [`Session::open_bridged`].
+    /// `bridged_allowed` gates whether a `#`-header document is actually
+    /// treated as bridged; the file is parsed the same way either way.
+    fn new(w: u16, h: u16, arg: &str, disk: Box<dyn Disk>, bridged_allowed: bool) -> Self {
         let (backend, input) = HostBackend::new(w, h);
         let terminal = Terminal::with_backend(Box::new(backend)).expect("host terminal");
         let mut app = Application::with_terminal(terminal);
@@ -214,7 +239,7 @@ impl Session {
         app.set_status_line(status_line(sw, sh));
 
         let (doc, name, message) = load(arg, &*disk);
-        let bridged = doc.header().first().is_some_and(|h| h == "#");
+        let bridged = bridged_allowed && doc.header().first().is_some_and(|h| h == "#");
 
         let bounds = window_bounds(&app);
         let mut window = WindowBuilder::new().bounds(bounds).title("").build();
@@ -307,6 +332,27 @@ impl Session {
     #[must_use]
     pub fn into_disk(self) -> Box<dyn Disk> {
         self.state.disk
+    }
+}
+
+#[allow(
+    clippy::missing_fields_in_debug,
+    reason = "deliberately omits `app`, `input` and `state`'s own internals: \
+              a `Session`'s Debug output is a summary for a host's logs, not \
+              a dump of the embedded Application or event queue"
+)]
+impl std::fmt::Debug for Session {
+    /// The document's name, its size, and whether it has unsaved changes;
+    /// never the `Application`, the input queue, or any other internal.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("name", &self.state.display_name())
+            .field(
+                "size",
+                &format!("{}x{}", self.state.doc.height(), self.state.doc.width()),
+            )
+            .field("modified", &self.state.doc.is_modified())
+            .finish()
     }
 }
 
@@ -740,6 +786,20 @@ mod tests {
     }
 
     #[test]
+    fn debug_shows_name_size_and_modified_only() {
+        let mut s = new_session();
+        let before = format!("{s:?}");
+        assert!(before.contains("untitled.csv"), "{before}");
+        assert!(before.contains("3x3"), "{before}");
+        assert!(before.contains("modified: false"), "{before}");
+
+        press(&mut s, "insert");
+        let after = format!("{s:?}");
+        assert!(after.contains("4x3"), "{after}");
+        assert!(after.contains("modified: true"), "{after}");
+    }
+
+    #[test]
     fn a_new_session_shows_the_menu_title_and_columns() {
         let s = new_session();
         let text = screen(&s);
@@ -844,7 +904,7 @@ mod tests {
         assert!(screen(&s).contains("line 2"), "{}", screen(&s));
     }
 
-    /// A disk whose writes are always refused, like a plank quota error.
+    /// A disk whose writes are always refused, like a host's quota error.
     /// Reads and listing behave like the `MemDisk` it wraps.
     struct FailDisk(MemDisk);
 
@@ -853,7 +913,7 @@ mod tests {
             self.0.read(path)
         }
         fn write(&mut self, _path: &str, _text: &str) -> Result<(), String> {
-            Err("'dev.plank.csvedit' disk would grow to ... limit".into())
+            Err("'dev.host.csvedit' disk would grow to ... limit".into())
         }
         fn list(&self) -> Result<Vec<String>, String> {
             self.0.list()
@@ -1115,7 +1175,7 @@ mod tests {
     }
 
     fn bridged_session() -> Session {
-        let mut s = Session::open(80, 24, "grid.csv", bridged_disk());
+        let mut s = Session::open_bridged(80, 24, "grid.csv", bridged_disk());
         s.step(80, 24);
         s
     }
@@ -1293,6 +1353,49 @@ mod tests {
             assert_eq!(s.doc().height(), 1, "{key}");
             assert!(!screen(&s).contains("Delete row"), "{key}: {}", screen(&s));
         }
+    }
+
+    #[test]
+    fn open_never_bridges_a_hash_header_file() {
+        // New: not refused, and actually resets the document.
+        let mut s = Session::open(80, 24, "grid.csv", bridged_disk());
+        s.step(80, 24);
+        assert!(s.key(Event::command(CMD_NEW)).is_none());
+        s.step(80, 24);
+        let text = screen(&s);
+        assert!(!text.contains("this grid stays on"), "{text}");
+        assert_eq!(s.doc().width(), 3, "New ran");
+
+        // Open: shows the picker, not a refusal.
+        let mut s = Session::open(80, 24, "grid.csv", bridged_disk());
+        s.step(80, 24);
+        assert!(s.key(Event::command(CMD_OPEN)).is_none());
+        s.step(80, 24);
+        let text = screen(&s);
+        assert!(!text.contains("this grid stays on"), "{text}");
+        assert!(text.contains("grid.csv"), "{text}");
+
+        // Save As: opens the save-as dialog, not a refusal.
+        let mut s = Session::open(80, 24, "grid.csv", bridged_disk());
+        s.step(80, 24);
+        assert!(s.key(Event::command(CMD_SAVE_AS)).is_none());
+        s.step(80, 24);
+        let text = screen(&s);
+        assert!(!text.contains("this grid stays on"), "{text}");
+        assert!(text.contains("Save as"), "{text}");
+
+        // Column edits: insert, delete and rename all run.
+        let mut s = Session::open(80, 24, "grid.csv", bridged_disk());
+        s.step(80, 24);
+        assert!(press(&mut s, "ctrl-l").is_none());
+        assert_eq!(s.doc().width(), 3, "column inserted");
+        assert!(press(&mut s, "ctrl-k").is_none());
+        assert_eq!(s.doc().width(), 2, "column deleted");
+        assert!(s.key(Event::command(CMD_RENAME_COL)).is_none());
+        s.step(80, 24);
+        let text = screen(&s);
+        assert!(!text.contains("fixed"), "{text}");
+        assert!(text.contains("Rename column"), "{text}");
     }
 
     #[test]
