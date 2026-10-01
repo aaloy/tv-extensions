@@ -2,7 +2,7 @@
 
 //! Remote keyboard input over TCP (disabled by default).
 //!
-//! This is a testing/automation aid: when enabled, turbo-vision listens on a
+//! This is a testing/automation aid: when enabled, this module listens on a
 //! local TCP port and converts incoming text lines into keyboard events that
 //! are injected into the application's event loop, exactly as if the keys had
 //! been pressed.
@@ -132,7 +132,8 @@ pub fn spawn(port: u16, tx: Sender<Event>) -> std::io::Result<()> {
 }
 
 /// Listen on `127.0.0.1:port` and type every received chord into
-/// `terminal`, as [`Terminal::event_injector`] does. Injected Ctrl+F12
+/// `terminal`, with the chords typed through the terminal's
+/// [`Terminal::event_injector`]. Injected Ctrl+F12
 /// and F12 key chords are served by turbo-vision's built-in capture
 /// (PNG with core's `screenshot` feature, ANSI dump always), or by a
 /// capture hook if the application installed one ([`Terminal::set_capture_hook`]).
@@ -153,6 +154,15 @@ fn port_from(value: Option<String>) -> Option<u16> {
 /// [`enable`] on the port in the `TV_REMOTE_KEYS` environment variable.
 /// Returns `Ok(false)`, doing nothing, when the variable is unset or not a
 /// port number.
+///
+/// With a turbo-vision whose `Application::new` already reads
+/// `TV_REMOTE_KEYS` itself and binds its own listener on that port (true of
+/// the pinned core revision this crate depends on today), calling this
+/// function afterward tries to bind the same port a second time and gets
+/// `AddrInUse`. Either don't call `enable_from_env` with such a core, or
+/// unset `TV_REMOTE_KEYS` before `Application::new` and set it again (or
+/// call [`enable`] directly) afterward. A core revision that has had its
+/// own remote input removed does not have this conflict.
 ///
 /// # Errors
 ///
