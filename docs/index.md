@@ -1,6 +1,6 @@
 # tv-extensions
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. The crate holds the pieces that let a host embed a turbo-vision application and step it one frame at a time, and `Grid`, a table widget that draws a line between its columns.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. The crate holds the pieces that let a host embed a turbo-vision application and step it one frame at a time.
 
 ## Why a separate crate
 
@@ -28,4 +28,4 @@ let running = host::pump(&mut app, &mut ());
 let cells = app.terminal.buffer();
 ```
 
-[Host-driven apps](host.md) explains the model, and why calls that would block are refused. [Grid](grid.md) describes the separator grid.
+[Host-driven apps](host.md) explains the model, and why calls that would block are refused.

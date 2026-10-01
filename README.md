@@ -1,6 +1,6 @@
 # tv-extensions
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds two things: the pieces that let a host embed a turbo-vision application and step it one frame at a time, and `Grid`, a table widget that draws a line between its columns.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the pieces that let a host embed a turbo-vision application and step it one frame at a time.
 
 ## Why a separate crate
 
@@ -29,26 +29,9 @@ let cells = app.terminal.buffer();
 
 `pump` returns `false` once the application quits. Calls that would need a nested event loop, such as `exec_view` or a history popup, return `CM_CANCEL` instead of blocking; [docs/host.md](docs/host.md) explains why.
 
-## A grid with separators
+## Grid retirement
 
-`Grid` wraps a turbo-vision `Table` and draws a `│` in the one-cell gap the table already leaves after each column, so nothing moves and clicks land where they did. Separators take the colour the table drew in each gap, which keeps the header's in the header colour and the selected row's inside its bar.
-
-```rust
-use turbo_vision::core::geometry::Rect;
-use turbo_vision::views::GroupLike;
-use turbo_vision::views::table::Column;
-use turbo_vision::views::window::WindowBuilder;
-use tv_extensions::Grid;
-
-let mut window = WindowBuilder::new().bounds(Rect::new(0, 0, 44, 12)).title("Files").build();
-let mut grid = Grid::new(Rect::new(0, 0, 40, 10), 0);
-grid.set_columns(vec![Column::new("Name", 12), Column::right("Size", 8)]);
-grid.set_rows(vec![vec!["notes.txt".into(), "1204".into()]]);
-let handle = window.add_typed(grid);
-window.get_mut(handle).unwrap().set_selected_row(0);
-```
-
-[docs/grid.md](docs/grid.md) covers the rest of its API.
+`Grid` has been retired. The core `Table` widget now draws the same separators itself: call `Table::set_separators(true)` to get the column separators in each line's own colour.
 
 ## Building and testing
 
