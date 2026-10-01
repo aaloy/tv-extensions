@@ -50,7 +50,7 @@ capture = ["dep:chrono", "dep:log"]
 # Key chords injected over TCP, for automation.
 remote-input = ["native", "dep:log"]
 # Serving an application over SSH.
-ssh = ["native", "dep:russh", "dep:russh-keys", "dep:async-trait", "dep:parking_lot", "dep:tokio", "dep:rand", "dep:ssh-key"]
+ssh = ["native", "dep:russh", "dep:russh-keys", "dep:async-trait", "dep:parking_lot", "dep:tokio", "dep:rand", "dep:ssh-key", "dep:log"]
 # The CSV table editor.
 csv = []
 

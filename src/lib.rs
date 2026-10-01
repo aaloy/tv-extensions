@@ -22,6 +22,7 @@
 //!   images over the Kitty graphics protocol.
 //! - [`remote_input`] (feature `remote-input`): key chords typed over TCP,
 //!   for automation.
+//! - [`ssh`] (feature `ssh`): serving a turbo-vision application over SSH.
 //!
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
@@ -40,6 +41,8 @@ pub mod popup_menu;
 #[cfg(feature = "remote-input")]
 pub mod remote_input;
 pub mod scroll_pane;
+#[cfg(feature = "ssh")]
+pub mod ssh;
 
 pub use host::{HostBackend, HostInput, pump};
 pub use popup_menu::{is_menu_item_checked, popup_menu, set_menu_item_checked};
