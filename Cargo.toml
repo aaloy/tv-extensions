@@ -45,8 +45,6 @@ native = ["turbo-vision/native"]
 log = ["dep:tracing", "dep:chrono", "dep:unicode-width"]
 # Kitty graphics images and ANSI-art backgrounds.
 graphics = ["dep:base64"]
-# Ctrl+F12 PNG and F12 ANSI screen captures.
-capture = ["dep:chrono", "dep:log"]
 # Key chords injected over TCP, for automation.
 remote-input = ["native", "dep:log"]
 # Serving an application over SSH.

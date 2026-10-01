@@ -132,9 +132,10 @@ pub fn spawn(port: u16, tx: Sender<Event>) -> std::io::Result<()> {
 }
 
 /// Listen on `127.0.0.1:port` and type every received chord into
-/// `terminal`, as [`Terminal::event_injector`] does. Ctrl+F12 and F12
-/// chords become captures if a capture hook is installed (see
-/// `tv_extensions::capture`).
+/// `terminal`, as [`Terminal::event_injector`] does. Injected Ctrl+F12
+/// and F12 key chords are served by turbo-vision's built-in capture
+/// (PNG with core's `screenshot` feature, ANSI dump always), or by a
+/// capture hook if the application installed one ([`Terminal::set_capture_hook`]).
 ///
 /// # Errors
 ///
