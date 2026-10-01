@@ -11,11 +11,14 @@
 //!   area larger than its screen bounds (TV Tool Box style).
 //! - [`popup_menu`]: modal context menus and check-mark menu items, reusing
 //!   the framework's `MenuBox`.
+//! - [`keys`]: key events from key names such as "ctrl-s" or "enter", the
+//!   form a host that is not a terminal reports keys in.
 //!
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
 
 pub mod host;
+pub mod keys;
 pub mod popup_menu;
 pub mod scroll_pane;
 
