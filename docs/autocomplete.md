@@ -5,21 +5,64 @@ like the typeahead fields of web toolkits. Once enough characters are typed,
 a list of the items containing them opens under the field, with the matched
 text in its own colour. It is always available, with no feature flag.
 
-The field works in one of two ways, chosen with `require_match`:
+## Validation rules
 
-| | Free text (default) | Must match (`require_match(true)`) |
-|---|---|---|
-| What the list does | Suggests | Offers the only valid values |
-| Typed text that is not an item | Kept | Kept, so the user sees what to fix; OK is refused |
-| Text that matches an item in another case (`méxico`) | Kept as typed | Changed to the item's spelling (`México`) when the field loses focus |
-| Empty field | Allowed | Refused: a value is required |
-| OK in a dialog | Always closes | Refused, with an error line under the field, until it holds an item |
-| Typical use | Search boxes, names, tags, anything open-ended | Countries, codes, any value from a fixed set |
+Two independent rules decide what the field accepts when a dialog's OK (or
+Enter) asks it, through the dialog's `valid()` check. Both are off by
+default:
 
-## Free text
+- **`required(true)`**: the field may not be blank.
+- **`require_match(true)`**: text that is not blank must be one of the
+  items, ignoring case. This is Borland's `TStringLookupValidator`.
 
-The default. The list is a convenience: the user can pick a suggestion or
-type anything else.
+| `required` | `require_match` | Blank | Text not in the list | An item | Typical use |
+|---|---|---|---|---|---|
+| no | no | ok | ok | ok | Search boxes, notes: anything open-ended |
+| yes | no | refused | ok | ok | A name that must be given; the list only suggests |
+| no | yes | ok | refused | ok | An optional choice from a fixed set |
+| yes | yes | refused | refused | ok | A choice that must be made from a fixed set |
+
+### Free text (no rules)
+
+The default. The list is a convenience: the user can pick a suggestion, type
+anything else, or leave the field blank.
+
+```rust
+use std::{cell::RefCell, rc::Rc};
+use turbo_vision::core::geometry::Rect;
+use tv_extensions::AutoCompleteBuilder;
+
+let notes = Rc::new(RefCell::new(String::new()));
+let field = AutoCompleteBuilder::new()
+    .bounds(Rect::new(12, 3, 42, 4))
+    .items(["Gift wrap", "Leave at the door", "Call on arrival"])
+    .data(notes.clone())
+    .build();
+// After the dialog closes, `notes` holds whatever was typed or picked.
+```
+
+### Required
+
+Anything but blank. The suggestions still only suggest.
+
+```rust
+use std::{cell::RefCell, rc::Rc};
+use turbo_vision::core::geometry::Rect;
+use tv_extensions::AutoCompleteBuilder;
+
+let city = Rc::new(RefCell::new(String::new()));
+let field = AutoCompleteBuilder::new()
+    .bounds(Rect::new(12, 3, 42, 4))
+    .items(["Barcelona", "Madrid", "Palma"])
+    .data(city.clone())
+    .required(true)
+    .build();
+// After OK, `city` is not blank.
+```
+
+### From the list, optional
+
+Blank is allowed; anything typed must be one of the items.
 
 ```rust
 use std::{cell::RefCell, rc::Rc};
@@ -28,34 +71,17 @@ use tv_extensions::AutoCompleteBuilder;
 
 let fruit = Rc::new(RefCell::new(String::new()));
 let field = AutoCompleteBuilder::new()
-    .bounds(Rect::new(12, 11, 42, 12))
+    .bounds(Rect::new(12, 3, 42, 4))
     .items(["Apple", "Banana", "Cherry"])
     .data(fruit.clone())
+    .require_match(true)
     .build();
-// After the dialog closes, `fruit` holds whatever the user typed or picked.
+// After OK, `fruit` is blank or one of the items.
 ```
 
-## Must match
+### From the list, required
 
-With `require_match(true)` a value from the list is required. It follows
-Borland's `TInputLine` with a `TStringLookupValidator`:
-
-- **OK or Enter in a dialog** runs the dialog's `valid()` check, which asks
-  every control. The field refuses an empty value or text that is not an
-  item, so the dialog stays open, and an error line appears under the field
-  in Borland's error colours (white on light red). It reads "Choose a value
-  from the list" unless `error_message` says otherwise, and it stays until
-  the user edits the field or picks a suggestion. When the field still has
-  the focus, the list also opens on the closest matches. Cancel always
-  closes.
-- **Leaving the field** (Tab, or a click elsewhere) only fixes the spelling
-  of a match: `méxico` becomes `México`. Other text is left as typed, so the
-  user sees what to fix when OK refuses it.
-
-Borland's validator reports with a message box. Here `valid()` has no access
-to the application to run one (core's own validators leave their `error()`
-empty for that reason), so the field shows the error itself; being part of
-the field, it stays visible while the focus is on the OK button.
+A value must be chosen from the items.
 
 ```rust
 use std::{cell::RefCell, rc::Rc};
@@ -67,13 +93,39 @@ let field = AutoCompleteBuilder::new()
     .bounds(Rect::new(12, 3, 42, 4))
     .items(["Austria", "Australia", "México"])
     .data(country.clone())
+    .required(true)
     .require_match(true)
-    .error_message("Choose a country from the list")
+    .required_message("Choose a country")
+    .match_message("Choose a country from the list")
     .build();
-// When the dialog closes with OK, `country` is one of the items.
+// After OK, `country` is one of the items.
 ```
 
-The same switch exists on the view itself: `set_require_match(true)`.
+The same switches exist on the view itself: `set_required` and
+`set_require_match`.
+
+### When a value is refused
+
+- The dialog stays open, and the field shows an error line under itself in
+  Borland's error colours (white on light red): "A value is required" for a
+  blank required field, "Choose a value from the list" for text that is not
+  an item. `required_message` and `match_message` change them; they are cut
+  to the field's width.
+- The line stays until the user edits the field or picks a suggestion. For
+  text that is not an item, the list also opens on the closest matches when
+  the field has the focus.
+- As in any Turbo Vision dialog, OK checks the fields in order and stops at
+  the first that refuses. A second faulty field reports on the next OK.
+- Cancel always closes.
+
+Unknown text is left as typed, so the user sees what to fix. Leaving a field
+that must match (Tab, or a click elsewhere) only fixes the spelling of a
+match: `méxico` becomes `México`.
+
+Borland's validators report with a message box. Here `valid()` has no access
+to the application to run one (core's own validators leave their `error()`
+empty for that reason), so the field shows the error itself; being part of
+the field, it stays visible while the focus is on the OK button.
 
 ## Keys and mouse
 
@@ -110,8 +162,10 @@ the window's own text colours in a window.
 |---|---|---|---|
 | `items` | `set_items` | empty | The suggestions |
 | `data` | — | a new empty string | The shared `Rc<RefCell<String>>` holding the text |
-| `require_match` | `set_require_match` | `false` | Must the value be one of the items? |
-| `error_message` | `set_error_message` | "Choose a value from the list" | The error line shown when OK is refused (cut to the field's width) |
+| `required` | `set_required` | `false` | May the field be blank? |
+| `require_match` | `set_require_match` | `false` | Must text that is not blank be one of the items? |
+| `required_message` | `set_required_message` | "A value is required" | The error line for a blank required field |
+| `match_message` | `set_match_message` | "Choose a value from the list" | The error line for text that is not an item |
 | `min_chars` | `set_min_chars` | 1 | Characters typed before the list opens; 0 opens it on any edit |
 | `max_drop_rows` | `set_max_drop_rows` | 6 | Rows shown before the list scrolls |
 | `max_length` | `set_max_length` | 255 | Longest text accepted |
@@ -119,10 +173,10 @@ the window's own text colours in a window.
 
 ## Example
 
-`examples/autocomplete.rs` shows both modes in one dialog: Country must
-match, Fruit takes free text. Press OK with Country empty, or with a country
-that is not in the list, to see the error line; then pick one and press OK
-again.
+`examples/autocomplete.rs` has one field per combination that adds a rule:
+Country (required, from the list), Fruit (optional, from the list) and City
+(required, free text). Press OK with them blank or holding text that is not
+listed to see each error line; fix the field and press OK again.
 
 ```sh
 cargo run --example autocomplete --features native
