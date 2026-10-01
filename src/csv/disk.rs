@@ -73,7 +73,13 @@ impl FsDisk {
 
 impl Disk for FsDisk {
     fn read(&self, path: &str) -> Result<String, String> {
-        std::fs::read_to_string(self.file(path)?).map_err(|e| format!("{path}: {e}"))
+        std::fs::read_to_string(self.file(path)?).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                format!("no such file: /{}", path.trim_start_matches('/'))
+            } else {
+                format!("{path}: {e}")
+            }
+        })
     }
     fn write(&mut self, path: &str, text: &str) -> Result<(), String> {
         std::fs::write(self.file(path)?, text).map_err(|e| format!("{path}: {e}"))
@@ -84,7 +90,11 @@ impl Disk for FsDisk {
             .filter_map(Result::ok)
             .filter(|e| e.path().is_file())
             .filter_map(|e| e.file_name().into_string().ok())
-            .filter(|n| n.ends_with(".csv"))
+            .filter(|n| {
+                std::path::Path::new(n)
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("csv"))
+            })
             .collect();
         names.sort();
         Ok(names)
@@ -113,8 +123,19 @@ mod tests {
         disk.write("b.csv", "x\n").unwrap();
         disk.write("a.csv", "y\n").unwrap();
         std::fs::write(dir.path().join("notes.txt"), "z").unwrap();
+        std::fs::write(dir.path().join("UPPER.CSV"), "u\n").unwrap();
         assert_eq!(disk.read("a.csv").unwrap(), "y\n");
-        assert_eq!(disk.list().unwrap(), vec!["a.csv", "b.csv"]);
+        assert_eq!(disk.list().unwrap(), vec!["UPPER.CSV", "a.csv", "b.csv"]);
+    }
+
+    #[test]
+    fn fs_disk_reports_a_missing_file_like_mem_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let disk = FsDisk::new(dir.path());
+        assert_eq!(
+            disk.read("nope.csv").unwrap_err(),
+            MemDisk::default().read("nope.csv").unwrap_err()
+        );
     }
 
     #[test]
