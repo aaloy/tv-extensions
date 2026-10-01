@@ -36,6 +36,8 @@ unicode-width = { version = "0.1", optional = true }
 [dev-dependencies]
 turbo-vision = { git = "https://github.com/aovestdipaperino/turbo-vision-4-rust", rev = "6d299279b71cf8fdefec60c3f52da1d04e8afcbf", default-features = false, features = ["test-util"] }
 tempfile = "3"
+# Used by the kitty_biorhythm example only; not part of the library's API.
+chrono = "0.4.45"
 
 [features]
 default = []
@@ -59,6 +61,46 @@ unsafe_code = "forbid"
 [[example]]
 name = "csv_edit"
 required-features = ["csv", "native"]
+
+[[example]]
+name = "kitty_image"
+required-features = ["graphics", "native"]
+
+[[example]]
+name = "kitty_background"
+required-features = ["graphics", "native"]
+
+[[example]]
+name = "kitty_biorhythm"
+required-features = ["graphics", "native"]
+
+[[example]]
+name = "desktop_logo"
+required-features = ["graphics", "native"]
+
+[[example]]
+name = "log_window"
+required-features = ["log", "native"]
+
+[[example]]
+name = "terminal_widget"
+required-features = ["log", "native"]
+
+[[example]]
+name = "ssh_server"
+required-features = ["ssh"]
+
+[[example]]
+name = "controls"
+required-features = ["native"]
+
+[[example]]
+name = "lazy_data"
+required-features = ["native"]
+
+[[example]]
+name = "scroll_and_popup"
+required-features = ["native"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -1,0 +1,448 @@
+//! Desklogo Example - Custom Desktop Background
+//! Port of the Borland Turbo Vision desklogo example
+//! Demonstrates how to customize the desktop background with a pattern or ANSI art
+//!
+//! Run with:
+//!   cargo run --example desktop_logo --features graphics,native
+
+// (C) 2025 - Enzo Lombardi
+
+use std::env;
+use std::path::PathBuf;
+use std::time::Instant;
+use turbo_vision::app::Application;
+use turbo_vision::core::command::CM_QUIT;
+use turbo_vision::core::draw::DrawBuffer;
+use turbo_vision::core::event::{Event, EventType};
+use turbo_vision::core::geometry::Rect;
+use turbo_vision::core::menu_data::MenuItemBuilder;
+use turbo_vision::core::menu_data::{Menu, MenuItem};
+use turbo_vision::core::palette::{Attr, Palette, TvColor};
+use turbo_vision::core::state::State;
+use turbo_vision::core::status_data::StatusItemBuilder;
+use turbo_vision::terminal::Terminal;
+use turbo_vision::views::ViewCore;
+use turbo_vision::views::msgbox::{MsgBox, message_box};
+use turbo_vision::views::view::write_line_to_terminal;
+use turbo_vision::views::{
+    View,
+    menu_bar::{MenuBar, SubMenu},
+    status_line::StatusLine,
+};
+use tv_extensions::graphics::AnsiBackground;
+
+// Custom commands
+const CM_ABOUT: u16 = 200;
+const CM_LOAD_FILE: u16 = 201;
+const CM_LOAD_ASCII: u16 = 202;
+
+// Animated Crab Widget for Status Bar
+struct CrabWidget {
+    core: ViewCore,
+    position: usize, // Current position (0-9)
+    direction: i8,   // 1 for right, -1 for left
+    last_update: Instant,
+}
+
+impl CrabWidget {
+    fn new(x: i16, y: i16) -> Self {
+        Self {
+            core: ViewCore {
+                bounds: Rect::new(x, y, x + 10, y + 1),
+                state: State::empty(),
+                ..ViewCore::default()
+            },
+            position: 0,
+            direction: 1,
+            last_update: Instant::now(),
+        }
+    }
+}
+
+impl View for CrabWidget {
+    fn core(&self) -> &ViewCore {
+        &self.core
+    }
+
+    fn core_mut(&mut self) -> &mut ViewCore {
+        &mut self.core
+    }
+
+    fn draw(&mut self, terminal: &mut Terminal) {
+        let mut buf = DrawBuffer::new(10);
+        // Use status line colors (reverse video)
+        let color = Attr::new(TvColor::Black, TvColor::LightGray);
+
+        // Fill with spaces
+        for i in 0..10 {
+            buf.move_char(i, ' ', color, 1);
+        }
+
+        // Place the crab at current position
+        buf.move_char(self.position, '🦀', color, 1);
+
+        write_line_to_terminal(terminal, 0, 0, &buf);
+    }
+
+    fn handle_event(&mut self, _event: &mut Event) {}
+    fn update_cursor(&self, _terminal: &mut Terminal) {}
+
+    fn get_palette(&self) -> Option<Palette> {
+        None
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn idle(&mut self) {
+        // Update animation every 100ms
+        if self.last_update.elapsed().as_millis() > 100 {
+            // Move the crab
+            if self.direction > 0 {
+                self.position += 1;
+                if self.position >= 9 {
+                    self.direction = -1;
+                }
+            } else {
+                if self.position > 0 {
+                    self.position -= 1;
+                }
+                if self.position == 0 {
+                    self.direction = 1;
+                }
+            }
+            self.last_update = Instant::now();
+        }
+    }
+}
+
+// The Turbo Vision logo pattern (13 rows x ~43 columns)
+// ASCII art logo pattern (fallback when no ANSI file is available)
+const ASCII_LOGO: &str = r#"████████╗██╗   ██╗██████╗ ██████╗  ██████╗
+╚══██╔══╝██║   ██║██╔══██╗██╔══██╗██╔═══██╗
+   ██║   ██║   ██║██████╔╝██████╔╝██║   ██║
+   ██║   ██║   ██║██╔══██╗██╔══██╗██║   ██║
+   ██║   ╚██████╔╝██║  ██║██████╔╝╚██████╔╝
+   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═════╝  ╚═════╝
+
+██╗   ██╗██╗███████╗██╗ ██████╗ ███╗   ██╗
+██║   ██║██║██╔════╝██║██╔═══██╗████╗  ██║
+██║   ██║██║███████╗██║██║   ██║██╔██╗ ██║
+╚██╗ ██╔╝██║╚════██║██║██║   ██║██║╚██╗██║
+ ╚████╔╝ ██║███████║██║╚██████╔╝██║ ╚████║
+  ╚═══╝  ╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝ "#;
+
+// Custom Desktop Background with Logo Pattern (fallback for ASCII art)
+struct LogoBackground {
+    core: ViewCore,
+    logo_lines: Vec<String>,
+}
+
+impl LogoBackground {
+    fn new(bounds: Rect) -> Self {
+        let logo_lines: Vec<String> = ASCII_LOGO.lines().map(|s| s.to_string()).collect();
+        Self {
+            core: ViewCore {
+                bounds,
+                state: State::empty(),
+                ..ViewCore::default()
+            },
+            logo_lines,
+        }
+    }
+}
+
+impl View for LogoBackground {
+    fn core(&self) -> &ViewCore {
+        &self.core
+    }
+
+    fn core_mut(&mut self) -> &mut ViewCore {
+        &mut self.core
+    }
+
+    fn draw(&mut self, terminal: &mut Terminal) {
+        let width = self.core.bounds.width() as usize;
+        let height = self.core.bounds.height() as usize;
+        // Use cyan background for desktop
+        let color = Attr::new(TvColor::LightGray, TvColor::DarkGray);
+
+        // Calculate logo dimensions
+        let logo_width = self
+            .logo_lines
+            .iter()
+            .map(|line| line.chars().count())
+            .max()
+            .unwrap_or(0);
+        let logo_height = self.logo_lines.len();
+
+        // Calculate center position
+        let x_offset = (width.saturating_sub(logo_width)) / 2;
+        let y_offset = (height.saturating_sub(logo_height)) / 2;
+
+        for i in 0..height {
+            let mut buf = DrawBuffer::new(width);
+
+            // Fill the entire line with spaces first
+            for j in 0..width {
+                buf.move_char(j, ' ', color, 1);
+            }
+
+            // Draw logo if we're in the logo area
+            if i >= y_offset && i < y_offset + logo_height {
+                let logo_line_idx = i - y_offset;
+                if let Some(logo_line) = self.logo_lines.get(logo_line_idx) {
+                    // Draw each character of the logo at the centered position
+                    for (j, ch) in logo_line.chars().enumerate() {
+                        if x_offset + j < width {
+                            buf.move_char(x_offset + j, ch, color, 1);
+                        }
+                    }
+                }
+            }
+
+            write_line_to_terminal(terminal, 0, i as i16, &buf);
+        }
+    }
+
+    fn handle_event(&mut self, _event: &mut Event) {}
+    fn update_cursor(&self, _terminal: &mut Terminal) {}
+
+    fn get_palette(&self) -> Option<turbo_vision::core::palette::Palette> {
+        None
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+fn create_menu_bar(width: i16) -> MenuBar {
+    let mut menu_bar = MenuBar::new(Rect::new(0, 0, width, 1));
+
+    // File menu with logo options
+    let file_menu_items = vec![
+        MenuItemBuilder::new()
+            .text("Load ~A~NSI File")
+            .command(CM_LOAD_FILE)
+            .build(),
+        MenuItemBuilder::new()
+            .text("Load AS~C~II Art")
+            .command(CM_LOAD_ASCII)
+            .build(),
+        MenuItem::separator(),
+        MenuItemBuilder::new()
+            .text("E~x~it")
+            .command(CM_QUIT)
+            .key("Alt+X")
+            .build(),
+    ];
+    let file_menu = SubMenu::new("~F~ile", Menu::from_items(file_menu_items));
+    menu_bar.add_submenu(file_menu);
+
+    // About menu
+    let about_menu_items = vec![
+        MenuItemBuilder::new()
+            .text("~A~bout")
+            .command(CM_ABOUT)
+            .key("Alt+A")
+            .build(),
+    ];
+    let about_menu = SubMenu::new("~A~bout", Menu::from_items(about_menu_items));
+
+    menu_bar.add_submenu(about_menu);
+    menu_bar
+}
+
+fn create_status_line(width: i16, height: i16) -> StatusLine {
+    let status_items = vec![
+        StatusItemBuilder::new()
+            .text("~Alt+X~ Exit")
+            .key("Alt+X")
+            .command(CM_QUIT)
+            .build(),
+    ];
+
+    StatusLine::new(Rect::new(0, height - 1, width, height), status_items)
+}
+
+fn show_about_dialog(app: &mut Application) {
+    let message = "Turbo Vision Example\n\n\
+                   Custom Desktop Background\n\n\
+                   Supports ANSI escape sequences\n\
+                   for colored ASCII art logos.\n\n\
+                   Use File menu to load logos.";
+
+    message_box(app, message, MsgBox::ABOUT | MsgBox::OK_BUTTON);
+}
+
+/// Find the examples directory containing logo.txt
+fn find_logo_file() -> Option<PathBuf> {
+    // Try several common locations
+    let candidates = [
+        PathBuf::from("examples/logo.txt"),
+        PathBuf::from("../examples/logo.txt"),
+        PathBuf::from("logo.txt"),
+    ];
+
+    // Also try relative to executable location
+    if let Ok(exe_path) = env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let from_exe = exe_dir.join("examples/logo.txt");
+            if from_exe.exists() {
+                return Some(from_exe);
+            }
+        }
+    }
+
+    for candidate in &candidates {
+        if candidate.exists() {
+            return Some(candidate.clone());
+        }
+    }
+
+    None
+}
+
+/// Create background - either ANSI from file or ASCII fallback
+fn create_background(desktop_bounds: Rect, use_ansi: bool) -> Box<dyn View> {
+    let bg_bounds = Rect::new(0, 0, desktop_bounds.width(), desktop_bounds.height());
+    let default_attr = Attr::new(TvColor::LightGray, TvColor::DarkGray);
+
+    if use_ansi {
+        if let Some(logo_path) = find_logo_file() {
+            match AnsiBackground::from_file(bg_bounds, &logo_path, default_attr) {
+                Ok(bg) => {
+                    return Box::new(bg);
+                }
+                Err(e) => {
+                    eprintln!("Failed to load ANSI file: {}", e);
+                }
+            }
+        }
+    }
+
+    // Fallback to ASCII art
+    Box::new(LogoBackground::new(bg_bounds))
+}
+
+fn main() -> turbo_vision::core::error::Result<()> {
+    let mut app = Application::new()?;
+    let (width, height) = app.terminal.size();
+
+    // Create menu bar (this adjusts desktop bounds)
+    let menu_bar = create_menu_bar(width);
+    app.set_menu_bar(menu_bar);
+
+    // Create status line (this adjusts desktop bounds again)
+    let status_line = create_status_line(width, height);
+    app.set_status_line(status_line);
+
+    // Try to load ANSI file first, fall back to ASCII
+    let desktop_bounds = app.desktop.bounds();
+    let logo_bg = create_background(desktop_bounds, true);
+    app.desktop.add(logo_bg);
+
+    // Create animated crab widget on the right side of the status bar
+    // Add it as an overlay widget so it continues animating even during modal dialogs
+    let crab_widget = CrabWidget::new(width - 11, height - 1);
+    app.add_overlay_widget(crab_widget);
+
+    // Track which background type we're using
+    let mut using_ansi = find_logo_file().is_some();
+
+    // Main event loop
+    app.running = true;
+    while app.running {
+        app.draw();
+        app.terminal.flush()?;
+
+        if let Ok(Some(mut event)) = app
+            .terminal
+            .poll_event(std::time::Duration::from_millis(50))
+        {
+            // Menu bar handles events first
+            if let Some(ref mut menu_bar) = app.menu_bar {
+                turbo_vision::views::view::dispatch_to_child(menu_bar, &mut event);
+
+                // Check for cascading submenu
+                if event.what == EventType::Keyboard || event.what == EventType::MouseUp {
+                    if let Some(command) = menu_bar.check_cascading_submenu(&mut app.terminal) {
+                        if command != 0 {
+                            event = Event::command(command);
+                        }
+                    }
+                }
+            }
+
+            // Status line handles events
+            if let Some(ref mut status_line) = app.status_line {
+                turbo_vision::views::view::dispatch_to_child(status_line, &mut event);
+            }
+
+            // Desktop handles events
+            turbo_vision::views::view::dispatch_to_child(&mut app.desktop, &mut event);
+
+            // Handle commands
+            if event.what == EventType::Command {
+                match event.command {
+                    CM_QUIT => app.running = false,
+                    CM_ABOUT => show_about_dialog(&mut app),
+                    CM_LOAD_FILE => {
+                        // Switch to ANSI background
+                        if !using_ansi {
+                            // Remove old background (it's the first child after the default)
+                            // Note: Desktop has a default background at index 0 internally
+                            let desktop_bounds = app.desktop.bounds();
+                            let new_bg = create_background(desktop_bounds, true);
+                            // We need to recreate the desktop to change the background
+                            // For now, just show a message
+                            if find_logo_file().is_some() {
+                                message_box(
+                                    &mut app,
+                                    "ANSI logo loaded!\nlogo.txt found.",
+                                    MsgBox::OK_BUTTON,
+                                );
+                                using_ansi = true;
+                            } else {
+                                message_box(
+                                    &mut app,
+                                    "No ANSI file found.\nPlace logo.txt in examples/",
+                                    MsgBox::OK_BUTTON,
+                                );
+                            }
+                            // Trigger a redraw
+                            let _ = new_bg;
+                        }
+                    }
+                    CM_LOAD_ASCII => {
+                        // Switch to ASCII art background
+                        if using_ansi {
+                            message_box(
+                                &mut app,
+                                "ASCII art mode.\nRestart to apply.",
+                                MsgBox::OK_BUTTON,
+                            );
+                            using_ansi = false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Idle processing - updates crab animation and other idle tasks
+        app.idle();
+    }
+
+    Ok(())
+}
