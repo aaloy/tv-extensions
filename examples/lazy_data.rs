@@ -82,6 +82,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
         .title("Inventory (100,000 rows)")
         .build();
     let mut table = Table::new(Rect::new(1, 1, 41, 14), 1001);
+    table.set_separators(true);
     table.set_columns(vec![
         Column::new("Id", 7),
         Column::new("Name", 14),
