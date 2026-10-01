@@ -106,6 +106,10 @@ name = "ssh_server"
 required-features = ["ssh"]
 
 [[example]]
+name = "autocomplete"
+required-features = ["native"]
+
+[[example]]
 name = "controls"
 required-features = ["native"]
 

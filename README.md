@@ -7,7 +7,7 @@
 
 <img src="https://raw.githubusercontent.com/aovestdipaperino/tv-extensions/main/logo.png" alt="tv-extensions logo" width="384" align="right" />
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus an `AutoComplete` field and host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 
 ## Getting started
 
@@ -68,6 +68,24 @@ match popup_menu(&mut app.terminal, position, menu) {
     Some(command) => { /* dispatch command */ }
     None => { /* dismissed */ }
 }
+```
+
+## AutoComplete
+
+A text field that filters a suggestion list as you type, with the matched text highlighted. Up/Down or the mouse pick a suggestion, Enter accepts it, Esc closes the list. Matching ignores case and accepts Latin-1 letters such as `é` or `ñ`. While the list is open the field's bounds grow over it, so add the field after any sibling the list may cover. Always available, no feature flag. Run `cargo run --example autocomplete --features native` to try it.
+
+```rust
+use std::{cell::RefCell, rc::Rc};
+use turbo_vision::core::geometry::Rect;
+use tv_extensions::AutoCompleteBuilder;
+
+let country = Rc::new(RefCell::new(String::new()));
+let field = AutoCompleteBuilder::new()
+    .bounds(Rect::new(16, 2, 46, 3))
+    .items(["Austria", "Australia", "Belgium"])
+    .data(country.clone())
+    .build();
+assert!(!field.is_open());
 ```
 
 ## Key translation
@@ -153,7 +171,7 @@ let server = SshServer::new(config, || {
 
 | Feature | Enables | Implies |
 | --- | --- | --- |
-| *(none)* | `host`, `scroll_pane`, `popup_menu`, `keys` — builds for `wasm32-wasip1` | |
+| *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `keys` — builds for `wasm32-wasip1` | |
 | `native` | a real terminal in turbo-vision (crossterm, OS clipboard) | |
 | `csv` | the `csv` module: the CSV table editor | |
 | `log` | the `log` module: `LogWindow`, `TerminalWidget` | |

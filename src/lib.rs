@@ -11,6 +11,8 @@
 //!   area larger than its screen bounds (TV Tool Box style).
 //! - [`mod@popup_menu`]: modal context menus and check-mark menu items,
 //!   reusing the framework's `MenuBox`.
+//! - [`autocomplete`]: [`AutoComplete`], a text field that filters a
+//!   suggestion list as you type.
 //! - [`keys`]: key events from key names such as "ctrl-s" or "enter", the
 //!   form a host that is not a terminal reports keys in.
 //! - `csv` (feature `csv`): a CSV table editor, host-driven like [`host`].
@@ -33,6 +35,7 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+pub mod autocomplete;
 #[cfg(feature = "csv")]
 #[cfg_attr(docsrs, doc(cfg(feature = "csv")))]
 pub mod csv;
@@ -53,6 +56,7 @@ pub mod scroll_pane;
 #[cfg_attr(docsrs, doc(cfg(feature = "ssh")))]
 pub mod ssh;
 
+pub use autocomplete::{AutoComplete, AutoCompleteBuilder};
 pub use host::{HostBackend, HostInput, pump};
 pub use popup_menu::{is_menu_item_checked, popup_menu, set_menu_item_checked};
 pub use scroll_pane::ScrollPane;
