@@ -8,6 +8,11 @@
 //! Type to filter (accented Latin-1 letters work too); Up/Down move the
 //! highlight, Enter or a click accepts a suggestion, Esc closes the list.
 //! Tab moves between the fields.
+//!
+//! The two fields show the two modes. Country requires a match: leave it
+//! holding text that is not a country and it goes back to the last one
+//! chosen (typing "méxico" becomes "México"). Fruit takes free text: the
+//! list only suggests.
 
 // (C) 2026 - Antoni Aloy
 
@@ -136,13 +141,14 @@ fn main() -> turbo_vision::core::error::Result<()> {
     // so each field leaves that much room before the next one.
     window.add(StaticText::new(Rect::new(2, 2, 16, 3), "Country:"));
     let country = Rc::new(RefCell::new(String::new()));
-    window.add(AutoComplete::new(
-        Rect::new(16, 2, 46, 3),
-        countries(),
-        country.clone(),
-    ));
+    let mut country_field =
+        AutoComplete::new(Rect::new(16, 2, 46, 3), countries(), country.clone());
+    country_field.set_require_match(true);
+    window.add(country_field);
+    window.add(StaticText::new(Rect::new(47, 2, 54, 3), "(list)"));
 
     window.add(StaticText::new(Rect::new(2, 10, 16, 11), "Fruit:"));
+    window.add(StaticText::new(Rect::new(47, 10, 54, 11), "(free)"));
     let fruit = Rc::new(RefCell::new(String::new()));
     window.add(
         AutoCompleteBuilder::new()
