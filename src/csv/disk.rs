@@ -49,7 +49,8 @@ impl Disk for MemDisk {
 }
 
 /// A directory on the local file system. Paths are file names at its root;
-/// a name that is empty, contains a path separator, or is `..` is refused,
+/// anything that is not a single ordinary path segment (empty, `.`, `..`,
+/// a name with an embedded separator, or a name containing `:`) is refused,
 /// so the editor can never reach outside `root`.
 #[derive(Debug, Clone)]
 pub struct FsDisk {
@@ -62,9 +63,34 @@ impl FsDisk {
         Self { root: root.into() }
     }
 
+    /// Resolves `path` to a file inside `root`, or refuses it.
+    ///
+    /// A name is accepted only when it is exactly one ordinary path segment:
+    /// `std::path::Path::new(name).components()` must yield a single
+    /// `Component::Normal` and nothing else. That alone rejects `..` and `.`
+    /// (a `ParentDir`/`CurDir` component, never `Normal`) and anything with
+    /// an embedded separator (more than one component, or on this OS a
+    /// literal `\` that is only a separator on Windows but is refused here
+    /// on every OS for consistency).
+    ///
+    /// It is not enough on its own, though: `PathBuf::join` treats a name
+    /// such as `C:secret.csv` as having a root on drive `C` with no leading
+    /// `\`, so on Windows `root.join("C:secret.csv")` discards `root` and
+    /// resolves against the current directory of drive `C` instead —
+    /// exactly the escape this method exists to prevent. And on every other
+    /// OS, `:` is just an ordinary filename character, so
+    /// `Path::new("C:secret.csv").components()` yields one `Normal`
+    /// component and the component check alone would wave it through there.
+    /// A name containing `:` is refused outright, so the refusal does not
+    /// depend on which OS runs the check.
     fn file(&self, path: &str) -> Result<std::path::PathBuf, String> {
         let name = path.trim_start_matches('/');
-        if name.is_empty() || name == ".." || name.contains(['/', '\\']) {
+        let is_single_normal_component = {
+            let mut components = std::path::Path::new(name).components();
+            matches!(components.next(), Some(std::path::Component::Normal(_)))
+                && components.next().is_none()
+        };
+        if name.is_empty() || name.contains([':', '\\']) || !is_single_normal_component {
             return Err(format!("not a file name: {path}"));
         }
         Ok(self.root.join(name))
@@ -145,7 +171,16 @@ mod tests {
         std::fs::create_dir(&inner).unwrap();
         std::fs::write(dir.path().join("secret.csv"), "s").unwrap();
         let mut disk = FsDisk::new(&inner);
-        for bad in ["../secret.csv", "..", "a/b.csv", "a\\b.csv", ""] {
+        for bad in [
+            "../secret.csv",
+            "..",
+            ".",
+            "./a.csv",
+            "a/b.csv",
+            "a\\b.csv",
+            "C:x.csv",
+            "",
+        ] {
             assert!(disk.read(bad).is_err(), "read {bad:?}");
             assert!(disk.write(bad, "x").is_err(), "write {bad:?}");
         }
