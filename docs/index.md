@@ -29,3 +29,13 @@ let cells = app.terminal.buffer();
 ```
 
 [Host-driven apps](host.md) explains the model, and why calls that would block are refused.
+
+## Modules
+
+- [Host-driven apps](host.md): the embedding model above, in full.
+- [ScrollPane and popup menus](scroll-pane.md): a scrolling interior for oversized dialogs, and modal context menus (always available, no feature flag).
+- [CSV editor](csv.md) (feature `csv`): a table editor, host-driven like `host`.
+- [Log window](log.md) (feature `log`): a scrolling output pane, and a window that shows `tracing` events in it.
+- [Graphics](graphics.md) (feature `graphics`): ANSI-art backgrounds and bitmap images over the Kitty graphics protocol.
+- [Remote input](remote-input.md) (feature `remote-input`): key chords and mouse clicks injected over TCP, for testing and automation.
+- [SSH server](ssh.md) (feature `ssh`): serving a turbo-vision application over SSH.

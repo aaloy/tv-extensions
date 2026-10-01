@@ -128,7 +128,7 @@ where
 
     /// Handle password authentication.
     ///
-    /// Consults the server's [`SshAuthPolicy`]: the configured password
+    /// Consults the server's [`crate::ssh::SshAuthPolicy`]: the configured password
     /// callback decides, `allow_anonymous` accepts, anything else is
     /// rejected (deny by default).
     async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
@@ -152,7 +152,7 @@ where
 
     /// Handle public key authentication.
     ///
-    /// Consults the server's [`SshAuthPolicy`]: the configured public key
+    /// Consults the server's [`crate::ssh::SshAuthPolicy`]: the configured public key
     /// callback decides, `allow_anonymous` accepts, anything else is
     /// rejected (deny by default).
     async fn auth_publickey(&mut self, user: &str, key: &PublicKey) -> Result<Auth, Self::Error> {

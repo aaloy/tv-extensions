@@ -9,8 +9,8 @@
 //!   terminal buffer.
 //! - [`scroll_pane`]: [`ScrollPane`], a scrolling viewport over a virtual
 //!   area larger than its screen bounds (TV Tool Box style).
-//! - [`popup_menu`]: modal context menus and check-mark menu items, reusing
-//!   the framework's `MenuBox`.
+//! - [`mod@popup_menu`]: modal context menus and check-mark menu items,
+//!   reusing the framework's `MenuBox`.
 //! - [`keys`]: key events from key names such as "ctrl-s" or "enter", the
 //!   form a host that is not a terminal reports keys in.
 //! - [`csv`] (feature `csv`): a CSV table editor, host-driven like [`host`].

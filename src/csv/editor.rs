@@ -6,7 +6,7 @@
 //! A host pushes one key per call and asks for a screen per step, so this is
 //! a Turbo Vision `Application` driven by [`crate::host::pump`], never by a
 //! blocking run loop, and every dialog is a plain desktop window whose
-//! buttons send commands back to the [`State`] handler.
+//! buttons send commands back to the `State` handler.
 
 use turbo_vision::app::{AppHandler, Application};
 use turbo_vision::core::command::{CM_CLOSE, CM_QUIT, CommandId};

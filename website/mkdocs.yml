@@ -1,5 +1,5 @@
 site_name: tv-extensions
-site_description: Host-driven apps and a separator grid for turbo-vision
+site_description: Host-driven apps and extension modules for turbo-vision
 site_author: Enzo Lombardi
 repo_url: https://github.com/aovestdipaperino/tv-extensions
 repo_name: aovestdipaperino/tv-extensions
@@ -64,4 +64,9 @@ plugins:
 nav:
   - Home: index.md
   - Host-driven apps: host.md
-  - Grid: grid.md
+  - ScrollPane and popup menus: scroll-pane.md
+  - CSV editor: csv.md
+  - Log window: log.md
+  - Graphics: graphics.md
+  - Remote input: remote-input.md
+  - SSH server: ssh.md
