@@ -36,29 +36,68 @@
 //! [`AutoCompleteBuilder::require_match`]) the value must be one of the
 //! items, like Borland's `TStringLookupValidator`:
 //!
-//! - Leaving the field turns text that matches an item, ignoring case, into
-//!   that item's exact spelling, and puts anything else back to the last
-//!   accepted value. An empty field is allowed and means "no choice".
-//! - `valid()` refuses an unknown value, so OK (or Enter) does not close
-//!   the dialog while the field holds one. The list opens on the closest
-//!   matches instead, since there is no message box to show. Cancel always
-//!   closes.
+//! - A value is required. `valid()` refuses an empty field or text that is
+//!   not an item, so OK (or Enter) does not close the dialog. The field then
+//!   shows an error line under itself ("Choose a value from the list", set
+//!   with [`AutoComplete::set_error_message`]) until the value is fixed, and
+//!   the list opens on the closest matches. Cancel always closes.
+//! - Unknown text is left as typed, so the user sees what to fix. Leaving
+//!   the field only turns text that matches an item, ignoring case, into the
+//!   item's exact spelling ("méxico" becomes "México").
 //!
 //! # Example
 //!
+//! The two modes differ only in `require_match`. Here both fields get the
+//! same unknown name, "Kiwi", and lose focus; then the dialog asks them
+//! whether OK may close it:
+//!
 //! ```
 //! use std::{cell::RefCell, rc::Rc};
+//! use turbo_vision::core::command::CM_OK;
+//! use turbo_vision::core::event::Event;
 //! use turbo_vision::core::geometry::Rect;
-//! use tv_extensions::AutoComplete;
+//! use turbo_vision::views::View;
+//! use tv_extensions::AutoCompleteBuilder;
 //!
-//! let text = Rc::new(RefCell::new(String::new()));
-//! let fruits = ["Apple", "Apricot", "Banana", "Blueberry", "Cherry"]
-//!     .into_iter()
-//!     .map(String::from)
-//!     .collect();
-//! let auto = AutoComplete::new(Rect::new(2, 2, 32, 3), fruits, text.clone());
-//! assert!(!auto.is_open());
+//! let fruits = ["Apple", "Banana", "Cherry"];
+//! let field = |data: &Rc<RefCell<String>>, require_match| {
+//!     AutoCompleteBuilder::new()
+//!         .bounds(Rect::new(2, 2, 32, 3))
+//!         .items(fruits)
+//!         .data(data.clone())
+//!         .require_match(require_match)
+//!         .build()
+//! };
+//! // Type `text` into a focused field, then move the focus away.
+//! let type_and_leave = |auto: &mut dyn View, text: &str| {
+//!     auto.set_focus(true);
+//!     for ch in text.chars() {
+//!         auto.handle_event(&mut Event::keyboard(ch as u16));
+//!     }
+//!     auto.set_focus(false);
+//!     auto.handle_event(&mut Event::broadcast(0)); // the next event settles it
+//! };
+//!
+//! // Free text (the default): whatever is typed is kept.
+//! let free = Rc::new(RefCell::new(String::new()));
+//! let mut free_field = field(&free, false);
+//! type_and_leave(&mut free_field, "Kiwi");
+//! assert_eq!(*free.borrow(), "Kiwi");
+//! assert!(free_field.valid(CM_OK));
+//!
+//! // Must match: the value must be one of the items.
+//! let strict = Rc::new(RefCell::new(String::new()));
+//! let mut strict_field = field(&strict, true);
+//! type_and_leave(&mut strict_field, "Kiwi");
+//! assert!(!strict_field.valid(CM_OK)); // OK refused...
+//! assert!(strict_field.shows_error()); // ...with the error line under the field
+//! type_and_leave(&mut strict_field, "banana");
+//! assert_eq!(*strict.borrow(), "Banana"); // the item's own spelling
+//! assert!(strict_field.valid(CM_OK));
 //! ```
+//!
+//! `examples/autocomplete.rs` puts both modes in one dialog, where OK is
+//! refused, with the error line, until the strict field holds an item.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -84,6 +123,14 @@ const FIELD_SELECTED: u8 = 3;
 const LIST_NORMAL: u8 = 4;
 const LIST_SELECTED: u8 = 5;
 const LIST_MATCH: u8 = 6;
+
+/// Borland's `errorAttr` (white on light red), which core also uses for an
+/// unmapped colour; the error line is drawn in it.
+const ERROR_ATTR: u8 = 0xCF;
+
+/// The error line's text unless [`AutoComplete::set_error_message`] says
+/// otherwise.
+const DEFAULT_ERROR_MESSAGE: &str = "Choose a value from the list";
 
 /// Palette inside a dialog: the field maps like `InputLine`, the list like
 /// `ListBox` (26 normal, 27 selected, 28 the divider colour for matches).
@@ -149,6 +196,18 @@ fn find_match(haystack: &str, needle: &str) -> Option<usize> {
     hay.windows(pat.len()).position(|w| w == pat.as_slice())
 }
 
+/// What the field accepts, and whether a refused value is being reported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    /// Any text (the default).
+    Free,
+    /// The value must be one of the items.
+    MustMatch,
+    /// As `MustMatch`, and `valid()` refused the value: the error line shows
+    /// until it is edited or a suggestion is picked.
+    Refused,
+}
+
 /// A text field that filters `items` to the ones matching the typed text,
 /// showing the matches in a drop-down below the field.
 ///
@@ -176,13 +235,10 @@ pub struct AutoComplete {
     top: usize,
     /// Command broadcast when a suggestion is accepted. Zero sends none.
     on_select: CommandId,
-    /// When set, the value must be one of `items` (or empty).
-    require_match: bool,
-    /// The last value known to be acceptable, restored when strict mode
-    /// rejects what was typed.
-    accepted: String,
-    /// The text was edited since it was last accepted.
+    mode: Mode,
+    /// The text was edited since it was last settled.
     dirty: bool,
+    error_message: String,
 }
 
 impl AutoComplete {
@@ -209,11 +265,10 @@ impl AutoComplete {
             highlighted: 0,
             top: 0,
             on_select: 0,
-            require_match: false,
-            accepted: String::new(),
+            mode: Mode::Free,
             dirty: false,
+            error_message: DEFAULT_ERROR_MESSAGE.to_string(),
         };
-        auto.accepted = auto.value();
         auto.cursor_pos = char_len(&auto.text.borrow());
         auto.refilter();
         auto
@@ -245,7 +300,25 @@ impl AutoComplete {
     /// Whether the value must be one of the items (default false, free
     /// text). See the module docs for what strict mode does.
     pub fn set_require_match(&mut self, require_match: bool) {
-        self.require_match = require_match;
+        self.mode = if require_match {
+            Mode::MustMatch
+        } else {
+            Mode::Free
+        };
+        self.sync_height();
+    }
+
+    /// The error line shown when strict mode refuses the value (default
+    /// "Choose a value from the list"). It is cut to the field's width.
+    pub fn set_error_message(&mut self, message: impl Into<String>) {
+        self.error_message = message.into();
+    }
+
+    /// True while the error line is showing: `valid()` refused the value
+    /// and it has not been edited or picked since.
+    #[must_use]
+    pub fn shows_error(&self) -> bool {
+        self.mode == Mode::Refused
     }
 
     /// Replace the suggestion list and re-filter against the current text.
@@ -273,7 +346,7 @@ impl AutoComplete {
     /// picks from it. This runs on the next event or draw instead, which
     /// still hides the list before a field that lost focus is drawn again.
     /// The same deferral applies to settling edited text (see `settle`):
-    /// doing it on that transient focus loss would undo text the user is
+    /// doing it on that transient focus loss would rewrite text the user is
     /// still typing whenever they click in their own field.
     fn close_if_blurred(&mut self) {
         if self.is_focused() {
@@ -292,19 +365,30 @@ impl AutoComplete {
         self.items.iter().find(|item| same_text(item, text))
     }
 
-    /// Accept the text after editing: as typed in free mode; in strict mode
-    /// as the matching item's spelling, or back to the last accepted value.
+    /// Tidy the text after editing: in strict mode, text naming an item
+    /// takes the item's spelling. Anything else stays as typed, for
+    /// `valid()` to report.
     fn settle(&mut self) {
         self.dirty = false;
+        if self.mode == Mode::Free {
+            return;
+        }
         let text = self.value();
-        let resolved = if !self.require_match || text.is_empty() {
-            Some(text)
-        } else {
-            self.exact_item(&text).cloned()
-        };
-        let value = resolved.unwrap_or_else(|| self.accepted.clone());
-        self.replace_text(value.clone());
-        self.accepted = value;
+        if let Some(item) = self.exact_item(&text).cloned() {
+            self.replace_text(item);
+        }
+    }
+
+    fn hide_error(&mut self) {
+        if self.mode == Mode::Refused {
+            self.mode = Mode::MustMatch;
+            self.sync_height();
+        }
+    }
+
+    /// Rows under the field taken by the error line: one or none.
+    fn error_rows(&self) -> usize {
+        usize::from(self.mode == Mode::Refused)
     }
 
     /// Put `value` in the field with the cursor at its end.
@@ -349,18 +433,26 @@ impl AutoComplete {
         }
     }
 
-    /// Grow the bounds over the open list, or shrink them back to the field
-    /// row. The owning group routes mouse events by bounds, so this is what
-    /// lets a click on a suggestion reach this view.
+    /// Grow the bounds over the error line and the open list, or shrink them
+    /// back to the field row. The owning group routes mouse events by
+    /// bounds, so this is what lets a click on a suggestion reach this view.
     fn sync_height(&mut self) {
-        let rows = if self.open { self.drop_rows() } else { 0 };
+        let list = if self.open { self.drop_rows() } else { 0 };
+        let rows = self.error_rows() + list;
         let top = self.core.bounds.a.y;
         self.core.bounds.b.y = top.saturating_add(1).saturating_add(coord(rows));
     }
 
-    /// The open drop-down, in this view's own space.
+    /// The open drop-down, in this view's own space: under the field and
+    /// the error line, if any.
     fn drop_bounds(&self) -> Rect {
-        Rect::new(0, 1, self.width_cells_i16(), 1 + coord(self.drop_rows()))
+        let top = 1 + coord(self.error_rows());
+        Rect::new(
+            0,
+            top,
+            self.width_cells_i16(),
+            top + coord(self.drop_rows()),
+        )
     }
 
     fn width(&self) -> usize {
@@ -414,8 +506,8 @@ impl AutoComplete {
             .and_then(|&i| self.items.get(i))
             .cloned();
         if let Some(chosen) = chosen {
-            self.accepted.clone_from(&chosen);
             self.dirty = false;
+            self.hide_error();
             self.cursor_pos = char_len(&chosen);
             *self.text.borrow_mut() = chosen;
             self.sel_start = 0;
@@ -542,11 +634,12 @@ impl AutoComplete {
             ..selected_attr
         };
 
+        let top = self.drop_bounds().a.y;
         if self.filtered.is_empty() {
             let mut row = DrawBuffer::new(width);
             row.move_char(0, ' ', normal_attr, width);
             row.move_str(0, "No matches", normal_attr);
-            write_line_to_terminal(terminal, 0, 1, &row);
+            write_line_to_terminal(terminal, 0, top, &row);
             return;
         }
 
@@ -576,8 +669,19 @@ impl AutoComplete {
                 };
                 buf.move_char(i, ch, attr, 1);
             }
-            write_line_to_terminal(terminal, 0, 1 + coord(row), &buf);
+            write_line_to_terminal(terminal, 0, top + coord(row), &buf);
         }
+    }
+
+    fn draw_error(&self, terminal: &mut Terminal) {
+        let width = self.width();
+        let attr = Attr::from_u8(ERROR_ATTR);
+        let mut row = DrawBuffer::new(width);
+        row.move_char(0, ' ', attr, width);
+        for (i, ch) in self.error_message.chars().take(width).enumerate() {
+            row.move_char(i, ch, attr, 1);
+        }
+        write_line_to_terminal(terminal, 0, 1, &row);
     }
 
     fn handle_mouse_down(&mut self, event: &mut Event) {
@@ -641,6 +745,7 @@ impl AutoComplete {
                 self.make_cursor_visible();
                 self.refilter();
                 self.dirty = true;
+                self.hide_error();
             }
             KB_DEL => {
                 if self.has_selection() {
@@ -655,6 +760,7 @@ impl AutoComplete {
                 self.make_cursor_visible();
                 self.refilter();
                 self.dirty = true;
+                self.hide_error();
             }
             KB_LEFT | KB_RIGHT | KB_HOME | KB_END => {
                 let len = char_len(&self.text.borrow());
@@ -677,6 +783,7 @@ impl AutoComplete {
                 self.make_cursor_visible();
                 self.refilter();
                 self.dirty = true;
+                self.hide_error();
             }
         }
         true
@@ -747,6 +854,9 @@ impl View for AutoComplete {
         }
         let text = self.text.borrow().clone();
         self.draw_field(terminal, &text);
+        if self.mode == Mode::Refused {
+            self.draw_error(terminal);
+        }
         if self.open {
             self.draw_list(terminal, &text);
         }
@@ -770,28 +880,32 @@ impl View for AutoComplete {
         }
     }
 
-    /// In strict mode, refuse to end the dialog (except with Cancel) while
-    /// the text is not one of the items. Matches Borland's `TInputLine::valid`
+    /// In strict mode, refuse to end the dialog (except with Cancel) unless
+    /// the text is one of the items. Matches Borland's `TInputLine::valid`
     /// with a `TStringLookupValidator`.
     fn valid(&mut self, command: CommandId) -> bool {
-        if command == CM_CANCEL || !self.require_match {
+        if command == CM_CANCEL || self.mode == Mode::Free {
             return true;
         }
         let text = self.value();
-        if text.is_empty() {
-            return true;
-        }
         if let Some(item) = self.exact_item(&text).cloned() {
-            self.replace_text(item.clone());
-            self.accepted = item;
+            self.replace_text(item);
             self.dirty = false;
+            self.hide_error();
             self.close_list();
             return true;
         }
-        // Core's validators have no message box to report with; showing
-        // what does match tells the user why the dialog stayed open.
-        self.refilter();
-        self.open_list();
+        // Borland's validator shows a message box here, but `valid()` has no
+        // access to the application to run one (core's own validators leave
+        // `error()` empty for that reason). The field draws the error under
+        // itself instead, which stays visible while the focus is on the OK
+        // button, and opens the list on what does match.
+        self.mode = Mode::Refused;
+        if self.is_focused() && !text.is_empty() {
+            self.refilter();
+            self.open_list();
+        }
+        self.sync_height();
         false
     }
 
@@ -831,6 +945,7 @@ pub struct AutoCompleteBuilder {
     max_drop_rows: usize,
     on_select: CommandId,
     require_match: bool,
+    error_message: Option<String>,
 }
 
 impl AutoCompleteBuilder {
@@ -846,6 +961,7 @@ impl AutoCompleteBuilder {
             max_drop_rows: 6,
             on_select: 0,
             require_match: false,
+            error_message: None,
         }
     }
 
@@ -905,6 +1021,13 @@ impl AutoCompleteBuilder {
         self
     }
 
+    /// See [`AutoComplete::set_error_message`].
+    #[must_use]
+    pub fn error_message(mut self, message: impl Into<String>) -> Self {
+        self.error_message = Some(message.into());
+        self
+    }
+
     /// Build the field.
     ///
     /// # Panics
@@ -922,6 +1045,9 @@ impl AutoCompleteBuilder {
         auto.set_max_drop_rows(self.max_drop_rows);
         auto.set_on_select(self.on_select);
         auto.set_require_match(self.require_match);
+        if let Some(message) = self.error_message {
+            auto.set_error_message(message);
+        }
         auto
     }
 
@@ -1214,41 +1340,85 @@ mod tests {
     }
 
     #[test]
-    fn strict_mode_puts_unknown_text_back_on_leaving() {
+    fn strict_mode_leaves_unknown_text_as_typed_on_leaving() {
         let (mut auto, data) = strict("Cherry");
         type_str(&mut auto, "Durian");
         blur(&mut auto);
-        assert_eq!(*data.borrow(), "Cherry");
+        assert_eq!(
+            *data.borrow(),
+            "Durian",
+            "kept so the user sees what to fix"
+        );
+        assert!(!auto.valid(turbo_vision::core::command::CM_OK));
     }
 
     #[test]
-    fn strict_mode_takes_the_items_spelling_on_leaving() {
+    fn strict_mode_requires_a_value() {
         let (mut auto, data) = strict("");
-        type_str(&mut auto, "bLUEberry");
-        blur(&mut auto);
-        assert_eq!(*data.borrow(), "Blueberry");
-    }
-
-    #[test]
-    fn strict_mode_reverts_to_the_last_chosen_suggestion() {
-        let (mut auto, data) = strict("");
-        type_str(&mut auto, "ban");
-        let mut ev = key(KB_ENTER);
-        auto.handle_event(&mut ev);
-        assert_eq!(*data.borrow(), "Banana");
-        type_str(&mut auto, "zzz"); // field still focused: appends
-        blur(&mut auto);
-        assert_eq!(*data.borrow(), "Banana");
-    }
-
-    #[test]
-    fn strict_mode_allows_an_empty_field() {
-        let (mut auto, data) = strict("Cherry");
-        let mut ev = key(KB_BACKSPACE); // everything is selected on focus
-        auto.handle_event(&mut ev);
         blur(&mut auto);
         assert_eq!(*data.borrow(), "");
+        assert!(!auto.valid(turbo_vision::core::command::CM_OK));
+        assert!(auto.shows_error());
+    }
+
+    #[test]
+    fn refused_value_shows_the_error_line_until_it_is_edited() {
+        use turbo_vision::core::command::CM_OK;
+        let (mut auto, _) = strict("");
+        type_str(&mut auto, "zz");
+        let mut ev = key(KB_ESC);
+        auto.handle_event(&mut ev);
+        assert!(!auto.shows_error());
+        assert!(!auto.valid(CM_OK));
+        assert!(auto.shows_error());
+        // Error line, then the list ("No matches") under it.
+        assert_eq!(auto.bounds().height(), 3);
+        let mut ev = key(KB_BACKSPACE);
+        auto.handle_event(&mut ev);
+        assert!(!auto.shows_error(), "editing clears it");
+    }
+
+    #[test]
+    fn the_error_line_stays_while_the_focus_is_on_ok() {
+        // Clicking OK moves the focus to the button before valid() runs.
+        let (mut auto, _) = strict("");
+        type_str(&mut auto, "zz");
+        blur(&mut auto);
+        assert!(!auto.valid(turbo_vision::core::command::CM_OK));
+        assert!(auto.shows_error());
+        assert!(!auto.is_open());
+        assert_eq!(auto.bounds().height(), 2, "field and error line");
+    }
+
+    #[test]
+    fn picking_a_suggestion_clears_the_error() {
+        let (mut auto, data) = strict("");
+        type_str(&mut auto, "ban");
+        let mut ev = key(KB_ESC);
+        auto.handle_event(&mut ev);
+        // Refused: the error line opens, with the matches under it.
+        assert!(!auto.valid(turbo_vision::core::command::CM_OK));
+        assert!(auto.is_open());
+        let mut ev = Event::mouse(
+            EventType::MouseDown,
+            Point::new(2, 2),
+            MB_LEFT_BUTTON,
+            false,
+        );
+        auto.handle_event(&mut ev);
+        assert_eq!(*data.borrow(), "Banana");
+        assert!(!auto.shows_error());
         assert!(auto.valid(turbo_vision::core::command::CM_OK));
+    }
+
+    #[test]
+    fn the_error_message_can_be_changed() {
+        let auto = AutoCompleteBuilder::new()
+            .bounds(Rect::new(0, 0, 20, 1))
+            .require_match(true)
+            .error_message("Tria un país")
+            .build();
+        assert_eq!(auto.error_message, "Tria un país");
     }
 
     #[test]
