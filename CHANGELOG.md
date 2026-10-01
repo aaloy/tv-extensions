@@ -34,6 +34,11 @@ Tracks turbo-vision 4.0 from crates.io. Forwards the `screenshot` feature.
 
 ### Added
 
+- `autocomplete`: `AutoComplete` and `AutoCompleteBuilder`, a text field
+  that filters a suggestion list as you type and highlights the matched
+  text. Keyboard and mouse selection, ASCII and Latin-1 input, colours from
+  the owner's palette (dialog or window), and an optional `on_select`
+  broadcast. From the standalone `tvauto` crate. Example: `autocomplete`.
 - `host`: host-driven applications for an embedder that owns the screen and
   the event loop (a WASM guest such as a plank frame) — `HostBackend`,
   `HostInput`, `pump`. Builds without turbo-vision's `native` feature, so
