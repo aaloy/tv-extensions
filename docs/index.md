@@ -1,10 +1,10 @@
 # tv-extensions
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. The crate holds the pieces that let a host embed a turbo-vision application and step it one frame at a time.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. The crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 
 ## Why a separate crate
 
-Turbo Vision's core is a port of a framework whose design was settled in 1990, and it earns its keep by staying small and stable. Embedding it in a host such as a plank WASM frame, where the host owns the screen and the event loop, is a newer and still moving use case, and so are the extra widgets an embedder tends to want. Keeping them here lets them change and version on their own, while core carries only the two hooks they need: `Backend::is_host_driven`, so a backend can say that nobody may block waiting for input, and `Application::step`, which runs one pass of the event loop.
+Turbo Vision's core is a port of a framework whose design was settled in 1990, and it earns its keep by staying small and stable. Host-driven embedding (in a host such as a plank WASM frame, where the host owns the screen and the event loop) and the extra widgets and protocols above are newer and still-moving use cases, each with its own pace of change, so keeping them here lets them change and version on their own. Core carries only the public API and the small set of hooks this crate builds on: `Backend::is_host_driven` and `Application::step` for host-driven embedding, plus `Terminal::event_injector`, the capture hook, `Terminal::write_raw`, and the public `InputParser` that the remote-input, graphics and SSH modules write and read through.
 
 The crate depends on turbo-vision without its `native` feature, so it builds for `wasm32-wasip1`.
 
@@ -12,9 +12,15 @@ The crate depends on turbo-vision without its `native` feature, so it builds for
 
 ```toml
 [dependencies]
-turbo-vision = { version = "3", default-features = false }
+turbo-vision = { git = "https://github.com/aovestdipaperino/turbo-vision-4-rust", rev = "6d299279b71cf8fdefec60c3f52da1d04e8afcbf", default-features = false }
 tv-extensions = { git = "https://github.com/aovestdipaperino/tv-extensions" }
 ```
+
+The `rev` must match the commit tv-extensions itself pins in its
+`Cargo.toml` — a different `turbo-vision` version here gives Cargo two
+separate copies of the crate (one straight from `crates.io` or another
+commit, one pulled in transitively by tv-extensions), which do not share
+types with each other.
 
 A host-driven application never runs its own loop. The host pushes events into a `HostInput`, calls `pump` once per frame, and reads the finished cells out of the terminal buffer:
 

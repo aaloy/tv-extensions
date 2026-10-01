@@ -1,10 +1,10 @@
 # tv-extensions
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the pieces that let a host embed a turbo-vision application and step it one frame at a time.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 
 ## Why a separate crate
 
-Turbo Vision's core is a port of a framework whose design was settled in 1990, and it earns its keep by staying small and stable. Embedding it in a host such as a plank WASM frame, where the host owns the screen and the event loop, is a newer and still moving use case, and so are the extra widgets an embedder tends to want. Keeping them here lets them change and version on their own, while core carries only the two hooks they need: `Backend::is_host_driven`, so a backend can say that nobody may block waiting for input, and `Application::step`, which runs one pass of the event loop.
+Turbo Vision's core is a port of a framework whose design was settled in 1990, and it earns its keep by staying small and stable. Host-driven embedding (in a host such as a plank WASM frame, where the host owns the screen and the event loop) and the extra widgets and protocols above are newer and still-moving use cases, each with its own pace of change, so keeping them here lets them change and version on their own. Core carries only the public API and the small set of hooks this crate builds on: `Backend::is_host_driven` and `Application::step` for host-driven embedding, plus `Terminal::event_injector`, the capture hook, `Terminal::write_raw`, and the public `InputParser` that the remote-input, graphics and SSH modules write and read through.
 
 The crate depends on turbo-vision without its `native` feature, so it builds for `wasm32-wasip1` (`scripts/check-wasm.sh` checks that).
 
@@ -154,9 +154,11 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
-cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets
 sh scripts/check-wasm.sh
 ```
+
+`-D warnings` is not used: clippy's `pedantic` lints are on as warnings (see `Cargo.toml`), and a few files copied verbatim from turbo-vision core carry pedantic warnings inherited from there as-is. The bar is no clippy *errors*, and no new warnings in hand-written code; `cargo clippy --all-targets` and read the output rather than failing the build on every pedantic nit.
 
 The documentation site lives in `website/` and is built with `mkdocs build -f website/mkdocs.yml` from the pages in `docs/`.
 

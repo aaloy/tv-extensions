@@ -31,9 +31,11 @@
   turbo-vision core, built on `russh`.
 - Examples: `controls`, `lazy_data`, `scroll_and_popup`, `csv_edit`,
   `kitty_image`, `kitty_background`, `kitty_biorhythm`, `desktop_logo`,
-  `log_window`, `terminal_widget`, `ssh_server`. The `csv_edit` example and
-  the extras demos (`controls`, `lazy_data`, `scroll_and_popup`,
-  `desktop_logo`) are rewritten on core widgets rather than the retired
+  `log_window`, `terminal_widget`, `ssh_server`. `desktop_logo` is a
+  turbo-vision core example, carried over here to demonstrate the
+  `graphics` feature; `csv_edit` is new, driving `csv::Session` from a
+  real terminal. The extras demos (`controls`, `lazy_data`,
+  `scroll_and_popup`) are rewritten on core widgets rather than the retired
   `turbo-vision-extras` API.
 
 ### Removed
@@ -47,3 +49,11 @@
   release), to carry the host-driven hooks (`Backend::is_host_driven`,
   `Application::step`) this crate depends on, ahead of a core release that
   includes them.
+- `tv-extensions` is now the home for every niche feature that left
+  turbo-vision core: the CSV editor, the logging window, Kitty/ANSI
+  graphics, remote input, SSH, `ScrollPane` and popup menus, plus
+  host-driven embedding for a host that owns the screen and the event loop.
+  All of it is built on core's public API and the hooks core exposes for
+  exactly this crate: `Terminal::event_injector`, the capture hook,
+  `Terminal::write_raw`, the public `InputParser`, and host-driven
+  `Backend::is_host_driven`/`Application::step`.
