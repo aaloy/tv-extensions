@@ -20,6 +20,8 @@
 //!   shows `tracing` events in it.
 //! - [`graphics`] (feature `graphics`): ANSI-art backgrounds and bitmap
 //!   images over the Kitty graphics protocol.
+//! - [`remote_input`] (feature `remote-input`): key chords typed over TCP,
+//!   for automation.
 //!
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
@@ -35,6 +37,8 @@ pub mod keys;
 #[cfg(feature = "log")]
 pub mod log;
 pub mod popup_menu;
+#[cfg(feature = "remote-input")]
+pub mod remote_input;
 pub mod scroll_pane;
 
 pub use host::{HostBackend, HostInput, pump};
