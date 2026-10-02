@@ -19,7 +19,7 @@
 //!
 //! | Key | Action |
 //! |-----|--------|
-//! | Printable characters (ASCII and Latin-1) | Type into the field, filter the list |
+//! | Any character one cell wide (`é`, `ñ`, `€`, `ł`, Greek, Cyrillic, ...) | Type into the field, filter the list |
 //! | Down | Open the list, or move the highlight down |
 //! | Up | Move the highlight up |
 //! | Enter | Accept the highlighted suggestion |
@@ -165,17 +165,6 @@ fn coord(n: usize) -> i16 {
 /// A screen coordinate as a count of cells; negative becomes zero.
 fn cells(n: i16) -> usize {
     usize::try_from(n).unwrap_or(0)
-}
-
-/// The character a key code types, if it is printable. Key codes carry the
-/// character itself for plain keys; special keys live at 0x0E08 and up, so
-/// only ASCII and the printable Latin-1 range are unambiguous.
-fn typed_char(key_code: u16) -> Option<char> {
-    if (0x20..0x7F).contains(&key_code) || (0xA0..=0xFF).contains(&key_code) {
-        char::from_u32(u32::from(key_code))
-    } else {
-        None
-    }
 }
 
 fn lower(c: char) -> char {
@@ -766,8 +755,10 @@ impl AutoComplete {
         true
     }
 
-    /// Text-editing keys. Returns true when the key was consumed.
-    fn handle_edit_key(&mut self, key_code: u16) -> bool {
+    /// Text-editing keys. `typed` is the character the key types, as
+    /// `Event::typed_char` reports it: any character one cell wide. Returns
+    /// true when the key was consumed.
+    fn handle_edit_key(&mut self, key_code: u16, typed: Option<char>) -> bool {
         match key_code {
             KB_BACKSPACE => {
                 if self.has_selection() {
@@ -813,7 +804,7 @@ impl AutoComplete {
                 self.make_cursor_visible();
             }
             _ => {
-                let Some(ch) = typed_char(key_code) else {
+                let Some(ch) = typed else {
                     return false;
                 };
                 if !self.insert_char(ch) {
@@ -855,7 +846,7 @@ impl AutoComplete {
                 event.clear();
             }
             key_code => {
-                if self.handle_edit_key(key_code) {
+                if self.handle_edit_key(key_code, event.typed_char()) {
                     event.clear();
                 }
             }
@@ -1243,6 +1234,36 @@ mod tests {
         type_str(&mut auto, "ñ");
         assert_eq!(*data.borrow(), "ñ");
         assert_eq!(shown(&auto), vec!["Ñandú"]);
+    }
+
+    #[test]
+    fn letters_past_latin1_are_typed_and_matched() {
+        let data = Rc::new(RefCell::new(String::new()));
+        let items = ["Łódź", "Plzeň", "Ústí"].map(String::from).to_vec();
+        let mut auto = AutoComplete::new(Rect::new(0, 0, 20, 1), items, data.clone());
+        auto.set_focus(true);
+        for ch in "ňł".chars() {
+            auto.handle_event(&mut Event::text(ch));
+        }
+        assert_eq!(*data.borrow(), "ňł");
+        let mut auto = AutoComplete::new(
+            Rect::new(0, 0, 20, 1),
+            ["Łódź", "Plzeň"].map(String::from).to_vec(),
+            Rc::new(RefCell::new(String::new())),
+        );
+        auto.set_focus(true);
+        auto.handle_event(&mut Event::text('ł'));
+        assert_eq!(shown(&auto), vec!["Łódź"], "case-insensitive past Latin-1");
+    }
+
+    #[test]
+    fn e_caron_types_instead_of_closing_the_list() {
+        // `ě` is U+011B, the value of KB_ESC: it used to close the list.
+        let (mut auto, data) = make();
+        type_str(&mut auto, "a");
+        assert!(auto.is_open());
+        auto.handle_event(&mut Event::text('ě'));
+        assert_eq!(*data.borrow(), "aě");
     }
 
     #[test]

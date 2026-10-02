@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+Requires turbo-vision 4.1.0.
+
+### Changed
+
+- `autocomplete`: any character one cell wide types and matches, through
+  turbo-vision's `Event::typed_char`, not only ASCII and Latin-1: `ł`, `ň`,
+  `€`, Greek and Cyrillic, case-insensitively. `ě` (U+011B, the value of
+  `KB_ESC`) types instead of closing the list.
+
 ## [0.4.0] - 2026-10-23
 
 Requires turbo-vision 4.0.2; works with 4.1.0, whose host-driven
