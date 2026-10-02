@@ -1410,6 +1410,23 @@ mod tests {
     }
 
     #[test]
+    fn session_cursor_follows_the_edit_dialog() {
+        let mut s = new_session();
+        assert_eq!(s.cursor(), None, "no dialog open yet");
+
+        press(&mut s, "enter"); // opens the edit-cell dialog, focused on its input line
+        let (x0, y0) = s.cursor().expect("the dialog's input line shows a cursor");
+
+        type_str(&mut s, "x");
+        let (x1, y1) = s.cursor().expect("cursor stays while typing");
+        assert_eq!(y1, y0, "typing stays on the input line's row");
+        assert_eq!(x1, x0 + 1, "cursor follows the typed character");
+
+        press(&mut s, "escape"); // cancels, closing the dialog
+        assert_eq!(s.cursor(), None, "closing the dialog hides the cursor");
+    }
+
+    #[test]
     fn save_as_refuses_a_name_with_a_slash_and_keeps_the_dialog() {
         let mut s = new_session();
         press(&mut s, "ctrl-r");

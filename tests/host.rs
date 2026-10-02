@@ -147,3 +147,29 @@ fn a_terminal_over_a_host_backend_builds() {
     let terminal = Terminal::with_backend(Box::new(backend)).expect("terminal");
     assert_eq!(terminal.size(), (12, 3));
 }
+
+#[test]
+fn host_tracks_the_cursor() {
+    let (mut app, input) = app(40, 10);
+    pump(&mut app, &mut ());
+    assert_eq!(input.cursor(), None, "nothing focused shows a cursor yet");
+
+    let mut window = WindowBuilder::new()
+        .bounds(Rect::new(0, 0, 40, 10))
+        .title("T")
+        .build();
+    // Interior row/col 0, so the screen position is the window's origin
+    // plus one cell for the frame border.
+    window.add(InputLine::new(Rect::new(0, 0, 30, 1), 50));
+    app.desktop.add(window);
+    for c in "Hi".chars() {
+        input.push(key(c));
+    }
+    pump(&mut app, &mut ());
+    let (x, y) = input
+        .cursor()
+        .expect("a focused input line reports a cursor");
+    assert_eq!(y, 1, "window(0) + border(1) + interior row(0)");
+    assert_eq!(x, 1 + 2, "the input line's screen column plus the typed length");
+}
+
