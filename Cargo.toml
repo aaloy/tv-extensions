@@ -22,8 +22,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 # Turbo Vision without its terminal by default (`native` off), so the crate
 # builds for wasm32-wasip1. From crates.io now that 4.0 carries the
-# host-driven hooks this crate depends on.
-turbo-vision = { version = "4.0", default-features = false }
+# host-driven hooks this crate depends on. 4.0.1 is required: it is the
+# version where Desktop (and TabbedPane/SplitPane) forward update_cursor,
+# which HostInput::cursor()/Session::cursor() depend on.
+turbo-vision = { version = "4.0.1", default-features = false }
 tracing = { version = "0.1", optional = true }
 base64 = { version = "0.22", optional = true }
 chrono = { version = "0.4.45", optional = true }
@@ -38,7 +40,7 @@ ssh-key = { version = "0.6", optional = true }
 unicode-width = { version = "0.1", optional = true }
 
 [dev-dependencies]
-turbo-vision = { version = "4.0", default-features = false, features = ["test-util"] }
+turbo-vision = { version = "4.0.1", default-features = false, features = ["test-util"] }
 tempfile = "3"
 # Used by the kitty_biorhythm example only; not part of the library's API.
 chrono = "0.4.45"

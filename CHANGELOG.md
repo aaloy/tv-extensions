@@ -2,6 +2,10 @@
 
 ## [0.3.0] - 2026-10-02
 
+Requires turbo-vision 4.0.1: the cursor below depends on its fix forwarding
+`Desktop::update_cursor` to the focused window (4.0.0's `Desktop` never
+called it, so no window's cursor ever reached the backend).
+
 ### Added
 
 - `host`: `HostInput::cursor()` reports the screen cell where the

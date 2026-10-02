@@ -24,7 +24,6 @@ use std::time::Duration;
 use turbo_vision::app::{AppHandler, Application};
 use turbo_vision::core::event::Event;
 use turbo_vision::terminal::{Backend, Capabilities, Terminal};
-use turbo_vision::views::View;
 
 #[derive(Debug, Default)]
 struct Shared {
@@ -170,35 +169,7 @@ pub fn pump<H: AppHandler>(app: &mut Application, handler: &mut H) -> bool {
         app.step(handler, None);
     }
     app.draw();
-    sync_cursor(app);
     app.running
-}
-
-/// Shows the cursor of the desktop's topmost window, or hides it when
-/// nothing on the desktop wants one.
-///
-/// `Application::draw` ends by calling `Desktop::update_cursor`, but
-/// turbo-vision 4.0's `Desktop` never overrides the `View` default (a
-/// no-op: see `src/views/view.rs`'s `update_cursor` and the absence of an
-/// override in `src/views/desktop.rs`), even though its own docs
-/// (`Chapter-10-Application-Objects.md`) describe that call as "update
-/// cursor to focused control". Until that is fixed upstream, this
-/// reproduces it here, using only `Desktop`'s public API: the topmost
-/// window is always the focused one (`Desktop::bring_to_front` keeps the
-/// two in step), so showing or hiding its cursor is exactly what the
-/// missing override would have done.
-pub(crate) fn sync_cursor(app: &mut Application) {
-    let Some(id) = app.desktop.top_view_id() else {
-        return;
-    };
-    let Some(view) = app.desktop.child_by_id(id) else {
-        return;
-    };
-    app.terminal.push_origin(app.desktop.bounds().a);
-    app.terminal.push_origin(view.bounds().a);
-    view.update_cursor(&mut app.terminal);
-    app.terminal.pop_origin();
-    app.terminal.pop_origin();
 }
 
 /// A host-driven [`Application`] of `w` by `h` cells, and the input handle

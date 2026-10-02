@@ -307,7 +307,6 @@ impl Session {
         if self.app.terminal.size() != before {
             self.state.relayout(&mut self.app);
             self.app.draw();
-            crate::host::sync_cursor(&mut self.app);
         }
     }
 
