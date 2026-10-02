@@ -123,3 +123,9 @@ required-features = ["native"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+
+# Integration branch only: build against the fork's turbo-vision branch that
+# merges the pending core work (FileDialog fix, frozen table panes, Unicode
+# text input). Remove once those are released on crates.io.
+[patch.crates-io]
+turbo-vision = { git = "https://github.com/aaloy/turbo-vision-4-rust", branch = "integration/all" }
