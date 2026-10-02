@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.1] - 2026-10-02
+
+Requires turbo-vision 4.0.2, which sends the cursor to the backend on
+`flush` rather than at once.
+
+### Fixed
+
+- `host::pump` flushes after its final draw, so `HostInput::cursor()` (and
+  `csv::Session::cursor()`) always match the frame in `Terminal::buffer`,
+  including a cursor requested during the pump's own idle tick.
+- `examples/csv_edit.rs` sets the cursor before flushing, so it no longer
+  trails the typed text by one frame.
+
 ## [0.3.0] - 2026-10-02
 
 Requires turbo-vision 4.0.1: the cursor below depends on its fix forwarding

@@ -106,7 +106,8 @@ fn main() -> io::Result<()> {
                     terminal.write_cell(x_i16, y_i16, *cell);
                 }
             }
-            terminal.flush()?;
+            // Set the cursor before flushing: the flush sends it after the
+            // cells, so it never shows over a stale frame.
             match session.cursor() {
                 Some((x, y)) => {
                     let x = i16::try_from(x).unwrap_or(i16::MAX);
@@ -115,6 +116,7 @@ fn main() -> io::Result<()> {
                 }
                 None => terminal.hide_cursor()?,
             }
+            terminal.flush()?;
             if let Some(event) = terminal.poll_event(Duration::from_millis(50))? {
                 if event.what == EventType::Broadcast && event.command == CM_REDRAW {
                     if let Ok((w, h)) = terminal.backend_size() {

@@ -1,6 +1,6 @@
 [package]
 name = "tv-extensions"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 authors = ["Enzo Lombardi <enzinol@gmail.com>"]
 license = "MIT"
@@ -25,7 +25,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 # host-driven hooks this crate depends on. 4.0.1 is required: it is the
 # version where Desktop (and TabbedPane/SplitPane) forward update_cursor,
 # which HostInput::cursor()/Session::cursor() depend on.
-turbo-vision = { version = "4.0.1", default-features = false }
+turbo-vision = { version = "4.0.2", default-features = false }
 tracing = { version = "0.1", optional = true }
 base64 = { version = "0.22", optional = true }
 chrono = { version = "0.4.45", optional = true }
@@ -40,7 +40,7 @@ ssh-key = { version = "0.6", optional = true }
 unicode-width = { version = "0.1", optional = true }
 
 [dev-dependencies]
-turbo-vision = { version = "4.0.1", default-features = false, features = ["test-util"] }
+turbo-vision = { version = "4.0.2", default-features = false, features = ["test-util"] }
 tempfile = "3"
 # Used by the kitty_biorhythm example only; not part of the library's API.
 chrono = "0.4.45"

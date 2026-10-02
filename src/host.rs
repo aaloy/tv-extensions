@@ -169,6 +169,9 @@ pub fn pump<H: AppHandler>(app: &mut Application, handler: &mut H) -> bool {
         app.step(handler, None);
     }
     app.draw();
+    // turbo-vision sends the cursor to the backend on flush, so flush the
+    // final frame: HostInput::cursor then matches the cells in the buffer.
+    let _ = app.terminal.flush();
     app.running
 }
 

@@ -173,3 +173,28 @@ fn host_tracks_the_cursor() {
     assert_eq!(x, 1 + 2, "the input line's screen column plus the typed length");
 }
 
+
+/// A cursor requested during the pump's own idle tick, after the step's
+/// flush, still reaches the host: `pump` flushes after its final draw.
+#[test]
+fn host_sees_a_cursor_requested_in_idle() {
+    struct OpenOnIdle(bool);
+    impl AppHandler for OpenOnIdle {
+        fn idle(&mut self, app: &mut Application) {
+            if !self.0 {
+                self.0 = true;
+                let mut window = WindowBuilder::new()
+                    .bounds(Rect::new(0, 0, 40, 10))
+                    .title("T")
+                    .build();
+                window.add(InputLine::new(Rect::new(0, 0, 30, 1), 50));
+                app.desktop.add(window);
+            }
+        }
+    }
+    let (mut app, input) = app(40, 10);
+    let mut handler = OpenOnIdle(false);
+    pump(&mut app, &mut handler);
+    assert_eq!(input.cursor(), app.terminal.cursor());
+    assert_eq!(input.cursor(), Some((1, 1)), "the input line opened in idle");
+}
