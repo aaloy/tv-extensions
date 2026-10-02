@@ -31,19 +31,26 @@
 //! Builds without turbo-vision's `native` feature, so the crate compiles
 //! for `wasm32-wasip1`.
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 #[cfg(feature = "csv")]
+#[cfg_attr(docsrs, doc(cfg(feature = "csv")))]
 pub mod csv;
 #[cfg(feature = "graphics")]
+#[cfg_attr(docsrs, doc(cfg(feature = "graphics")))]
 pub mod graphics;
 pub mod host;
 pub mod keys;
 #[cfg(feature = "log")]
+#[cfg_attr(docsrs, doc(cfg(feature = "log")))]
 pub mod log;
 pub mod popup_menu;
 #[cfg(feature = "remote-input")]
+#[cfg_attr(docsrs, doc(cfg(feature = "remote-input")))]
 pub mod remote_input;
 pub mod scroll_pane;
 #[cfg(feature = "ssh")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ssh")))]
 pub mod ssh;
 
 pub use host::{HostBackend, HostInput, pump};

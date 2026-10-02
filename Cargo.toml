@@ -1,6 +1,6 @@
 [package]
 name = "tv-extensions"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Enzo Lombardi <enzinol@gmail.com>"]
 license = "MIT"
@@ -9,11 +9,15 @@ description = "Extensions for turbo-vision: host-driven applications, ScrollPane
 keywords = ["tui", "turbo-vision", "wasm"]
 categories = ["command-line-interface", "wasm"]
 readme = "README.md"
-exclude = ["website/*", ".superpowers/*"]
+exclude = ["website/*", ".superpowers/*", "logo.png"]
 
 [lib]
 name = "tv_extensions"
 path = "src/lib.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 # Turbo Vision without its terminal by default (`native` off), so the crate
