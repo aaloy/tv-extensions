@@ -131,7 +131,7 @@ the field, it stays visible while the focus is on the OK button.
 
 | Key | Action |
 |-----|--------|
-| Printable characters (ASCII and Latin-1) | Type into the field, filter the list |
+| Any character one cell wide (`é`, `ñ`, `€`, `ł`, Greek, Cyrillic, ...) | Type into the field, filter the list |
 | Down | Open the list, or move the highlight down |
 | Up | Move the highlight up |
 | Enter | Accept the highlighted suggestion; with the list closed, the dialog's default button |
@@ -139,9 +139,9 @@ the field, it stays visible while the focus is on the OK button.
 | Left/Right/Home/End/Backspace/Delete | Ordinary text editing |
 
 Clicking a suggestion accepts it, and clicking the field opens the list.
-Matching ignores case, including accented Latin-1 letters such as `é` or
-`ñ`; characters beyond Latin-1 cannot be typed, since turbo-vision's key
-codes cannot tell them from special keys.
+Matching ignores case for any letter, accented or not. Any character one
+cell wide can be typed, read through turbo-vision's `Event::typed_char`;
+characters two cells wide (CJK, emoji) cannot yet.
 
 ## Layout and colours
 

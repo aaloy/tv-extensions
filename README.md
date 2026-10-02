@@ -72,7 +72,7 @@ match popup_menu(&mut app.terminal, position, menu) {
 
 ## AutoComplete
 
-A text field that filters a suggestion list as you type, with the matched text highlighted. Up/Down or the mouse pick a suggestion, Enter accepts it, Esc closes the list. Matching ignores case and accepts Latin-1 letters such as `é` or `ñ`. Always available, no feature flag. [docs/autocomplete.md](docs/autocomplete.md) has the rest.
+A text field that filters a suggestion list as you type, with the matched text highlighted. Up/Down or the mouse pick a suggestion, Enter accepts it, Esc closes the list. Matching ignores case, and any character one cell wide can be typed (`é`, `ñ`, `€`, `ł`, Greek, Cyrillic). Always available, no feature flag. [docs/autocomplete.md](docs/autocomplete.md) has the rest.
 
 Two independent rules, both off by default, decide what a dialog's OK accepts:
 

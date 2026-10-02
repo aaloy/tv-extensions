@@ -6,7 +6,7 @@
 
 - `autocomplete`: `AutoComplete` and `AutoCompleteBuilder`, a text field
   that filters a suggestion list as you type and highlights the matched
-  text. Keyboard and mouse selection, ASCII and Latin-1 input, colours from
+  text. Keyboard and mouse selection, input of any one-cell character, colours from
   the owner's palette (dialog or window), and an optional `on_select`
   broadcast. Validation with two independent rules, both off by
   default: `required` (not blank) and `require_match` (text that is not
