@@ -61,6 +61,10 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [[example]]
+name = "make_logo"
+required-features = ["screenshot"]
+
+[[example]]
 name = "csv_edit"
 required-features = ["csv", "native"]
 
