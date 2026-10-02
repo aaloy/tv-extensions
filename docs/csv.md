@@ -56,4 +56,13 @@ cargo run --example csv_edit --features csv,native -- [DIR] [FILE.csv]
 ```
 
 Each key read from the terminal goes to `session.key`; each frame is copied
-cell by cell from `session.buffer()` to the terminal.
+cell by cell from `session.buffer()` to the terminal, then `session.cursor()`
+tells it where to show the terminal's own cursor: `Some((x, y))` shows it
+there, `None` hides it.
+
+## The cursor
+
+`Session::cursor()` reports the screen cell where the edit-cell, rename and
+save-as dialogs' input line shows its text cursor, or `None` while no dialog
+with one is open — the table itself has no text cursor to show. A host that
+cannot place a real cursor can draw that cell reversed instead.

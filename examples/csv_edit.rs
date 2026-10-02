@@ -107,6 +107,14 @@ fn main() -> io::Result<()> {
                 }
             }
             terminal.flush()?;
+            match session.cursor() {
+                Some((x, y)) => {
+                    let x = i16::try_from(x).unwrap_or(i16::MAX);
+                    let y = i16::try_from(y).unwrap_or(i16::MAX);
+                    terminal.show_cursor(x, y)?;
+                }
+                None => terminal.hide_cursor()?,
+            }
             if let Some(event) = terminal.poll_event(Duration::from_millis(50))? {
                 if event.what == EventType::Broadcast && event.command == CM_REDRAW {
                     if let Ok((w, h)) = terminal.backend_size() {

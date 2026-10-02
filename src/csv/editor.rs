@@ -307,6 +307,7 @@ impl Session {
         if self.app.terminal.size() != before {
             self.state.relayout(&mut self.app);
             self.app.draw();
+            crate::host::sync_cursor(&mut self.app);
         }
     }
 
@@ -332,6 +333,17 @@ impl Session {
     #[must_use]
     pub fn into_disk(self) -> Box<dyn Disk> {
         self.state.disk
+    }
+
+    /// The screen cell where the session shows its text cursor after the
+    /// last [`Session::step`] or [`Session::key`], or `None` while nothing
+    /// in it wants one (no dialog, or a non-text control focused).
+    ///
+    /// A host that cannot place a real terminal cursor can draw this cell
+    /// reversed instead.
+    #[must_use]
+    pub fn cursor(&self) -> Option<(u16, u16)> {
+        self.input.cursor()
     }
 }
 

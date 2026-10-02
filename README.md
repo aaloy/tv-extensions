@@ -14,7 +14,7 @@ Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4
 ```toml
 [dependencies]
 turbo-vision = { version = "4.0", default-features = false }
-tv-extensions = "0.2"
+tv-extensions = "0.3"
 ```
 
 ## Why a separate crate

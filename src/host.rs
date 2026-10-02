@@ -24,11 +24,13 @@ use std::time::Duration;
 use turbo_vision::app::{AppHandler, Application};
 use turbo_vision::core::event::Event;
 use turbo_vision::terminal::{Backend, Capabilities, Terminal};
+use turbo_vision::views::View;
 
 #[derive(Debug, Default)]
 struct Shared {
     queue: VecDeque<Event>,
     size: (u16, u16),
+    cursor: Option<(u16, u16)>,
 }
 
 /// Locks the shared state. The critical sections only push, pop or assign,
@@ -64,6 +66,18 @@ impl HostInput {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// The screen cell where the application showed its text cursor after
+    /// the last frame, or `None` while it hides it.
+    ///
+    /// Turbo-vision has no terminal cursor to defer to under a
+    /// [`HostBackend`], so the host draws one itself from this: a real
+    /// cursor where the host can place one, or the cell redrawn in reverse
+    /// video where it can't.
+    #[must_use]
+    pub fn cursor(&self) -> Option<(u16, u16)> {
+        lock(&self.0).cursor
+    }
 }
 
 /// The application's end: a [`Backend`] whose input is whatever the host
@@ -78,6 +92,7 @@ impl HostBackend {
         let shared = Arc::new(Mutex::new(Shared {
             queue: VecDeque::new(),
             size: (w, h),
+            cursor: None,
         }));
         (Self(Arc::clone(&shared)), HostInput(shared))
     }
@@ -108,10 +123,12 @@ impl Backend for HostBackend {
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
-    fn show_cursor(&mut self, _x: u16, _y: u16) -> io::Result<()> {
+    fn show_cursor(&mut self, x: u16, y: u16) -> io::Result<()> {
+        lock(&self.0).cursor = Some((x, y));
         Ok(())
     }
     fn hide_cursor(&mut self) -> io::Result<()> {
+        lock(&self.0).cursor = None;
         Ok(())
     }
     fn capabilities(&self) -> Capabilities {
@@ -153,7 +170,35 @@ pub fn pump<H: AppHandler>(app: &mut Application, handler: &mut H) -> bool {
         app.step(handler, None);
     }
     app.draw();
+    sync_cursor(app);
     app.running
+}
+
+/// Shows the cursor of the desktop's topmost window, or hides it when
+/// nothing on the desktop wants one.
+///
+/// `Application::draw` ends by calling `Desktop::update_cursor`, but
+/// turbo-vision 4.0's `Desktop` never overrides the `View` default (a
+/// no-op: see `src/views/view.rs`'s `update_cursor` and the absence of an
+/// override in `src/views/desktop.rs`), even though its own docs
+/// (`Chapter-10-Application-Objects.md`) describe that call as "update
+/// cursor to focused control". Until that is fixed upstream, this
+/// reproduces it here, using only `Desktop`'s public API: the topmost
+/// window is always the focused one (`Desktop::bring_to_front` keeps the
+/// two in step), so showing or hiding its cursor is exactly what the
+/// missing override would have done.
+pub(crate) fn sync_cursor(app: &mut Application) {
+    let Some(id) = app.desktop.top_view_id() else {
+        return;
+    };
+    let Some(view) = app.desktop.child_by_id(id) else {
+        return;
+    };
+    app.terminal.push_origin(app.desktop.bounds().a);
+    app.terminal.push_origin(view.bounds().a);
+    view.update_cursor(&mut app.terminal);
+    app.terminal.pop_origin();
+    app.terminal.pop_origin();
 }
 
 /// A host-driven [`Application`] of `w` by `h` cells, and the input handle

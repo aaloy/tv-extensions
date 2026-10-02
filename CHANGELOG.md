@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0] - 2026-10-02
+
+### Added
+
+- `host`: `HostInput::cursor()` reports the screen cell where the
+  application shows its text cursor after the last pump, or `None` while it
+  hides it, so a host-driven embedder can draw one itself.
+  `csv::Session::cursor()` exposes the same thing for the CSV editor;
+  `examples/csv_edit.rs` now shows or hides the real terminal's cursor from
+  it each frame.
+
 ## [0.2.0] - 2026-10-01
 
 Tracks turbo-vision 4.0 from crates.io. Forwards the `screenshot` feature.

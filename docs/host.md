@@ -53,3 +53,7 @@ impl Session {
 Keys go in through the queue and come out as a redrawn buffer in the same call, and a resize is just a new size followed by a pump. When `key` returns `false` the application has quit and the frame can close.
 
 One detail of layout is worth knowing. Without a menu bar and a status line, turbo-vision's desktop keeps a spare row at the top and bottom, as Borland's does. An embedder that wants the whole screen for its windows either sets a menu bar and status line, as csvedit does, or sets the desktop's bounds to the full screen.
+
+## The cursor
+
+A host-driven application has no terminal cursor of its own to fall back on, so `HostInput::cursor()` reports where the application last put one: the screen cell `(x, y)` a focused control showed its text cursor at after the last `pump`, or `None` while nothing shows one. A host that can place a real cursor moves it there each frame; one that can't can instead redraw that cell in reverse video.
