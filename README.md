@@ -5,7 +5,7 @@
   <a href="https://docs.rs/tv-extensions"><img src="https://img.shields.io/docsrs/tv-extensions?style=flat-square&labelColor=101010" alt="docs.rs"></a>
 </p>
 
-<img src="https://raw.githubusercontent.com/aovestdipaperino/tv-extensions/main/logo.png" alt="tv-extensions logo" width="288" align="right" />
+<img src="https://raw.githubusercontent.com/aovestdipaperino/tv-extensions/main/logo.png" alt="tv-extensions logo" width="384" align="right" />
 
 Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 

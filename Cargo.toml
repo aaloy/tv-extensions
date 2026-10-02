@@ -42,6 +42,9 @@ turbo-vision = { version = "4.0", default-features = false, features = ["test-ut
 tempfile = "3"
 # Used by the kitty_biorhythm example only; not part of the library's API.
 chrono = "0.4.45"
+# Used by the make_logo example only, to re-deflate the screenshot
+# renderer's uncompressed PNG output; not part of the library's API.
+flate2 = "1"
 
 [features]
 default = []
