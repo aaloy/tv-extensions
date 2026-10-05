@@ -7,7 +7,7 @@
 
 <img src="https://raw.githubusercontent.com/aovestdipaperino/tv-extensions/main/logo.png" alt="tv-extensions logo" width="384" align="right" />
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus a `DualList` picker and host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 
 ## Getting started
 
@@ -69,6 +69,30 @@ match popup_menu(&mut app.terminal, position, menu) {
     None => { /* dismissed */ }
 }
 ```
+
+## DualList
+
+Two lists side by side for picking a subset of items, like Django admin's `filter_horizontal`: available items on the left, chosen ones on the right, a filter field over each, and `>` `>>` `<` `<<` buttons between them. Space marks items; Enter or a double-click moves them. Each item is a key and a label, and the chosen keys come back through an `Rc<RefCell<Vec<K>>>`. Always available, no feature flag. [docs/dual-list.md](docs/dual-list.md) has the rest.
+
+```rust
+use std::{cell::RefCell, rc::Rc};
+use turbo_vision::core::geometry::Rect;
+use tv_extensions::DualListBuilder;
+
+// Preselect Basil; OK needs one to five toppings
+let chosen = Rc::new(RefCell::new(vec![104]));
+let toppings = DualListBuilder::new()
+    .bounds(Rect::new(2, 1, 62, 16))
+    .items([(101, "Anchovies"), (104, "Basil"), (115, "Mozzarella")])
+    .data(chosen.clone())
+    .titles("Toppings", "On the pizza")
+    .min_chosen(1)
+    .max_chosen(5)
+    .build();
+// After the dialog closes, `chosen` holds the chosen ids.
+```
+
+`cargo run --example dual_list --features native` shows it in a dialog, and `cargo run --example dual_list_form --features native` as one field of a larger form (a Django-style "Change user" page).
 
 ## Key translation
 
@@ -153,7 +177,7 @@ let server = SshServer::new(config, || {
 
 | Feature | Enables | Implies |
 | --- | --- | --- |
-| *(none)* | `host`, `scroll_pane`, `popup_menu`, `keys` — builds for `wasm32-wasip1` | |
+| *(none)* | `host`, `scroll_pane`, `popup_menu`, `dual_list`, `keys` — builds for `wasm32-wasip1` | |
 | `native` | a real terminal in turbo-vision (crossterm, OS clipboard) | |
 | `csv` | the `csv` module: the CSV table editor | |
 | `log` | the `log` module: `LogWindow`, `TerminalWidget` | |

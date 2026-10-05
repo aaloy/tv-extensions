@@ -110,6 +110,14 @@ name = "controls"
 required-features = ["native"]
 
 [[example]]
+name = "dual_list"
+required-features = ["native"]
+
+[[example]]
+name = "dual_list_form"
+required-features = ["native"]
+
+[[example]]
 name = "lazy_data"
 required-features = ["native"]
 
