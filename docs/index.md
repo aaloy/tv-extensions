@@ -1,6 +1,6 @@
 # tv-extensions
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. The crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus an `AutoComplete` field and host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. The crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus an `AutoComplete` field, a `DualList` picker and host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 
 ## Why a separate crate
 
@@ -35,6 +35,7 @@ let cells = app.terminal.buffer();
 - [Host-driven apps](host.md): the embedding model above, in full.
 - [ScrollPane and popup menus](scroll-pane.md): a scrolling interior for oversized dialogs, and modal context menus (always available, no feature flag).
 - [AutoComplete](autocomplete.md): a text field that filters a suggestion list as you type, taking free text or requiring one of the items (always available, no feature flag).
+- [DualList](dual-list.md): two lists side by side for picking a subset of items, with filters (always available, no feature flag).
 - [CSV editor](csv.md) (feature `csv`): a table editor, host-driven like `host`.
 - [Log window](log.md) (feature `log`): a scrolling output pane, and a window that shows `tracing` events in it.
 - [Graphics](graphics.md) (feature `graphics`): ANSI-art backgrounds and bitmap images over the Kitty graphics protocol.

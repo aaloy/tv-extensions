@@ -14,6 +14,18 @@
   dialog's OK cannot close on it, and the field shows an error line
   (`required_message` / `match_message`) until it is fixed. From the
   standalone `tvauto` crate. Example: `autocomplete`.
+- `dual_list`: `DualList` and `DualListBuilder`, two lists side by side
+  for picking a subset of items, like Django admin's `filter_horizontal`.
+  Each item is a key and a label; the chosen keys are shared through an
+  `Rc<RefCell<Vec<K>>>`. A labelled filter field over each list
+  (`filter_label`), Alt hotkeys from `~X~` in the titles, multi-select
+  marking, Enter or double-click to move, `>` `>>` `<` `<<` buttons (moving
+  all respects the filter), Tab through the parts and on to the dialog.
+  Optional `keep_chosen_order`, `on_change` broadcast, and
+  `min_chosen` / `max_chosen` validation with an error line in the chosen
+  list's header. Built from core `InputLine`, `ListBox` and `Button`.
+  Examples: `dual_list`, and `dual_list_form` (the picker in a larger
+  form).
 
 ## [0.3.1] - 2026-10-02
 

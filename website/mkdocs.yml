@@ -66,6 +66,7 @@ nav:
   - Host-driven apps: host.md
   - ScrollPane and popup menus: scroll-pane.md
   - AutoComplete: autocomplete.md
+  - DualList: dual-list.md
   - CSV editor: csv.md
   - Log window: log.md
   - Graphics: graphics.md
