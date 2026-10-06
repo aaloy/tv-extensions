@@ -113,11 +113,14 @@ as picking the columns of a report.
 
 ## Validation
 
-`min_chosen(n)` and `max_chosen(n)` bound how many items a dialog's OK
-accepts; `required(true)` is `min_chosen(1)`. Both are off by default.
-When OK is refused, the dialog stays open and the header of the chosen list
-turns into an error line, in Borland's error colours, until the next move.
-Cancel always closes.
+`min_chosen(n)` and `max_chosen(n)` bound how many items can be chosen;
+`required(true)` is `min_chosen(1)`. Both are off by default. They follow
+Borland's validators: input that can never be valid is refused as it is
+entered, completeness is checked when the dialog closes. So a move that
+would choose more than the maximum does not happen, while fewer than the
+minimum makes `valid()` refuse OK (and the close button of a modeless
+window). Either way the header of the chosen list turns into an error line,
+in Borland's error colours, until the next move. Cancel always closes.
 
 The default messages are "Choose at least N items" and "Choose at most N
 items" ("one item" for 1). Replace them with `min_message` and
