@@ -57,9 +57,11 @@
 //!
 //! [`DualListBuilder::min_chosen`] and [`DualListBuilder::max_chosen`]
 //! (both off by default; [`DualListBuilder::required`] is `min_chosen(1)`)
-//! bound how many items OK accepts. When OK is refused, the header of the
-//! chosen list turns into an error line in Borland's error colours until
-//! the next move. Cancel always closes.
+//! bound how many items can be chosen. A move that would choose more than
+//! the maximum is refused; fewer than the minimum is checked by `valid()`,
+//! so OK (or closing a modeless window) is refused. Either way the header
+//! of the chosen list turns into an error line in Borland's error colours
+//! until the next move. Cancel always closes.
 //!
 //! # Example
 //!
@@ -446,7 +448,8 @@ impl<K: Clone + PartialEq + 'static> DualList<K> {
         self.min_chosen = min;
     }
 
-    /// The most items OK accepts (default no limit).
+    /// The most items that can be chosen (default no limit): a move that
+    /// would choose more is refused and shows the error line.
     pub fn set_max_chosen(&mut self, max: Option<usize>) {
         self.max_chosen = max;
     }
@@ -469,8 +472,8 @@ impl<K: Clone + PartialEq + 'static> DualList<K> {
         self.on_change = command;
     }
 
-    /// True while the error line is showing: `valid()` refused the
-    /// selection and nothing has moved since.
+    /// True while the error line is showing: `valid()` or a move past the
+    /// maximum was refused, and nothing has moved since.
     #[must_use]
     pub fn shows_error(&self) -> bool {
         self.refused.is_some()
@@ -582,6 +585,19 @@ impl<K: Clone + PartialEq + 'static> DualList<K> {
         }
         match from {
             Side::Available => {
+                // Borland's validators reject input that can never be valid
+                // as it is typed (IsValidInput) and leave completeness to
+                // valid() (IsValid). Too many is the first kind: refuse the
+                // move here, or the selection could only be fixed by moving
+                // items back, and every valid() — a modeless window's close
+                // button too — would be vetoed until then.
+                if self
+                    .max_chosen
+                    .is_some_and(|max| self.chosen.len() + picked.len() > max)
+                {
+                    self.refused = Some(Refusal::TooMany);
+                    return false;
+                }
                 self.chosen.extend(picked);
                 if !self.keep_chosen_order {
                     self.chosen.sort_unstable();
@@ -1390,6 +1406,25 @@ mod tests {
 
         list.set_chosen(&[0]);
         assert!(list.valid(CM_OK));
+    }
+
+    #[test]
+    fn a_move_past_the_maximum_is_refused_so_closing_still_works() {
+        use turbo_vision::core::command::CM_CLOSE;
+        let (mut list, data) = make(vec![0]);
+        list.set_max_chosen(Some(2));
+        assert!(!list.run_command(CMD_ADD_ALL), "four more is two too many");
+        assert_eq!(*data.borrow(), vec![0]);
+        assert!(list.shows_error());
+        assert!(list.valid(CM_CLOSE), "nothing invalid was chosen");
+
+        // One more fits, and moving clears the error line.
+        focus(&mut list, AVAILABLE_LIST);
+        key(&mut list, KB_ENTER);
+        assert_eq!(*data.borrow(), vec![0, 1]);
+        assert!(!list.shows_error());
+        key(&mut list, KB_ENTER);
+        assert_eq!(*data.borrow(), vec![0, 1], "a third is refused");
     }
 
     #[test]

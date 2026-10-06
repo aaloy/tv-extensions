@@ -12,8 +12,10 @@
   marking, Enter or double-click to move, `>` `>>` `<` `<<` buttons (moving
   all respects the filter), Tab through the parts and on to the dialog.
   Optional `keep_chosen_order`, `on_change` broadcast, and
-  `min_chosen` / `max_chosen` validation with an error line in the chosen
-  list's header. Built from core `InputLine`, `ListBox` and `Button`.
+  `min_chosen` / `max_chosen` validation, Borland style: a move past the
+  maximum is refused as it is made, too few refuses OK in `valid()`; an
+  error line in the chosen list's header says why. Built from core
+  `InputLine`, `ListBox` and `Button`.
   Examples: `dual_list`, and `dual_list_form` (the picker in a larger
   form).
 
