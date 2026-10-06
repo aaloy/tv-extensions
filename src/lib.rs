@@ -9,6 +9,8 @@
 //!   terminal buffer.
 //! - [`scroll_pane`]: [`ScrollPane`], a scrolling viewport over a virtual
 //!   area larger than its screen bounds (TV Tool Box style).
+//! - [`dual_list`]: [`DualList`], two lists side by side for picking a
+//!   subset of items, with filters (Django admin's `filter_horizontal`).
 //! - [`mod@popup_menu`]: modal context menus and check-mark menu items,
 //!   reusing the framework's `MenuBox`.
 //! - [`autocomplete`]: [`AutoComplete`], a text field that filters a
@@ -39,6 +41,7 @@ pub mod autocomplete;
 #[cfg(feature = "csv")]
 #[cfg_attr(docsrs, doc(cfg(feature = "csv")))]
 pub mod csv;
+pub mod dual_list;
 #[cfg(feature = "graphics")]
 #[cfg_attr(docsrs, doc(cfg(feature = "graphics")))]
 pub mod graphics;
@@ -57,6 +60,7 @@ pub mod scroll_pane;
 pub mod ssh;
 
 pub use autocomplete::{AutoComplete, AutoCompleteBuilder};
+pub use dual_list::{DualList, DualListBuilder};
 pub use host::{HostBackend, HostInput, pump};
 pub use popup_menu::{is_menu_item_checked, popup_menu, set_menu_item_checked};
 pub use scroll_pane::ScrollPane;

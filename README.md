@@ -7,7 +7,7 @@
 
 <img src="https://raw.githubusercontent.com/aovestdipaperino/tv-extensions/main/logo.png" alt="tv-extensions logo" width="384" align="right" />
 
-Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus an `AutoComplete` field and host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
+Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust), the Rust port of Borland's Turbo Vision. This crate holds the niche features that moved out of turbo-vision core — a CSV table editor, a logging window, Kitty/ANSI graphics, remote input over TCP, an SSH server, `ScrollPane` and popup menus — plus an `AutoComplete` field, a `DualList` picker and host-driven embedding, for a host that owns the screen and the event loop and steps the application one frame at a time.
 
 ## Getting started
 
@@ -16,6 +16,14 @@ Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4
 turbo-vision = { version = "4.0.1", default-features = false }
 tv-extensions = "0.3"
 ```
+
+## Component gallery
+
+```sh
+cargo run --example gallery --features native,csv,log,graphics
+```
+
+Every component, live, beside how it works, its parameters and the code that built it, as in turbo-vision's own gallery. The list on the left is grouped by kind; F6 moves into the panel to try a component, and F6 again goes back. The code shown is the demo's own source file (`examples/gallery/demos/`), so what you read is what runs. The CSV editor and the host-driven demo run a second, host-driven application inside a view of the gallery.
 
 ## Why a separate crate
 
@@ -116,6 +124,30 @@ let fruit_field = AutoCompleteBuilder::new()
 
 `cargo run --example autocomplete --features native` shows the combinations in one dialog.
 
+## DualList
+
+Two lists side by side for picking a subset of items, like Django admin's `filter_horizontal`: available items on the left, chosen ones on the right, a filter field over each, and `>` `>>` `<` `<<` buttons between them. Space marks items; Enter or a double-click moves them. Each item is a key and a label, and the chosen keys come back through an `Rc<RefCell<Vec<K>>>`. Always available, no feature flag. [docs/dual-list.md](docs/dual-list.md) has the rest.
+
+```rust
+use std::{cell::RefCell, rc::Rc};
+use turbo_vision::core::geometry::Rect;
+use tv_extensions::DualListBuilder;
+
+// Preselect Basil; OK needs one to five toppings
+let chosen = Rc::new(RefCell::new(vec![104]));
+let toppings = DualListBuilder::new()
+    .bounds(Rect::new(2, 1, 62, 16))
+    .items([(101, "Anchovies"), (104, "Basil"), (115, "Mozzarella")])
+    .data(chosen.clone())
+    .titles("Toppings", "On the pizza")
+    .min_chosen(1)
+    .max_chosen(5)
+    .build();
+// After the dialog closes, `chosen` holds the chosen ids.
+```
+
+`cargo run --example dual_list --features native` shows it in a dialog, and `cargo run --example dual_list_form --features native` as one field of a larger form (a Django-style "Change user" page).
+
 ## Key translation
 
 Turns a key name such as `"ctrl-s"` or `"enter"` into the `Event` turbo-vision expects — the form a host that is not a terminal (a web page, a WASM host) reports keys in. Always available, no feature flag.
@@ -199,7 +231,7 @@ let server = SshServer::new(config, || {
 
 | Feature | Enables | Implies |
 | --- | --- | --- |
-| *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `keys` — builds for `wasm32-wasip1` | |
+| *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `dual_list`, `keys` — builds for `wasm32-wasip1` | |
 | `native` | a real terminal in turbo-vision (crossterm, OS clipboard) | |
 | `csv` | the `csv` module: the CSV table editor | |
 | `log` | the `log` module: `LogWindow`, `TerminalWidget` | |
@@ -215,9 +247,12 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
+cargo test --example gallery --features native,csv,log,graphics
 cargo clippy --all-targets
 sh scripts/check-wasm.sh
 ```
+
+The gallery's tests check that every demo builds inside its panel, explains itself and links to related demos, and that every module has a demo or a reason not to.
 
 `-D warnings` is not used: clippy's `pedantic` lints are on as warnings (see `Cargo.toml`), and a few files copied verbatim from turbo-vision core carry pedantic warnings inherited from there as-is. The bar is no clippy *errors*, and no new warnings in hand-written code; `cargo clippy --all-targets` and read the output rather than failing the build on every pedantic nit.
 

@@ -114,12 +114,28 @@ name = "controls"
 required-features = ["native"]
 
 [[example]]
+name = "dual_list"
+required-features = ["native"]
+
+[[example]]
+name = "dual_list_form"
+required-features = ["native"]
+
+[[example]]
 name = "lazy_data"
 required-features = ["native"]
 
 [[example]]
 name = "scroll_and_popup"
 required-features = ["native"]
+
+# The component gallery. Its tests (every demo builds and fits, every
+# module has a demo) run with
+# `cargo test --example gallery --features native,csv,log,graphics`.
+[[example]]
+name = "gallery"
+required-features = ["native", "csv", "log", "graphics"]
+test = true
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
