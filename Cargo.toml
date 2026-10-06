@@ -129,6 +129,14 @@ required-features = ["native"]
 name = "scroll_and_popup"
 required-features = ["native"]
 
+# The component gallery. Its tests (every demo builds and fits, every
+# module has a demo) run with
+# `cargo test --example gallery --features native,csv,log,graphics`.
+[[example]]
+name = "gallery"
+required-features = ["native", "csv", "log", "graphics"]
+test = true
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 # The cast family fires on the code that cannot avoid it: turbo-vision geometry
