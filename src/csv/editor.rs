@@ -288,7 +288,8 @@ impl Session {
         Self { app, input, state }
     }
 
-    /// Handles one key. `Some(line)` means the editor wants to close, with
+    /// Handles one event: a key, or the mouse at a cell of the session's
+    /// screen. `Some(line)` means the editor wants to close, with
     /// `line` for the scrollback.
     pub fn key(&mut self, ev: Event) -> Option<String> {
         self.input.push(ev);

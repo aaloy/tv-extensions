@@ -18,6 +18,14 @@
   `InputLine`, `ListBox` and `Button`.
   Examples: `dual_list`, and `dual_list_form` (the picker in a larger
   form).
+- `examples/gallery`: a component gallery, modelled on turbo-vision's. A
+  grouped list of components beside a panel with the live component, how
+  it works, its parameters, "See also" links and its own source code.
+  Demos: DualList, ScrollPane, popup menu, LogWindow, TerminalWidget,
+  AnsiBackground, the CSV editor and a host-driven application (both run
+  live inside a view), and key names. `remote_input` and `ssh` have no
+  view to show. Run with
+  `cargo run --example gallery --features native,csv,log,graphics`.
 
 ## [0.3.1] - 2026-10-02
 

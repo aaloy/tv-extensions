@@ -17,6 +17,14 @@ turbo-vision = { version = "4.0.1", default-features = false }
 tv-extensions = "0.3"
 ```
 
+## Component gallery
+
+```sh
+cargo run --example gallery --features native,csv,log,graphics
+```
+
+Every component, live, beside how it works, its parameters and the code that built it, as in turbo-vision's own gallery. The list on the left is grouped by kind; F6 moves into the panel to try a component, and F6 again goes back. The code shown is the demo's own source file (`examples/gallery/demos/`), so what you read is what runs. The CSV editor and the host-driven demo run a second, host-driven application inside a view of the gallery.
+
 ## Why a separate crate
 
 Turbo Vision's core is a port of a framework whose design was settled in 1990, and it earns its keep by staying small and stable. Host-driven embedding (in a host such as a plank WASM frame, where the host owns the screen and the event loop) and the extra widgets and protocols above are newer and still-moving use cases, each with its own pace of change, so keeping them here lets them change and version on their own. Core carries only the public API and the small set of hooks this crate builds on: `Backend::is_host_driven` and `Application::step` for host-driven embedding, plus `Terminal::event_injector`, the capture hook, `Terminal::write_raw`, and the public `InputParser` that the remote-input, graphics and SSH modules write and read through.
@@ -193,9 +201,12 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
+cargo test --example gallery --features native,csv,log,graphics
 cargo clippy --all-targets
 sh scripts/check-wasm.sh
 ```
+
+The gallery's tests check that every demo builds inside its panel, explains itself and links to related demos, and that every module has a demo or a reason not to.
 
 `-D warnings` is not used: clippy's `pedantic` lints are on as warnings (see `Cargo.toml`), and a few files copied verbatim from turbo-vision core carry pedantic warnings inherited from there as-is. The bar is no clippy *errors*, and no new warnings in hand-written code; `cargo clippy --all-targets` and read the output rather than failing the build on every pedantic nit.
 
