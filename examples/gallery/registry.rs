@@ -79,6 +79,15 @@ pub struct Demo {
 /// Every demo, in the order of the list: by group, then by name.
 pub const DEMOS: &[Demo] = &[
     Demo {
+        name: "AutoComplete",
+        group: Group::Views,
+        module: "autocomplete",
+        source: include_str!("demos/autocomplete.rs"),
+        height: 5,
+        build: demos::autocomplete::build,
+        handle: None,
+    },
+    Demo {
         name: "DualList",
         group: Group::Views,
         module: "dual_list",
