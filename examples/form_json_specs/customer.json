@@ -1,0 +1,20 @@
+{
+  "title": "New customer",
+  "fields": [
+    { "name": "name", "type": "text", "label": "Name", "required": true, "max_len": 40 },
+    { "name": "email", "type": "text", "required": true },
+    { "name": "age", "type": "integer", "min": 0, "max": 120 },
+    { "name": "since", "type": "date", "default": "2026-10-21" },
+    { "type": "section", "label": "Account" },
+    {
+      "name": "kind", "type": "choice", "default": "retail",
+      "options": [
+        { "label": "Retail", "value": "retail" },
+        { "label": "Wholesale", "value": "wholesale" }
+      ]
+    },
+    { "name": "credit", "type": "number", "min": 0 },
+    { "name": "vip", "type": "boolean", "label": "VIP customer" },
+    { "name": "notes", "type": "memo", "rows": 3 }
+  ]
+}

@@ -2,48 +2,36 @@
 //!
 //! What an agent or an MCP tool does to ask a person something: it passes a
 //! spec, the person fills the form in, and the answers come back as JSON (or
-//! the person cancels).
+//! the person cancels). The answers are printed on stdout once the screen is
+//! restored.
 //!
 //! Run with: `cargo run --example form_json --features native,json`
-//! With your own spec: `cargo run --example form_json --features native,json -- spec.json`
-//! The answers are printed on stdout after the screen is restored.
+//! One of the specs in `examples/form_json_specs/`: add `-- deploy` or
+//! `-- survey` (the default is `customer`).
+//! Your own: `-- path/to/spec.json`
 
 // (C) 2026 - Antoni Aloy
 
-use serde_json::{Value, json};
+use serde_json::Value;
 use turbo_vision::app::Application;
 use tv_extensions::forms::json::{FormError, run};
 
-fn demo_spec() -> Value {
-    json!({
-        "title": "New customer",
-        "fields": [
-            { "name": "name", "type": "text", "label": "Name", "required": true, "max_len": 40 },
-            { "name": "email", "type": "text", "required": true },
-            { "name": "age", "type": "integer", "min": 0, "max": 120 },
-            { "name": "since", "type": "date", "default": "2026-10-21" },
-            { "type": "section", "label": "Account" },
-            { "name": "kind", "type": "choice", "default": "retail",
-              "options": [
-                  { "label": "Retail", "value": "retail" },
-                  { "label": "Wholesale", "value": "wholesale" }
-              ] },
-            { "name": "credit", "type": "number", "min": 0 },
-            { "name": "vip", "type": "boolean", "label": "VIP customer" },
-            { "name": "notes", "type": "memo", "rows": 3 }
-        ]
-    })
+const CUSTOMER: &str = include_str!("form_json_specs/customer.json");
+const DEPLOY: &str = include_str!("form_json_specs/deploy.json");
+const SURVEY: &str = include_str!("form_json_specs/survey.json");
+
+fn load(which: Option<String>) -> Result<Value, Box<dyn std::error::Error>> {
+    let text = match which.as_deref() {
+        None | Some("customer") => CUSTOMER.to_string(),
+        Some("deploy") => DEPLOY.to_string(),
+        Some("survey") => SURVEY.to_string(),
+        Some(path) => std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?,
+    };
+    Ok(serde_json::from_str(&text)?)
 }
 
-fn main() -> turbo_vision::core::error::Result<()> {
-    let spec = match std::env::args().nth(1) {
-        Some(path) => {
-            let text = std::fs::read_to_string(&path)?;
-            serde_json::from_str(&text)
-                .map_err(|e| std::io::Error::other(format!("{path}: {e}")))?
-        }
-        None => demo_spec(),
-    };
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let spec = load(std::env::args().nth(1))?;
 
     let result = {
         let mut app = Application::new()?;
@@ -51,10 +39,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
     }; // the application is dropped here: the terminal is restored
 
     match result {
-        Ok(answers) => println!(
-            "{}",
-            serde_json::to_string_pretty(&answers).unwrap_or_default()
-        ),
+        Ok(answers) => println!("{}", serde_json::to_string_pretty(&answers)?),
         Err(FormError::Cancelled) => eprintln!("cancelled"),
         Err(FormError::Spec(why)) => eprintln!("invalid form: {why}"),
     }

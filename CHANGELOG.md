@@ -15,7 +15,8 @@ applications send a keyboard-pressed button's command at once.
   `options`), lets the person fill it in with the usual validation and
   errors, and returns the answers as a JSON object in the spec's order, or
   `FormError::Cancelled`. A bad spec is `FormError::Spec` with a message
-  naming the path and the problem. Example: `form_json`.
+  naming the path and the problem. Examples: `form_json` (with three spec
+  files) and `form_json_agent`; tests in `tests/forms_json.rs`.
 - `forms`: `Form` lays a dialog out from labelled fields with no
   coordinates (lines of fields, titled groups, sections, label placement,
   button alignment), and `Form::<T>::for_record` edits a struct of yours:

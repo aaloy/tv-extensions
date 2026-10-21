@@ -891,6 +891,11 @@ message such as `fields[2].type: unknown type "txt"; expected one of ...`, so
 the agent that wrote it can fix it. See the module documentation of
 `tv_extensions::forms::json` for the full spec.
 
-`cargo run --example form_json --features native,json [-- spec.json]` runs
-one and prints the answers.
+`cargo run --example form_json --features native,json` runs the customer form
+and prints the answers; add `-- deploy` or `-- survey` for the other specs in
+`examples/form_json_specs/`, or `-- your-spec.json`. `form_json_agent` plays
+the calling side: it sends a spec with a mistake, reads the error message the
+way a model would, repairs the spec, and acts on the answer or the cancel.
+`tests/forms_json.rs` drives every field type through the dialog with
+keystrokes.
 

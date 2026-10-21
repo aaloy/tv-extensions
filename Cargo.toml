@@ -120,6 +120,10 @@ required-features = ["native"]
 name = "controls"
 required-features = ["native"]
 
+[[test]]
+name = "forms_json"
+required-features = ["json"]
+
 [[example]]
 name = "form_layout"
 required-features = ["native"]
@@ -134,6 +138,10 @@ required-features = ["native"]
 
 [[example]]
 name = "form_json"
+required-features = ["native", "json"]
+
+[[example]]
+name = "form_json_agent"
 required-features = ["native", "json"]
 
 [[example]]
