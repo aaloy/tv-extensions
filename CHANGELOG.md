@@ -7,6 +7,15 @@ applications send a keyboard-pressed button's command at once.
 
 ### Added
 
+- `forms::json` (feature `json`): a form described as JSON and answered as
+  JSON, for an agent or an MCP tool that needs a person to fill something
+  in. `forms::json::run(&mut app, &spec)` builds a record form from the spec
+  (field types `text`, `memo`, `integer`, `number`, `boolean`, `choice`,
+  `date`, `section`; `required`, `default`, `min`, `max`, `max_len`,
+  `options`), lets the person fill it in with the usual validation and
+  errors, and returns the answers as a JSON object in the spec's order, or
+  `FormError::Cancelled`. A bad spec is `FormError::Spec` with a message
+  naming the path and the problem. Example: `form_json`.
 - `forms`: `Form` lays a dialog out from labelled fields with no
   coordinates (lines of fields, titled groups, sections, label placement,
   button alignment), and `Form::<T>::for_record` edits a struct of yours:

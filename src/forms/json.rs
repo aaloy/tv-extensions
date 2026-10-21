@@ -1,0 +1,803 @@
+// (C) 2026 - Antoni Aloy
+
+//! Forms described as JSON, answered as JSON.
+//!
+//! A program that cannot draw a dialog itself, an agent or an MCP tool, says
+//! what it needs to ask in JSON; a person fills the form in the terminal;
+//! the program gets the answers back as JSON, or a cancel. It is a thin
+//! front end over the record forms of [`Form`]: the same validation, the
+//! same errors shown in the dialog, the same keyboard and mouse.
+//!
+//! ```no_run
+//! use serde_json::json;
+//! use turbo_vision::app::Application;
+//! use tv_extensions::forms::json::{FormError, run};
+//!
+//! # fn main() -> turbo_vision::core::error::Result<()> {
+//! # let mut app = Application::with_terminal(turbo_vision::test_util::test_terminal(80, 25));
+//! let spec = json!({
+//!     "title": "New customer",
+//!     "fields": [
+//!         { "name": "name",  "type": "text",    "label": "Name", "required": true },
+//!         { "name": "age",   "type": "integer", "min": 0, "max": 120 },
+//!         { "name": "kind",  "type": "choice",  "options": ["Retail", "Wholesale"] },
+//!         { "name": "vip",   "type": "boolean", "label": "VIP customer" }
+//!     ]
+//! });
+//! match run(&mut app, &spec) {
+//!     Ok(answers) => println!("{answers}"), // {"name":"Ada","age":36,"kind":"Retail","vip":false}
+//!     Err(FormError::Cancelled) => println!("the person cancelled"),
+//!     Err(FormError::Spec(why)) => eprintln!("bad form: {why}"),
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # The spec
+//!
+//! An object with a `title` (default `"Form"`) and a list of `fields`. Any
+//! other key is refused, so a typo is an error rather than silently ignored.
+//! Each field is an object with a `type`:
+//!
+//! | `type` | Shows | Answer |
+//! |--------|-------|--------|
+//! | `text` | one input line | string |
+//! | `memo` | several lines (`rows`, default 4) | string |
+//! | `integer` | an input line that must be a whole number | number, or `null` when left empty |
+//! | `number` | an input line that must be a number | number, or `null` when left empty |
+//! | `boolean` | a check box | `true` / `false` |
+//! | `choice` | a drop-down of `options` | the chosen option's value |
+//! | `date` | an input line for `YYYY-MM-DD` (feature `chrono`) | `"YYYY-MM-DD"`, or `null` |
+//! | `section` | a heading, no answer | |
+//!
+//! Every field except `section` has a unique `name`, the key of its answer.
+//! Optional keys: `label` (the name with the first letter capitalised by
+//! default; a `~` marks the Alt hot key, and one is picked for you when there
+//! is none), `required`, `default` (the value shown at first), `max_len`
+//! (`text`), `rows` (`memo`), `min` and `max` (`integer`, `number`), and
+//! `options` (`choice`): each a string, number or boolean standing for itself,
+//! or `{ "label": "Wholesale", "value": 2 }`. A `choice` must be answered; a
+//! `boolean` with `required: true` must be checked.
+//!
+//! The person cannot close the form with OK while a field is invalid: the
+//! errors show in the dialog and the focus moves to the first one.
+
+use super::{Editor, Form};
+use serde_json::{Map, Number, Value};
+use std::collections::HashSet;
+use std::fmt;
+use turbo_vision::app::Application;
+
+/// Why a form gave no answers.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FormError {
+    /// The person cancelled (Cancel, Esc or the close box).
+    Cancelled,
+    /// The spec is not a valid form. The message says where and what, in
+    /// words meant for whoever wrote the spec, such as
+    /// `fields[2].type: unknown type "txt"`.
+    Spec(String),
+}
+
+impl fmt::Display for FormError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cancelled => f.write_str("the form was cancelled"),
+            Self::Spec(why) => write!(f, "invalid form: {why}"),
+        }
+    }
+}
+
+impl std::error::Error for FormError {}
+
+/// One field's value while the form is open. A record form edits a struct,
+/// so the answers live in a list of these, one per field.
+#[derive(Debug, Clone)]
+enum Slot {
+    Text(String),
+    Int(Option<i64>),
+    Num(Option<f64>),
+    Bool(bool),
+    Choice(Value),
+    #[cfg(feature = "chrono")]
+    Date(Option<chrono::NaiveDate>),
+}
+
+/// The record a JSON form edits.
+#[derive(Debug, Clone)]
+struct Values(Vec<Slot>);
+
+macro_rules! lens {
+    ($name:ident, $variant:ident, $ty:ty) => {
+        fn $name(values: &mut Values, index: usize) -> &mut $ty {
+            match &mut values.0[index] {
+                Slot::$variant(value) => value,
+                other => unreachable!(
+                    "slot {index} holds {other:?}, not a {}",
+                    stringify!($variant)
+                ),
+            }
+        }
+    };
+}
+lens!(text_of, Text, String);
+lens!(int_of, Int, Option<i64>);
+lens!(num_of, Num, Option<f64>);
+lens!(bool_of, Bool, bool);
+lens!(choice_of, Choice, Value);
+#[cfg(feature = "chrono")]
+lens!(date_of, Date, Option<chrono::NaiveDate>);
+
+/// A form built from a JSON spec: run it with [`run`](Self::run), once or
+/// many times.
+pub struct JsonForm {
+    editor: Editor<Values>,
+    initial: Values,
+    /// Each answer's key and the slot that holds it, in the spec's order.
+    answers: Vec<(String, usize)>,
+}
+
+/// Build the form `spec` describes, let the person fill it in, and return the
+/// answers as a JSON object. A shorthand for [`JsonForm::from_spec`] then
+/// [`JsonForm::run`].
+///
+/// # Errors
+///
+/// [`FormError::Spec`] when `spec` is not a valid form, [`FormError::Cancelled`]
+/// when the person cancels.
+pub fn run(app: &mut Application, spec: &Value) -> Result<Value, FormError> {
+    JsonForm::from_spec(spec)?.run(app)
+}
+
+impl JsonForm {
+    /// Build the form `spec` describes.
+    ///
+    /// # Errors
+    ///
+    /// [`FormError::Spec`] naming the first thing wrong with `spec`.
+    pub fn from_spec(spec: &Value) -> Result<Self, FormError> {
+        build(spec).map_err(FormError::Spec)
+    }
+
+    /// Show the form and return the answers as a JSON object keyed by field
+    /// name, in the spec's order. The form can be run again; it starts from
+    /// the defaults each time.
+    ///
+    /// # Errors
+    ///
+    /// [`FormError::Cancelled`] when the person cancels.
+    pub fn run(&mut self, app: &mut Application) -> Result<Value, FormError> {
+        match self.editor.edit(app, self.initial.clone()) {
+            Some(values) => Ok(self.to_json(&values)),
+            None => Err(FormError::Cancelled),
+        }
+    }
+
+    fn to_json(&self, values: &Values) -> Value {
+        let mut out = Map::new();
+        for (name, index) in &self.answers {
+            out.insert(name.clone(), slot_json(&values.0[*index]));
+        }
+        Value::Object(out)
+    }
+
+    /// The answers the form holds at its defaults, if they pass the rules.
+    #[cfg(test)]
+    fn read(&mut self) -> Result<Value, super::ValidationErrors> {
+        self.editor.load(self.initial.clone());
+        self.editor.read().map(|values| self.to_json(&values))
+    }
+}
+
+fn slot_json(slot: &Slot) -> Value {
+    match slot {
+        Slot::Text(text) => Value::String(text.clone()),
+        Slot::Int(n) => n.map_or(Value::Null, |n| Value::Number(n.into())),
+        Slot::Num(n) => n
+            .and_then(Number::from_f64)
+            .map_or(Value::Null, Value::Number),
+        Slot::Bool(b) => Value::Bool(*b),
+        Slot::Choice(value) => value.clone(),
+        #[cfg(feature = "chrono")]
+        Slot::Date(date) => date.map_or(Value::Null, |d| {
+            Value::String(d.format("%Y-%m-%d").to_string())
+        }),
+    }
+}
+
+const SPEC_KEYS: &[&str] = &["title", "fields"];
+const FIELD_KEYS: &[&str] = &[
+    "name", "type", "label", "required", "default", "max_len", "rows", "min", "max", "options",
+];
+const TYPES: &str = "text, memo, integer, number, boolean, choice, date, section";
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one match arm per field type reads better than a function each"
+)]
+fn build(spec: &Value) -> Result<JsonForm, String> {
+    let spec = spec.as_object().ok_or("the form must be a JSON object")?;
+    reject_unknown(spec, SPEC_KEYS, "")?;
+    let title = match spec.get("title") {
+        None => "Form",
+        Some(Value::String(title)) => title,
+        Some(_) => return Err("title: must be a string".into()),
+    };
+    let fields = spec
+        .get("fields")
+        .and_then(Value::as_array)
+        .ok_or("fields: a list of fields is required")?;
+    if fields.is_empty() {
+        return Err("fields: the form has no fields".into());
+    }
+
+    let hot_keys = HotKeys::new(fields);
+    let mut form = Form::<Values>::for_record(title);
+    let mut slots = Vec::new();
+    let mut answers = Vec::new();
+    let mut names = HashSet::new();
+
+    for (position, field) in fields.iter().enumerate() {
+        let at = format!("fields[{position}]");
+        let field = field
+            .as_object()
+            .ok_or(format!("{at}: must be an object"))?;
+        reject_unknown(field, FIELD_KEYS, &format!("{at}."))?;
+        let kind = str_key(field, "type", &at)?.ok_or(format!("{at}.type: required ({TYPES})"))?;
+        if kind == "section" {
+            let label = str_key(field, "label", &at)?
+                .ok_or(format!("{at}.label: a section needs a label"))?;
+            form.section(&plain(label));
+            continue;
+        }
+        let name = str_key(field, "name", &at)?
+            .filter(|name| !name.is_empty())
+            .ok_or(format!("{at}.name: required"))?;
+        if !names.insert(name.to_string()) {
+            return Err(format!("{at}.name: \"{name}\" is used twice"));
+        }
+        let label = hot_keys.label(field, name, &at)?;
+        let plain_label = plain(&label);
+        let required = bool_key(field, "required", &at)?.unwrap_or(false);
+        let default = field.get("default");
+        let index = slots.len();
+
+        match kind {
+            "text" => {
+                let value = match default {
+                    None => String::new(),
+                    Some(Value::String(s)) => s.clone(),
+                    Some(_) => return Err(format!("{at}.default: must be a string")),
+                };
+                slots.push(Slot::Text(value));
+                let mut f = form.input(&label, move |r| text_of(r, index));
+                if required {
+                    f = f.required();
+                }
+                if let Some(max) = uint_key(field, "max_len", &at)? {
+                    f = f.max_len(max);
+                }
+            }
+            "memo" => {
+                let value = match default {
+                    None => String::new(),
+                    Some(Value::String(s)) => s.clone(),
+                    Some(_) => return Err(format!("{at}.default: must be a string")),
+                };
+                slots.push(Slot::Text(value));
+                let rows = uint_key(field, "rows", &at)?.unwrap_or(4);
+                let rows = i16::try_from(rows).map_err(|_| format!("{at}.rows: too large"))?;
+                let mut f = form.memo(&label, rows, move |r| text_of(r, index));
+                if required {
+                    f = f.required();
+                }
+            }
+            "integer" => {
+                let value = match default {
+                    None | Some(Value::Null) => None,
+                    Some(v) => Some(
+                        v.as_i64()
+                            .ok_or(format!("{at}.default: must be a whole number"))?,
+                    ),
+                };
+                slots.push(Slot::Int(value));
+                let min = limit_key(field, "min", &at)?;
+                let max = limit_key(field, "max", &at)?;
+                let mut f = form.input(&label, move |r| int_of(r, index));
+                if required {
+                    f = f.required();
+                }
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "limits are compared as f64; whole numbers beyond 2^53 are not a form's concern"
+                )]
+                f.validate(move |v: &Option<i64>| {
+                    range_check(v.map(|n| n as f64), min, max, &plain_label)
+                });
+            }
+            "number" => {
+                let value = match default {
+                    None | Some(Value::Null) => None,
+                    Some(v) => Some(
+                        v.as_f64()
+                            .ok_or(format!("{at}.default: must be a number"))?,
+                    ),
+                };
+                slots.push(Slot::Num(value));
+                let min = limit_key(field, "min", &at)?;
+                let max = limit_key(field, "max", &at)?;
+                let mut f = form.input(&label, move |r| num_of(r, index));
+                if required {
+                    f = f.required();
+                }
+                f.validate(move |v: &Option<f64>| range_check(*v, min, max, &plain_label));
+            }
+            "boolean" => {
+                let value = match default {
+                    None => false,
+                    Some(Value::Bool(b)) => *b,
+                    Some(_) => return Err(format!("{at}.default: must be true or false")),
+                };
+                slots.push(Slot::Bool(value));
+                let mut f = form.check(&label, move |r| bool_of(r, index));
+                if required {
+                    f = f.required();
+                }
+            }
+            "choice" => {
+                let options = options_key(field, &at)?;
+                let value = match default {
+                    None => Value::Null,
+                    Some(v) if options.iter().any(|(_, o)| o == v) => v.clone(),
+                    Some(_) => {
+                        return Err(format!("{at}.default: is not one of the options' values"));
+                    }
+                };
+                slots.push(Slot::Choice(value));
+                form.choice(&label, options, move |r| choice_of(r, index));
+            }
+            #[cfg(feature = "chrono")]
+            "date" => {
+                let value = match default {
+                    None | Some(Value::Null) => None,
+                    Some(Value::String(s)) => Some(
+                        chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                            .map_err(|_| format!("{at}.default: must be YYYY-MM-DD"))?,
+                    ),
+                    Some(_) => return Err(format!("{at}.default: must be YYYY-MM-DD")),
+                };
+                slots.push(Slot::Date(value));
+                let mut f = form.input(&label, move |r| date_of(r, index));
+                if required {
+                    f = f.required();
+                }
+            }
+            other => {
+                let hint = if other == "date" {
+                    "dates need the `chrono` feature".to_string()
+                } else {
+                    format!("expected one of {TYPES}")
+                };
+                return Err(format!("{at}.type: unknown type \"{other}\"; {hint}"));
+            }
+        }
+        answers.push((name.to_string(), index));
+    }
+    if answers.is_empty() {
+        return Err("fields: the form has no field to answer".into());
+    }
+
+    form.ok_cancel();
+    Ok(JsonForm {
+        editor: form.build_editor(),
+        initial: Values(slots),
+        answers,
+    })
+}
+
+fn range_check(
+    value: Option<f64>,
+    min: Option<f64>,
+    max: Option<f64>,
+    name: &str,
+) -> Result<(), String> {
+    let Some(value) = value else { return Ok(()) };
+    match (min, max) {
+        (Some(min), _) if value < min => Err(format!("{name} must be at least {min}")),
+        (_, Some(max)) if value > max => Err(format!("{name} must be at most {max}")),
+        _ => Ok(()),
+    }
+}
+
+fn reject_unknown(object: &Map<String, Value>, allowed: &[&str], at: &str) -> Result<(), String> {
+    match object.keys().find(|key| !allowed.contains(&key.as_str())) {
+        Some(key) => Err(format!(
+            "{at}{key}: unknown key; expected one of {}",
+            allowed.join(", ")
+        )),
+        None => Ok(()),
+    }
+}
+
+fn str_key<'a>(
+    object: &'a Map<String, Value>,
+    key: &str,
+    at: &str,
+) -> Result<Option<&'a str>, String> {
+    match object.get(key) {
+        None => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s)),
+        Some(_) => Err(format!("{at}.{key}: must be a string")),
+    }
+}
+
+fn bool_key(object: &Map<String, Value>, key: &str, at: &str) -> Result<Option<bool>, String> {
+    match object.get(key) {
+        None => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(format!("{at}.{key}: must be true or false")),
+    }
+}
+
+fn uint_key(object: &Map<String, Value>, key: &str, at: &str) -> Result<Option<usize>, String> {
+    match object.get(key) {
+        None => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .filter(|n| *n > 0)
+            .map(Some)
+            .ok_or(format!("{at}.{key}: must be a positive whole number")),
+    }
+}
+
+fn limit_key(object: &Map<String, Value>, key: &str, at: &str) -> Result<Option<f64>, String> {
+    match object.get(key) {
+        None => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .map(Some)
+            .ok_or(format!("{at}.{key}: must be a number")),
+    }
+}
+
+/// A `choice`'s options as captions and values.
+fn options_key(object: &Map<String, Value>, at: &str) -> Result<Vec<(String, Value)>, String> {
+    let list = object
+        .get("options")
+        .and_then(Value::as_array)
+        .filter(|list| !list.is_empty())
+        .ok_or(format!("{at}.options: a choice needs a list of options"))?;
+    let mut options = Vec::new();
+    for (i, option) in list.iter().enumerate() {
+        let (caption, value) = match option {
+            Value::String(s) => (s.clone(), option.clone()),
+            Value::Number(_) | Value::Bool(_) => (scalar_text(option), option.clone()),
+            Value::Object(o) => {
+                let extra = o.keys().find(|k| *k != "label" && *k != "value");
+                if let Some(extra) = extra {
+                    return Err(format!(
+                        "{at}.options[{i}].{extra}: unknown key; expected label, value"
+                    ));
+                }
+                let value = o.get("value").cloned();
+                let caption = match o.get("label") {
+                    Some(Value::String(s)) => s.clone(),
+                    Some(_) => return Err(format!("{at}.options[{i}].label: must be a string")),
+                    None => value
+                        .as_ref()
+                        .map(scalar_text)
+                        .ok_or(format!("{at}.options[{i}]: needs a label or a value"))?,
+                };
+                let value = value.unwrap_or_else(|| Value::String(caption.clone()));
+                if value.is_null() || value.is_array() || value.is_object() {
+                    return Err(format!(
+                        "{at}.options[{i}].value: must be a string, number or boolean"
+                    ));
+                }
+                (caption, value)
+            }
+            _ => {
+                return Err(format!(
+                    "{at}.options[{i}]: must be a string, number, boolean or object"
+                ));
+            }
+        };
+        if options.iter().any(|(_, v)| *v == value) {
+            return Err(format!(
+                "{at}.options[{i}]: the value {value} is used twice"
+            ));
+        }
+        options.push((caption, value));
+    }
+    Ok(options)
+}
+
+fn scalar_text(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// A label without the `~` hot key marks.
+fn plain(label: &str) -> String {
+    label.replace('~', "")
+}
+
+/// Picks an Alt hot key for each label that has none, so that the fields can
+/// be reached from the keyboard and no two share a letter.
+struct HotKeys {
+    /// The letters taken: by explicit `~x~` marks, and `O` by the OK button.
+    taken: std::cell::RefCell<HashSet<char>>,
+}
+
+impl HotKeys {
+    fn new(fields: &[Value]) -> Self {
+        let mut taken = HashSet::from(['O']);
+        for field in fields {
+            if let Some(label) = field.get("label").and_then(Value::as_str)
+                && let Some(c) = marked(label)
+            {
+                taken.insert(c);
+            }
+        }
+        Self {
+            taken: std::cell::RefCell::new(taken),
+        }
+    }
+
+    /// The field's label with a hot key: its own, or one picked from its
+    /// text. Defaults to the name with the first letter capitalised.
+    fn label(&self, field: &Map<String, Value>, name: &str, at: &str) -> Result<String, String> {
+        let text = match str_key(field, "label", at)? {
+            Some(label) if marked(label).is_some() => return Ok(label.to_string()),
+            Some(label) => label.to_string(),
+            None => capitalised(name),
+        };
+        let mut taken = self.taken.borrow_mut();
+        for (at, c) in text.char_indices() {
+            let upper = c.to_ascii_uppercase();
+            if c.is_ascii_alphabetic() && taken.insert(upper) {
+                let end = at + c.len_utf8();
+                return Ok(format!("{}~{c}~{}", &text[..at], &text[end..]));
+            }
+        }
+        Ok(text)
+    }
+}
+
+/// The upper-case letter a label marks with `~x~`, if it does.
+fn marked(label: &str) -> Option<char> {
+    let start = label.find('~')? + 1;
+    let rest = &label[start..];
+    let mut chars = rest.chars();
+    let c = chars.next()?;
+    (chars.next() == Some('~')).then(|| c.to_ascii_uppercase())
+}
+
+fn capitalised(name: &str) -> String {
+    let name = name.replace(['_', '-'], " ");
+    let mut chars = name.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use turbo_vision::core::event::{Event, KB_ALT_O, KB_ESC};
+    use turbo_vision::test_util::test_terminal;
+
+    fn form(spec: &Value) -> JsonForm {
+        JsonForm::from_spec(spec).expect("a valid spec")
+    }
+
+    fn why(spec: &Value) -> String {
+        match JsonForm::from_spec(spec) {
+            Err(FormError::Spec(why)) => why,
+            Err(other) => panic!("unexpected {other:?}"),
+            Ok(_) => panic!("the spec was accepted"),
+        }
+    }
+
+    fn app() -> Application {
+        Application::with_terminal(test_terminal(100, 40))
+    }
+
+    fn customer() -> Value {
+        json!({
+            "title": "New customer",
+            "fields": [
+                { "name": "name", "type": "text", "label": "Name", "required": true, "max_len": 20 },
+                { "name": "age", "type": "integer", "min": 0, "max": 120 },
+                { "name": "ratio", "type": "number", "default": 1.5 },
+                { "type": "section", "label": "Account" },
+                { "name": "kind", "type": "choice", "options": ["Retail", { "label": "Wholesale", "value": 2 }] },
+                { "name": "vip", "type": "boolean", "label": "VIP customer" },
+                { "name": "notes", "type": "memo", "rows": 2 }
+            ]
+        })
+    }
+
+    #[test]
+    fn defaults_come_back_as_json_in_the_specs_order() {
+        let mut spec = customer();
+        spec["fields"][0]["default"] = json!("Ada");
+        spec["fields"][4]["default"] = json!(2);
+        let mut form = form(&spec);
+        let answers = form.read().expect("valid");
+        assert_eq!(
+            answers,
+            json!({ "name": "Ada", "age": null, "ratio": 1.5, "kind": 2, "vip": false, "notes": "" })
+        );
+        let keys: Vec<_> = answers.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["name", "age", "ratio", "kind", "vip", "notes"]);
+    }
+
+    #[test]
+    fn required_fields_and_an_unchosen_choice_are_refused() {
+        let mut f = form(&customer());
+        let errors = f.read().expect_err("name and kind are missing");
+        assert_eq!(errors.len(), 2, "{errors}");
+    }
+
+    #[test]
+    fn min_and_max_reject_out_of_range_numbers() {
+        let mut spec = customer();
+        spec["fields"][0]["default"] = json!("Ada");
+        spec["fields"][4]["default"] = json!("Retail");
+        spec["fields"][1]["default"] = json!(121);
+        let errors = form(&spec).read().expect_err("age is too large");
+        assert!(
+            errors.to_string().contains("Age must be at most 120"),
+            "{errors}"
+        );
+    }
+
+    #[test]
+    fn the_person_fills_it_in_and_the_answers_come_back() {
+        let mut app = app();
+        let tx = app.terminal.event_injector();
+        for c in "Bo".chars() {
+            tx.send(Event::text(c)).unwrap(); // the first field has the focus
+        }
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        let spec = json!({ "fields": [
+            { "name": "name", "type": "text", "required": true },
+            { "name": "vip", "type": "boolean", "default": true }
+        ]});
+        assert_eq!(
+            run(&mut app, &spec),
+            Ok(json!({ "name": "Bo", "vip": true }))
+        );
+    }
+
+    #[test]
+    fn an_invalid_form_stays_open_until_it_is_fixed() {
+        let mut app = app();
+        let tx = app.terminal.event_injector();
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap(); // refused: name is empty
+        tx.send(Event::text('x')).unwrap();
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        let spec = json!({ "fields": [{ "name": "name", "type": "text", "required": true }] });
+        assert_eq!(run(&mut app, &spec), Ok(json!({ "name": "x" })));
+    }
+
+    #[test]
+    fn escape_cancels() {
+        let mut app = app();
+        app.terminal
+            .event_injector()
+            .send(Event::keyboard(KB_ESC))
+            .unwrap();
+        let spec = json!({ "fields": [{ "name": "a", "type": "text" }] });
+        assert_eq!(run(&mut app, &spec), Err(FormError::Cancelled));
+    }
+
+    #[test]
+    fn a_form_can_run_again_from_its_defaults() {
+        let mut app = app();
+        let mut f = form(&json!({ "fields": [{ "name": "a", "type": "text", "default": "d" }] }));
+        let tx = app.terminal.event_injector();
+        tx.send(Event::text('1')).unwrap();
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        assert_eq!(f.run(&mut app), Ok(json!({ "a": "d1" })));
+        assert_eq!(
+            f.run(&mut app),
+            Ok(json!({ "a": "d" })),
+            "the second run starts over"
+        );
+    }
+
+    #[test]
+    fn hot_keys_are_picked_and_never_repeat() {
+        let spec = json!({ "fields": [
+            { "name": "name", "type": "text" },
+            { "name": "notes", "type": "text", "label": "Notes" },
+            { "name": "ok", "type": "text", "label": "~K~ind" },
+            { "name": "x", "type": "text", "label": "Zip" }
+        ]});
+        let hot = HotKeys::new(spec["fields"].as_array().unwrap());
+        let label = |i: usize| {
+            let field = spec["fields"][i].as_object().unwrap();
+            hot.label(field, field["name"].as_str().unwrap(), "f")
+                .unwrap()
+        };
+        assert_eq!(label(0), "~N~ame");
+        assert_eq!(
+            label(1),
+            "No~t~es",
+            "N is taken and O belongs to the OK button, so T"
+        );
+        assert_eq!(label(2), "~K~ind", "an explicit mark is kept");
+        assert_eq!(label(3), "~Z~ip");
+    }
+
+    #[test]
+    fn a_bad_spec_says_where_and_what() {
+        assert_eq!(why(&json!([])), "the form must be a JSON object");
+        assert_eq!(why(&json!({})), "fields: a list of fields is required");
+        assert_eq!(
+            why(&json!({ "fields": [] })),
+            "fields: the form has no fields"
+        );
+        assert_eq!(
+            why(&json!({ "titel": "x", "fields": [] })),
+            "titel: unknown key; expected one of title, fields"
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "name": "a", "type": "txt" }] })),
+            format!("fields[0].type: unknown type \"txt\"; expected one of {TYPES}")
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "type": "text" }] })),
+            "fields[0].name: required"
+        );
+        assert_eq!(
+            why(
+                &json!({ "fields": [{ "name": "a", "type": "text" }, { "name": "a", "type": "text" }] })
+            ),
+            "fields[1].name: \"a\" is used twice"
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "name": "a", "type": "choice" }] })),
+            "fields[0].options: a choice needs a list of options"
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "name": "a", "type": "integer", "default": "x" }] })),
+            "fields[0].default: must be a whole number"
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "name": "a", "type": "text", "requird": true }] })),
+            format!(
+                "fields[0].requird: unknown key; expected one of {}",
+                FIELD_KEYS.join(", ")
+            )
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "type": "section", "label": "Only a heading" }] })),
+            "fields: the form has no field to answer"
+        );
+    }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn dates_are_text_in_and_out() {
+        let spec = json!({ "fields": [
+            { "name": "since", "type": "date", "default": "1843-07-01" },
+            { "name": "until", "type": "date" }
+        ]});
+        assert_eq!(
+            form(&spec).read().unwrap(),
+            json!({ "since": "1843-07-01", "until": null })
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "name": "d", "type": "date", "default": "1 July" }] })),
+            "fields[0].default: must be YYYY-MM-DD"
+        );
+    }
+}

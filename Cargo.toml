@@ -30,6 +30,7 @@ turbo-vision = { version = "4.0.2", default-features = false }
 tracing = { version = "0.1", optional = true }
 base64 = { version = "0.22", optional = true }
 chrono = { version = "0.4.45", optional = true }
+serde_json = { version = "1", features = ["preserve_order"], optional = true }
 log = { version = "0.4.33", optional = true }
 russh = { version = "0.48", optional = true }
 russh-keys = { version = "0.48", optional = true }
@@ -51,6 +52,9 @@ flate2 = "1"
 
 [features]
 default = ["chrono"]
+# Forms described as JSON and answered as JSON (`forms::json`), for an agent or
+# an MCP tool that needs a person to fill something in.
+json = ["dep:serde_json"]
 # A real terminal (crossterm, OS clipboard) in turbo-vision.
 native = ["turbo-vision/native"]
 # LogWindow and TerminalWidget, with a tracing subscriber.
@@ -127,6 +131,10 @@ required-features = ["native"]
 [[example]]
 name = "form_record"
 required-features = ["native"]
+
+[[example]]
+name = "form_json"
+required-features = ["native", "json"]
 
 [[example]]
 name = "dual_list"

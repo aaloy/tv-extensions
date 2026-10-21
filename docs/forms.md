@@ -848,3 +848,49 @@ For record forms:
   the same controls placed by hand, and how dialogs work underneath.
 - [Chapter 13 – Data Validation](user-guide/Chapter-13-Data-Validation.md):
   the validators you can attach to input lines.
+
+## Forms as JSON (feature `json`)
+
+A program that cannot draw a dialog itself, an agent or an MCP tool, can
+describe a form as JSON, let a person fill it in, and get the answers back as
+JSON or a cancel:
+
+```rust,no_run
+use serde_json::json;
+use turbo_vision::app::Application;
+use tv_extensions::forms::json::{FormError, run};
+
+# fn main() -> turbo_vision::core::error::Result<()> {
+let mut app = Application::new()?;
+let spec = json!({
+    "title": "New customer",
+    "fields": [
+        { "name": "name", "type": "text", "required": true },
+        { "name": "age",  "type": "integer", "min": 0, "max": 120 },
+        { "name": "kind", "type": "choice", "options": ["Retail", "Wholesale"] },
+        { "name": "vip",  "type": "boolean", "label": "VIP customer" }
+    ]
+});
+match run(&mut app, &spec) {
+    Ok(answers) => println!("{answers}"), // {"name":"Ada","age":36,"kind":"Retail","vip":false}
+    Err(FormError::Cancelled) => println!("cancelled"),
+    Err(FormError::Spec(why)) => eprintln!("bad form: {why}"),
+}
+# Ok(())
+# }
+```
+
+It is the record form above with a JSON front end, so the person gets the
+same validation, the same errors in the dialog and the same keyboard and mouse.
+Field types are `text`, `memo`, `integer`, `number`, `boolean`, `choice`,
+`date` and `section` (a heading). Per field: `name` (the answer's key),
+`label`, `required`, `default`, and by type `max_len`, `rows`, `min`, `max`,
+`options`. Labels without a `~` get an Alt hot key picked for them. Unknown
+keys are refused, and a bad spec comes back as `FormError::Spec` with a
+message such as `fields[2].type: unknown type "txt"; expected one of ...`, so
+the agent that wrote it can fix it. See the module documentation of
+`tv_extensions::forms::json` for the full spec.
+
+`cargo run --example form_json --features native,json [-- spec.json]` runs
+one and prints the answers.
+

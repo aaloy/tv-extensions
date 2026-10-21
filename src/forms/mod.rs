@@ -92,6 +92,9 @@ use turbo_vision::views::static_text::StaticText;
 use turbo_vision::views::view::{View, ViewId};
 
 pub mod data;
+#[cfg(feature = "json")]
+#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+pub mod json;
 pub use data::{Editor, Field, FieldError, FieldId, TextValue, ValidationErrors};
 
 /// Columns between the dialog's frame and the form's contents, each side.
