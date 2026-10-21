@@ -1,0 +1,25 @@
+{
+  "title": "Book a table",
+  "labels": "left",
+  "label_align": "right",
+  "fields": [
+    { "type": "note", "text": "We hold your table for 15 minutes.\nPlease give the details below." },
+    { "type": "group", "label": "Guest", "fields": [
+      { "name": "name", "type": "text", "required": true, "max_len": 40 },
+      { "type": "row", "fields": [
+        { "name": "phone", "type": "text", "max_len": 15 },
+        { "name": "vip", "type": "boolean", "label": "Regular guest" }
+      ] }
+    ] },
+    { "type": "group", "label": "Booking", "fields": [
+      { "name": "date", "type": "date", "required": true },
+      { "name": "people", "type": "integer", "widget": "spinner", "min": 1, "max": 12, "default": 2 },
+      { "name": "arrival", "type": "integer", "label": "Minutes late", "widget": "slider", "min": 0, "max": 60 },
+      { "name": "area", "type": "choice", "widget": "radio", "default": "inside",
+        "options": [ { "label": "Inside", "value": "inside" }, { "label": "Terrace", "value": "terrace" } ] }
+    ] },
+    { "name": "extras", "type": "multichoice", "label": "Extras",
+      "options": [ "Baby chair", "Birthday cake", "Wheelchair access" ] },
+    { "name": "notes", "type": "memo", "rows": 2 }
+  ]
+}

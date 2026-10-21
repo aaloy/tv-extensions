@@ -43,12 +43,16 @@
 //! |--------|-------|--------|
 //! | `text` | one input line | string |
 //! | `memo` | several lines (`rows`, default 4) | string |
-//! | `integer` | an input line that must be a whole number | number, or `null` when left empty |
+//! | `integer` | an input line that must be a whole number, or a spinner or slider with `"widget"` | number, or `null` when left empty |
 //! | `number` | an input line that must be a number | number, or `null` when left empty |
 //! | `boolean` | a check box | `true` / `false` |
 //! | `choice` | a drop-down of `options`, or radio buttons with `"widget": "radio"` | the chosen option's value |
+//! | `multichoice` | one check box per option | the list of the ticked options' values |
 //! | `date` | an input line for `YYYY-MM-DD` (feature `chrono`) | `"YYYY-MM-DD"`, or `null` |
 //! | `section` | a heading, no answer | |
+//! | `note` | a few lines of text (`text`), no answer | |
+//! | `group` | a titled box around `fields` | |
+//! | `row` | `fields` side by side on one line | |
 //!
 //! Every field except `section` has a unique `name`, the key of its answer.
 //! Optional keys: `label` (the name with the first letter capitalised by
@@ -59,15 +63,34 @@
 //! or `{ "label": "Wholesale", "value": 2 }`. A `choice` must be answered; a
 //! `boolean` with `required: true` must be checked.
 //!
+//! `integer` takes `"widget": "input"` (the default), `"spinner"` or
+//! `"slider"`; the last two need whole-number `min` and `max`, start on
+//! `default` or `min`, and always have a value. A `multichoice` has the
+//! `choice` options and a `default` list; `required` means at least one is
+//! ticked.
+//!
+//! # Layout
+//!
+//! `group` (with an optional `label` as its title) and `row` hold a `fields`
+//! list of their own. Groups nest and can hold rows; a row holds plain
+//! fields (no `memo`, `note`, `group`, `row` or `section`). The answers stay
+//! one flat object whatever the nesting, so field names are unique across
+//! the whole form. At the top of the spec, `labels` is `"left"` (default) or
+//! `"above"`, and `label_align` is `"left"` (default) or `"right"`.
+//!
 //! The person cannot close the form with OK while a field is invalid: the
 //! errors show in the dialog and the focus moves to the first one.
 
-use super::{Editor, Form, size};
+use super::{Editor, Field, Form, LabelAlign, LabelPosition, Line, TextValue, size};
 use serde_json::{Map, Number, Value};
 use std::collections::HashSet;
 use std::fmt;
 use turbo_vision::app::Application;
-use turbo_vision::views::cluster_group::{MAX_CLUSTER_ITEMS, RadioButtons};
+use turbo_vision::views::View;
+use turbo_vision::views::cluster_group::{CheckBoxes, MAX_CLUSTER_ITEMS, RadioButtons};
+use turbo_vision::views::slider::Slider;
+use turbo_vision::views::spinner::Spinner;
+use turbo_vision::views::static_text::StaticText;
 
 /// Why a form gave no answers.
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +123,7 @@ enum Slot {
     Num(Option<f64>),
     Bool(bool),
     Choice(Value),
+    Multi(Vec<Value>),
     #[cfg(feature = "chrono")]
     Date(Option<chrono::NaiveDate>),
 }
@@ -126,6 +150,7 @@ lens!(int_of, Int, Option<i64>);
 lens!(num_of, Num, Option<f64>);
 lens!(bool_of, Bool, bool);
 lens!(choice_of, Choice, Value);
+lens!(multi_of, Multi, Vec<Value>);
 #[cfg(feature = "chrono")]
 lens!(date_of, Date, Option<chrono::NaiveDate>);
 
@@ -199,6 +224,7 @@ fn slot_json(slot: &Slot) -> Value {
             .map_or(Value::Null, Value::Number),
         Slot::Bool(b) => Value::Bool(*b),
         Slot::Choice(value) => value.clone(),
+        Slot::Multi(values) => Value::Array(values.clone()),
         #[cfg(feature = "chrono")]
         Slot::Date(date) => date.map_or(Value::Null, |d| {
             Value::String(d.format("%Y-%m-%d").to_string())
@@ -206,17 +232,83 @@ fn slot_json(slot: &Slot) -> Value {
     }
 }
 
-const SPEC_KEYS: &[&str] = &["title", "fields"];
+const SPEC_KEYS: &[&str] = &["title", "fields", "labels", "label_align"];
 const FIELD_KEYS: &[&str] = &[
     "name", "type", "label", "required", "default", "max_len", "rows", "min", "max", "options",
-    "widget",
+    "widget", "text", "fields",
 ];
-const TYPES: &str = "text, memo, integer, number, boolean, choice, date, section";
+const TYPES: &str =
+    "text, memo, integer, number, boolean, choice, multichoice, date, section, note, group, row";
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "one match arm per field type reads better than a function each"
-)]
+/// The widest a spinner or slider is drawn.
+const SPINNER_WIDTH: i16 = 12;
+const SLIDER_WIDTH: i16 = 30;
+
+/// What building the form has collected so far.
+struct Ctx {
+    hot_keys: HotKeys,
+    slots: Vec<Slot>,
+    /// Each answer's key and its slot, in the spec's order.
+    answers: Vec<(String, usize)>,
+    names: HashSet<String>,
+}
+
+/// Where a field goes: on a row of its own, or on a line beside others.
+enum Target<'a, 'b> {
+    Form(&'a mut Form<Values>),
+    Line(&'a mut Line<'b, Values>),
+}
+
+impl Target<'_, '_> {
+    fn input<T: TextValue + 'static>(
+        &mut self,
+        label: &str,
+        lens: impl Fn(&mut Values) -> &mut T + 'static,
+    ) -> Field<'_, Values, T> {
+        match self {
+            Self::Form(f) => f.input(label, lens),
+            Self::Line(l) => l.input(label, lens),
+        }
+    }
+
+    fn check(
+        &mut self,
+        caption: &str,
+        lens: impl Fn(&mut Values) -> &mut bool + 'static,
+    ) -> Field<'_, Values, bool> {
+        match self {
+            Self::Form(f) => f.check(caption, lens),
+            Self::Line(l) => l.check(caption, lens),
+        }
+    }
+
+    fn choice(
+        &mut self,
+        label: &str,
+        options: Vec<(String, Value)>,
+        lens: impl Fn(&mut Values) -> &mut Value + 'static,
+    ) -> Field<'_, Values, Value> {
+        match self {
+            Self::Form(f) => f.choice(label, options, lens),
+            Self::Line(l) => l.choice(label, options, lens),
+        }
+    }
+
+    fn bind<V: View + 'static, T: 'static>(
+        &mut self,
+        label: &str,
+        view: V,
+        lens: impl Fn(&mut Values) -> &mut T + 'static,
+        read: impl Fn(&V) -> Result<T, String> + 'static,
+        write: impl Fn(&mut V, &T) + 'static,
+    ) -> Field<'_, Values, T> {
+        match self {
+            Self::Form(f) => f.bind(label, view, lens, read, write),
+            Self::Line(l) => l.bind(label, view, lens, read, write),
+        }
+    }
+}
+
 fn build(spec: &Value) -> Result<JsonForm, String> {
     let spec = spec.as_object().ok_or("the form must be a JSON object")?;
     reject_unknown(spec, SPEC_KEYS, "")?;
@@ -233,190 +325,389 @@ fn build(spec: &Value) -> Result<JsonForm, String> {
         return Err("fields: the form has no fields".into());
     }
 
-    let hot_keys = HotKeys::new(fields);
     let mut form = Form::<Values>::for_record(title);
-    let mut slots = Vec::new();
-    let mut answers = Vec::new();
-    let mut names = HashSet::new();
-
-    for (position, field) in fields.iter().enumerate() {
-        let at = format!("fields[{position}]");
-        let field = field
-            .as_object()
-            .ok_or(format!("{at}: must be an object"))?;
-        reject_unknown(field, FIELD_KEYS, &format!("{at}."))?;
-        let kind = str_key(field, "type", &at)?.ok_or(format!("{at}.type: required ({TYPES})"))?;
-        if kind == "section" {
-            let label = str_key(field, "label", &at)?
-                .ok_or(format!("{at}.label: a section needs a label"))?;
-            form.section(&plain(label));
-            continue;
+    match str_key(spec, "labels", "")? {
+        None | Some("left") => {}
+        Some("above") => {
+            form.label_position(LabelPosition::Above);
         }
-        let name = str_key(field, "name", &at)?
-            .filter(|name| !name.is_empty())
-            .ok_or(format!("{at}.name: required"))?;
-        if !names.insert(name.to_string()) {
-            return Err(format!("{at}.name: \"{name}\" is used twice"));
+        Some(other) => {
+            return Err(format!(
+                "labels: unknown placement \"{other}\"; expected left or above"
+            ));
         }
-        if field.contains_key("widget") && kind != "choice" {
-            return Err(format!("{at}.widget: only a choice has a widget"));
-        }
-        let label = hot_keys.label(field, name, &at)?;
-        let plain_label = plain(&label);
-        let required = bool_key(field, "required", &at)?.unwrap_or(false);
-        let default = field.get("default");
-        let index = slots.len();
-
-        match kind {
-            "text" => {
-                let value = match default {
-                    None => String::new(),
-                    Some(Value::String(s)) => s.clone(),
-                    Some(_) => return Err(format!("{at}.default: must be a string")),
-                };
-                slots.push(Slot::Text(value));
-                let mut f = form.input(&label, move |r| text_of(r, index));
-                if required {
-                    f = f.required();
-                }
-                if let Some(max) = uint_key(field, "max_len", &at)? {
-                    f = f.max_len(max);
-                }
-            }
-            "memo" => {
-                let value = match default {
-                    None => String::new(),
-                    Some(Value::String(s)) => s.clone(),
-                    Some(_) => return Err(format!("{at}.default: must be a string")),
-                };
-                slots.push(Slot::Text(value));
-                let rows = uint_key(field, "rows", &at)?.unwrap_or(4);
-                let rows = i16::try_from(rows).map_err(|_| format!("{at}.rows: too large"))?;
-                let mut f = form.memo(&label, rows, move |r| text_of(r, index));
-                if required {
-                    f = f.required();
-                }
-            }
-            "integer" => {
-                let value = match default {
-                    None | Some(Value::Null) => None,
-                    Some(v) => Some(
-                        v.as_i64()
-                            .ok_or(format!("{at}.default: must be a whole number"))?,
-                    ),
-                };
-                slots.push(Slot::Int(value));
-                let min = limit_key(field, "min", &at)?;
-                let max = limit_key(field, "max", &at)?;
-                let mut f = form.input(&label, move |r| int_of(r, index));
-                if required {
-                    f = f.required();
-                }
-                #[allow(
-                    clippy::cast_precision_loss,
-                    reason = "limits are compared as f64; whole numbers beyond 2^53 are not a form's concern"
-                )]
-                f.validate(move |v: &Option<i64>| {
-                    range_check(v.map(|n| n as f64), min, max, &plain_label)
-                });
-            }
-            "number" => {
-                let value = match default {
-                    None | Some(Value::Null) => None,
-                    Some(v) => Some(
-                        v.as_f64()
-                            .ok_or(format!("{at}.default: must be a number"))?,
-                    ),
-                };
-                slots.push(Slot::Num(value));
-                let min = limit_key(field, "min", &at)?;
-                let max = limit_key(field, "max", &at)?;
-                let mut f = form.input(&label, move |r| num_of(r, index));
-                if required {
-                    f = f.required();
-                }
-                f.validate(move |v: &Option<f64>| range_check(*v, min, max, &plain_label));
-            }
-            "boolean" => {
-                let value = match default {
-                    None => false,
-                    Some(Value::Bool(b)) => *b,
-                    Some(_) => return Err(format!("{at}.default: must be true or false")),
-                };
-                slots.push(Slot::Bool(value));
-                let mut f = form.check(&label, move |r| bool_of(r, index));
-                if required {
-                    f = f.required();
-                }
-            }
-            "choice" => {
-                let options = options_key(field, &at)?;
-                let radio = match str_key(field, "widget", &at)? {
-                    None | Some("dropdown") => false,
-                    Some("radio") => true,
-                    Some(other) => {
-                        return Err(format!(
-                            "{at}.widget: unknown widget \"{other}\"; expected dropdown or radio"
-                        ));
-                    }
-                };
-                let value = match default {
-                    None => Value::Null,
-                    Some(v) if options.iter().any(|(_, o)| o == v) => v.clone(),
-                    Some(_) => {
-                        return Err(format!("{at}.default: is not one of the options' values"));
-                    }
-                };
-                slots.push(Slot::Choice(value));
-                if radio {
-                    add_radio(&mut form, &label, options, index, &at)?;
-                } else {
-                    form.choice(&label, options, move |r| choice_of(r, index));
-                }
-            }
-            #[cfg(feature = "chrono")]
-            "date" => {
-                let value = match default {
-                    None | Some(Value::Null) => None,
-                    Some(Value::String(s)) => Some(
-                        chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                            .map_err(|_| format!("{at}.default: must be YYYY-MM-DD"))?,
-                    ),
-                    Some(_) => return Err(format!("{at}.default: must be YYYY-MM-DD")),
-                };
-                slots.push(Slot::Date(value));
-                let mut f = form.input(&label, move |r| date_of(r, index));
-                if required {
-                    f = f.required();
-                }
-            }
-            other => {
-                let hint = if other == "date" {
-                    "dates need the `chrono` feature".to_string()
-                } else {
-                    format!("expected one of {TYPES}")
-                };
-                return Err(format!("{at}.type: unknown type \"{other}\"; {hint}"));
-            }
-        }
-        answers.push((name.to_string(), index));
     }
-    if answers.is_empty() {
+    match str_key(spec, "label_align", "")? {
+        None | Some("left") => {}
+        Some("right") => {
+            form.label_align(LabelAlign::Right);
+        }
+        Some(other) => {
+            return Err(format!(
+                "label_align: unknown alignment \"{other}\"; expected left or right"
+            ));
+        }
+    }
+
+    let mut ctx = Ctx {
+        hot_keys: HotKeys::new(fields),
+        slots: Vec::new(),
+        answers: Vec::new(),
+        names: HashSet::new(),
+    };
+    add_items(&mut form, fields, "fields", &mut ctx)?;
+    if ctx.answers.is_empty() {
         return Err("fields: the form has no field to answer".into());
     }
 
     form.ok_cancel();
     Ok(JsonForm {
         editor: form.build_editor(),
-        initial: Values(slots),
-        answers,
+        initial: Values(ctx.slots),
+        answers: ctx.answers,
     })
+}
+
+/// Fail when `field` has a key its kind does not use.
+fn only(field: &Map<String, Value>, allowed: &[&str], at: &str) -> Result<(), String> {
+    reject_unknown(field, allowed, &format!("{at}."))
+}
+
+/// The nested `fields` list of a group or a row.
+fn children<'a>(field: &'a Map<String, Value>, at: &str) -> Result<&'a [Value], String> {
+    field
+        .get("fields")
+        .and_then(Value::as_array)
+        .filter(|list| !list.is_empty())
+        .map(Vec::as_slice)
+        .ok_or(format!("{at}.fields: a list of fields is required"))
+}
+
+/// Add each item of `items` to the form: a field, a heading, a note, a group
+/// or a row.
+fn add_items(
+    form: &mut Form<Values>,
+    items: &[Value],
+    path: &str,
+    ctx: &mut Ctx,
+) -> Result<(), String> {
+    for (position, item) in items.iter().enumerate() {
+        let at = format!("{path}[{position}]");
+        let field = item.as_object().ok_or(format!("{at}: must be an object"))?;
+        reject_unknown(field, FIELD_KEYS, &format!("{at}."))?;
+        let kind = str_key(field, "type", &at)?.ok_or(format!("{at}.type: required ({TYPES})"))?;
+        match kind {
+            "section" => {
+                only(field, &["type", "label"], &at)?;
+                let label = str_key(field, "label", &at)?
+                    .ok_or(format!("{at}.label: a section needs a label"))?;
+                form.section(&plain(label));
+            }
+            "note" => {
+                only(field, &["type", "text"], &at)?;
+                let text = str_key(field, "text", &at)?
+                    .ok_or(format!("{at}.text: a note needs its text"))?;
+                let rows = i16::try_from(text.lines().count().max(1)).unwrap_or(i16::MAX);
+                form.row(StaticText::new(size(0, rows), text));
+            }
+            "group" => {
+                only(field, &["type", "label", "fields"], &at)?;
+                let title = str_key(field, "label", &at)?.unwrap_or("");
+                let inner = children(field, &at)?;
+                form.group(&plain(title));
+                add_items(form, inner, &format!("{at}.fields"), ctx)?;
+                form.end_group();
+            }
+            "row" => {
+                only(field, &["type", "fields"], &at)?;
+                let inner = children(field, &at)?;
+                let mut line = form.line();
+                for (i, child) in inner.iter().enumerate() {
+                    let child_at = format!("{at}.fields[{i}]");
+                    let child = child
+                        .as_object()
+                        .ok_or(format!("{child_at}: must be an object"))?;
+                    reject_unknown(child, FIELD_KEYS, &format!("{child_at}."))?;
+                    if let Some(kind) = str_key(child, "type", &child_at)?
+                        && matches!(kind, "memo" | "section" | "note" | "group" | "row")
+                    {
+                        return Err(format!(
+                            "{child_at}.type: a {kind} cannot be in a row; put it outside"
+                        ));
+                    }
+                    add_field(&mut Target::Line(&mut line), child, &child_at, ctx)?;
+                }
+            }
+            _ => add_field(&mut Target::Form(form), field, &at, ctx)?,
+        }
+    }
+    Ok(())
+}
+
+/// Which widget a field asks for, checked against the ones its type offers.
+fn widget<'a>(
+    field: &'a Map<String, Value>,
+    kind: &str,
+    at: &str,
+) -> Result<Option<&'a str>, String> {
+    let offered: &[&str] = match kind {
+        "choice" => &["dropdown", "radio"],
+        "integer" => &["input", "spinner", "slider"],
+        _ => {
+            return if field.contains_key("widget") {
+                Err(format!("{at}.widget: a {kind} has no choice of widget"))
+            } else {
+                Ok(None)
+            };
+        }
+    };
+    match str_key(field, "widget", at)? {
+        None => Ok(None),
+        Some(w) if offered.contains(&w) => Ok(Some(w)),
+        Some(other) => Err(format!(
+            "{at}.widget: unknown widget \"{other}\"; expected {}",
+            offered.join(", ")
+        )),
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one match arm per field type reads better than a function each"
+)]
+fn add_field(
+    target: &mut Target<'_, '_>,
+    field: &Map<String, Value>,
+    at: &str,
+    ctx: &mut Ctx,
+) -> Result<(), String> {
+    let kind = str_key(field, "type", at)?.ok_or(format!("{at}.type: required ({TYPES})"))?;
+    if matches!(kind, "section" | "note" | "group" | "row") {
+        return Err(format!("{at}.type: a {kind} cannot be here"));
+    }
+    if field.contains_key("text") || field.contains_key("fields") {
+        let key = if field.contains_key("text") {
+            "text"
+        } else {
+            "fields"
+        };
+        return Err(format!("{at}.{key}: a {kind} has no {key}"));
+    }
+    let name = str_key(field, "name", at)?
+        .filter(|name| !name.is_empty())
+        .ok_or(format!("{at}.name: required"))?;
+    if !ctx.names.insert(name.to_string()) {
+        return Err(format!("{at}.name: \"{name}\" is used twice"));
+    }
+    let widget = widget(field, kind, at)?;
+    let label = ctx.hot_keys.label(field, name, at)?;
+    let plain_label = plain(&label);
+    let required = bool_key(field, "required", at)?.unwrap_or(false);
+    let default = field.get("default");
+    let index = ctx.slots.len();
+
+    match kind {
+        "text" => {
+            let value = match default {
+                None => String::new(),
+                Some(Value::String(s)) => s.clone(),
+                Some(_) => return Err(format!("{at}.default: must be a string")),
+            };
+            ctx.slots.push(Slot::Text(value));
+            let mut f = target.input(&label, move |r| text_of(r, index));
+            if required {
+                f = f.required();
+            }
+            if let Some(max) = uint_key(field, "max_len", at)? {
+                f.max_len(max);
+            }
+        }
+        "memo" => {
+            let value = match default {
+                None => String::new(),
+                Some(Value::String(s)) => s.clone(),
+                Some(_) => return Err(format!("{at}.default: must be a string")),
+            };
+            ctx.slots.push(Slot::Text(value));
+            let rows = uint_key(field, "rows", at)?.unwrap_or(4);
+            let rows = i16::try_from(rows).map_err(|_| format!("{at}.rows: too large"))?;
+            let Target::Form(form) = target else {
+                return Err(format!("{at}.type: a memo cannot be in a row"));
+            };
+            let f = form.memo(&label, rows, move |r| text_of(r, index));
+            if required {
+                f.required();
+            }
+        }
+        "integer" if matches!(widget, Some("spinner" | "slider")) => {
+            let (min, max) = whole_range(field, at, widget.unwrap_or_default())?;
+            let start = match default {
+                None => min,
+                Some(v) => v
+                    .as_i64()
+                    .filter(|n| (min..=max).contains(n))
+                    .ok_or(format!(
+                        "{at}.default: must be a whole number from {min} to {max}"
+                    ))?,
+            };
+            ctx.slots.push(Slot::Int(Some(start)));
+            if widget == Some("spinner") {
+                target.bind(
+                    &label,
+                    Spinner::new(size(SPINNER_WIDTH, 1), min, max),
+                    move |r| int_of(r, index),
+                    |s: &Spinner| Ok(Some(s.value())),
+                    move |s: &mut Spinner, v: &Option<i64>| {
+                        s.set_value(v.unwrap_or(min));
+                    },
+                );
+            } else {
+                target.bind(
+                    &label,
+                    Slider::new(size(SLIDER_WIDTH, 1), min, max),
+                    move |r| int_of(r, index),
+                    |s: &Slider| Ok(Some(s.value())),
+                    move |s: &mut Slider, v: &Option<i64>| {
+                        s.set_value(v.unwrap_or(min));
+                    },
+                );
+            }
+        }
+        "integer" => {
+            let value = match default {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(
+                    v.as_i64()
+                        .ok_or(format!("{at}.default: must be a whole number"))?,
+                ),
+            };
+            ctx.slots.push(Slot::Int(value));
+            let min = limit_key(field, "min", at)?;
+            let max = limit_key(field, "max", at)?;
+            let mut f = target.input(&label, move |r| int_of(r, index));
+            if required {
+                f = f.required();
+            }
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "limits are compared as f64; whole numbers beyond 2^53 are not a form's concern"
+            )]
+            f.validate(move |v: &Option<i64>| {
+                range_check(v.map(|n| n as f64), min, max, &plain_label)
+            });
+        }
+        "number" => {
+            let value = match default {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(
+                    v.as_f64()
+                        .ok_or(format!("{at}.default: must be a number"))?,
+                ),
+            };
+            ctx.slots.push(Slot::Num(value));
+            let min = limit_key(field, "min", at)?;
+            let max = limit_key(field, "max", at)?;
+            let mut f = target.input(&label, move |r| num_of(r, index));
+            if required {
+                f = f.required();
+            }
+            f.validate(move |v: &Option<f64>| range_check(*v, min, max, &plain_label));
+        }
+        "boolean" => {
+            let value = match default {
+                None => false,
+                Some(Value::Bool(b)) => *b,
+                Some(_) => return Err(format!("{at}.default: must be true or false")),
+            };
+            ctx.slots.push(Slot::Bool(value));
+            let f = target.check(&label, move |r| bool_of(r, index));
+            if required {
+                f.required();
+            }
+        }
+        "choice" => {
+            let options = options_key(field, at)?;
+            let value = match default {
+                None => Value::Null,
+                Some(v) if options.iter().any(|(_, o)| o == v) => v.clone(),
+                Some(_) => {
+                    return Err(format!("{at}.default: is not one of the options' values"));
+                }
+            };
+            ctx.slots.push(Slot::Choice(value));
+            if widget == Some("radio") {
+                add_radio(target, &label, options, index, at)?;
+            } else {
+                target.choice(&label, options, move |r| choice_of(r, index));
+            }
+        }
+        "multichoice" => {
+            let options = options_key(field, at)?;
+            let chosen = match default {
+                None => Vec::new(),
+                Some(Value::Array(list)) => {
+                    for v in list {
+                        if !options.iter().any(|(_, o)| o == v) {
+                            return Err(format!(
+                                "{at}.default: {v} is not one of the options' values"
+                            ));
+                        }
+                    }
+                    list.clone()
+                }
+                Some(_) => return Err(format!("{at}.default: must be a list of values")),
+            };
+            ctx.slots.push(Slot::Multi(chosen));
+            add_multi(target, &label, options, index, required, at)?;
+        }
+        #[cfg(feature = "chrono")]
+        "date" => {
+            let value = match default {
+                None | Some(Value::Null) => None,
+                Some(Value::String(s)) => Some(
+                    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                        .map_err(|_| format!("{at}.default: must be YYYY-MM-DD"))?,
+                ),
+                Some(_) => return Err(format!("{at}.default: must be YYYY-MM-DD")),
+            };
+            ctx.slots.push(Slot::Date(value));
+            let f = target.input(&label, move |r| date_of(r, index));
+            if required {
+                f.required();
+            }
+        }
+        other => {
+            let hint = if other == "date" {
+                "dates need the `chrono` feature".to_string()
+            } else {
+                format!("expected one of {TYPES}")
+            };
+            return Err(format!("{at}.type: unknown type \"{other}\"; {hint}"));
+        }
+    }
+    ctx.answers.push((name.to_string(), index));
+    Ok(())
+}
+
+/// The whole-number `min` and `max` a spinner or slider needs.
+fn whole_range(field: &Map<String, Value>, at: &str, widget: &str) -> Result<(i64, i64), String> {
+    let get = |key: &str| {
+        field
+            .get(key)
+            .and_then(Value::as_i64)
+            .ok_or(format!("{at}.{key}: a {widget} needs a whole number {key}"))
+    };
+    let (min, max) = (get("min")?, get("max")?);
+    if min > max {
+        return Err(format!("{at}.min: is greater than max"));
+    }
+    Ok((min, max))
 }
 
 /// A choice shown as radio buttons, one per option, bound to the same slot a
 /// drop-down would use.
 fn add_radio(
-    form: &mut Form<Values>,
+    target: &mut Target<'_, '_>,
     label: &str,
     options: Vec<(String, Value)>,
     index: usize,
@@ -431,7 +722,7 @@ fn add_radio(
     let values: Vec<Value> = options.into_iter().map(|(_, value)| value).collect();
     let rows = i16::try_from(captions.len()).unwrap_or(i16::MAX);
     let for_write = values.clone();
-    form.bind(
+    target.bind(
         label,
         RadioButtons::new(size(0, rows), captions),
         move |r| choice_of(r, index),
@@ -447,6 +738,51 @@ fn add_radio(
                 .position(|v| v == value)
                 .map_or(0, |i| 1_u32 << i);
             radio.set_value(bits);
+        },
+    );
+    Ok(())
+}
+
+/// A multiple choice: one check box per option, answering the list of the
+/// ticked options' values in the options' order.
+fn add_multi(
+    target: &mut Target<'_, '_>,
+    label: &str,
+    options: Vec<(String, Value)>,
+    index: usize,
+    required: bool,
+    at: &str,
+) -> Result<(), String> {
+    if options.len() > MAX_CLUSTER_ITEMS {
+        return Err(format!(
+            "{at}.options: a multichoice takes at most {MAX_CLUSTER_ITEMS} options"
+        ));
+    }
+    let captions: Vec<String> = options.iter().map(|(caption, _)| caption.clone()).collect();
+    let values: Vec<Value> = options.into_iter().map(|(_, value)| value).collect();
+    let rows = i16::try_from(captions.len()).unwrap_or(i16::MAX);
+    let for_write = values.clone();
+    target.bind(
+        label,
+        CheckBoxes::new(size(0, rows), captions),
+        move |r| multi_of(r, index),
+        move |boxes: &CheckBoxes| {
+            let ticked: Vec<Value> = values
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| boxes.is_checked(*i))
+                .map(|(_, v)| v.clone())
+                .collect();
+            if required && ticked.is_empty() {
+                Err("at least one must be chosen".to_string())
+            } else {
+                Ok(ticked)
+            }
+        },
+        move |boxes: &mut CheckBoxes, chosen: &Vec<Value>| {
+            for (i, v) in for_write.iter().enumerate() {
+                boxes.set_checked(i, chosen.contains(v));
+            }
         },
     );
     Ok(())
@@ -591,14 +927,23 @@ struct HotKeys {
 
 impl HotKeys {
     fn new(fields: &[Value]) -> Self {
-        let mut taken = HashSet::from(['O']);
-        for field in fields {
-            if let Some(label) = field.get("label").and_then(Value::as_str)
-                && let Some(c) = marked(label)
-            {
-                taken.insert(c);
+        fn collect(fields: &[Value], taken: &mut HashSet<char>) {
+            for field in fields {
+                let kind = field.get("type").and_then(Value::as_str);
+                if matches!(kind, Some("group" | "row")) {
+                    if let Some(inner) = field.get("fields").and_then(Value::as_array) {
+                        collect(inner, taken);
+                    }
+                } else if !matches!(kind, Some("section" | "note"))
+                    && let Some(label) = field.get("label").and_then(Value::as_str)
+                    && let Some(c) = marked(label)
+                {
+                    taken.insert(c);
+                }
             }
         }
+        let mut taken = HashSet::from(['O']);
+        collect(fields, &mut taken);
         Self {
             taken: std::cell::RefCell::new(taken),
         }
@@ -830,11 +1175,11 @@ mod tests {
     fn the_widget_is_checked() {
         assert_eq!(
             why(&radio(json!({ "widget": "slider" }))),
-            "fields[0].widget: unknown widget \"slider\"; expected dropdown or radio"
+            "fields[0].widget: unknown widget \"slider\"; expected dropdown, radio"
         );
         assert_eq!(
             why(&json!({ "fields": [{ "name": "a", "type": "text", "widget": "radio" }] })),
-            "fields[0].widget: only a choice has a widget"
+            "fields[0].widget: a text has no choice of widget"
         );
         let many: Vec<String> = (0..33).map(|i| format!("o{i}")).collect();
         assert!(why(&radio(json!({ "options": many }))).contains("at most 32 options"),);
@@ -855,7 +1200,7 @@ mod tests {
         );
         assert_eq!(
             why(&json!({ "titel": "x", "fields": [] })),
-            "titel: unknown key; expected one of title, fields"
+            "titel: unknown key; expected one of title, fields, labels, label_align"
         );
         assert_eq!(
             why(&json!({ "fields": [{ "name": "a", "type": "txt" }] })),
@@ -907,5 +1252,186 @@ mod tests {
             why(&json!({ "fields": [{ "name": "d", "type": "date", "default": "1 July" }] })),
             "fields[0].default: must be YYYY-MM-DD"
         );
+    }
+
+    // ---- more widgets and layout ----
+
+    fn fields(list: Value) -> Value {
+        json!({ "fields": list })
+    }
+
+    #[test]
+    fn spinners_and_sliders_start_on_their_default_or_min() {
+        let spec = fields(json!([
+            { "name": "a", "type": "integer", "widget": "spinner", "min": 1, "max": 9 },
+            { "name": "b", "type": "integer", "widget": "slider", "min": 0, "max": 100, "default": 40 },
+            { "name": "c", "type": "integer", "widget": "input" }
+        ]));
+        assert_eq!(
+            form(&spec).read().unwrap(),
+            json!({ "a": 1, "b": 40, "c": null })
+        );
+    }
+
+    #[test]
+    fn spinners_and_sliders_need_a_range_and_a_default_inside_it() {
+        let bad = |extra: Value| {
+            let mut field = json!({ "name": "a", "type": "integer", "widget": "spinner" });
+            field
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            why(&fields(json!([field])))
+        };
+        assert_eq!(
+            bad(json!({})),
+            "fields[0].min: a spinner needs a whole number min"
+        );
+        assert_eq!(
+            bad(json!({ "min": 5, "max": 1 })),
+            "fields[0].min: is greater than max"
+        );
+        assert_eq!(
+            bad(json!({ "min": 1, "max": 5, "default": 9 })),
+            "fields[0].default: must be a whole number from 1 to 5"
+        );
+        assert_eq!(
+            why(&fields(
+                json!([{ "name": "a", "type": "integer", "widget": "dial" }])
+            )),
+            "fields[0].widget: unknown widget \"dial\"; expected input, spinner, slider"
+        );
+    }
+
+    #[test]
+    fn a_multichoice_answers_a_list_in_the_options_order() {
+        let spec = fields(json!([
+            { "name": "tags", "type": "multichoice", "options": ["a", "b", { "label": "C", "value": 3 }],
+              "default": [3, "a"] }
+        ]));
+        assert_eq!(form(&spec).read().unwrap(), json!({ "tags": ["a", 3] }));
+        let none = fields(json!([{ "name": "t", "type": "multichoice", "options": ["a"] }]));
+        assert_eq!(form(&none).read().unwrap(), json!({ "t": [] }));
+    }
+
+    #[test]
+    fn a_required_multichoice_needs_one_ticked() {
+        let spec = fields(json!([
+            { "name": "t", "type": "multichoice", "options": ["a", "b"], "required": true }
+        ]));
+        let errors = form(&spec).read().expect_err("none ticked");
+        assert!(errors.to_string().contains("at least one"), "{errors}");
+        let spec = fields(json!([
+            { "name": "t", "type": "multichoice", "options": ["a", "b"], "required": true, "default": ["b"] }
+        ]));
+        assert_eq!(form(&spec).read().unwrap(), json!({ "t": ["b"] }));
+        let bad = fields(json!([
+            { "name": "t", "type": "multichoice", "options": ["a"], "default": ["z"] }
+        ]));
+        assert!(why(&bad).starts_with("fields[0].default: \"z\" is not one of"));
+    }
+
+    #[test]
+    fn groups_and_rows_nest_and_answers_stay_flat() {
+        let spec = fields(json!([
+            { "type": "note", "text": "Fill in\nboth parts" },
+            { "type": "group", "label": "Person", "fields": [
+                { "name": "first", "type": "text", "default": "Ada" },
+                { "type": "row", "fields": [
+                    { "name": "age", "type": "integer", "default": 36 },
+                    { "name": "vip", "type": "boolean" }
+                ] },
+                { "type": "group", "label": "Inner", "fields": [
+                    { "name": "city", "type": "text", "default": "Palma" }
+                ] }
+            ] },
+            { "name": "notes", "type": "memo", "rows": 2 }
+        ]));
+        assert_eq!(
+            form(&spec).read().unwrap(),
+            json!({ "first": "Ada", "age": 36, "vip": false, "city": "Palma", "notes": "" })
+        );
+    }
+
+    #[test]
+    fn names_stay_unique_across_groups_and_hot_keys_across_rows() {
+        let spec = fields(json!([
+            { "name": "a", "type": "text" },
+            { "type": "group", "fields": [{ "name": "a", "type": "text" }] }
+        ]));
+        assert_eq!(why(&spec), "fields[1].fields[0].name: \"a\" is used twice");
+    }
+
+    #[test]
+    fn layout_items_are_checked() {
+        assert_eq!(
+            why(&fields(json!([{ "type": "group" }]))),
+            "fields[0].fields: a list of fields is required"
+        );
+        assert_eq!(
+            why(&fields(json!([{ "type": "row", "fields": [] }]))),
+            "fields[0].fields: a list of fields is required"
+        );
+        assert_eq!(
+            why(&fields(
+                json!([{ "type": "row", "fields": [{ "name": "m", "type": "memo" }] }])
+            )),
+            "fields[0].fields[0].type: a memo cannot be in a row; put it outside"
+        );
+        assert_eq!(
+            why(&fields(
+                json!([{ "type": "row", "fields": [{ "type": "row", "fields": [] }] }])
+            )),
+            "fields[0].fields[0].type: a row cannot be in a row; put it outside"
+        );
+        assert_eq!(
+            why(&fields(json!([{ "type": "note" }]))),
+            "fields[0].text: a note needs its text"
+        );
+        assert!(
+            why(&fields(
+                json!([{ "type": "note", "text": "x", "name": "n" }])
+            ))
+            .starts_with("fields[0].name: unknown key; expected one of type, text")
+        );
+        assert_eq!(
+            why(&fields(
+                json!([{ "name": "a", "type": "text", "fields": [] }])
+            )),
+            "fields[0].fields: a text has no fields"
+        );
+        assert!(
+            why(&fields(json!([{ "name": "a", "type": "text" }]))
+                .as_object()
+                .map(|o| {
+                    let mut o = o.clone();
+                    o.insert("labels".into(), json!("beside"));
+                    Value::Object(o)
+                })
+                .unwrap())
+            .starts_with("labels: unknown placement \"beside\"")
+        );
+    }
+
+    #[test]
+    fn labels_above_and_right_aligned_build() {
+        for (labels, align) in [("above", "left"), ("left", "right")] {
+            let mut spec = fields(json!([{ "name": "a", "type": "text", "default": "x" }]));
+            spec["labels"] = json!(labels);
+            spec["label_align"] = json!(align);
+            assert_eq!(form(&spec).read().unwrap(), json!({ "a": "x" }));
+        }
+    }
+
+    #[test]
+    fn hot_keys_in_rows_and_groups_do_not_repeat() {
+        let spec = fields(json!([
+            { "name": "street", "type": "text" },
+            { "type": "row", "fields": [
+                { "name": "stop", "type": "text" },
+                { "name": "sweet", "type": "text", "label": "~S~weet" }
+            ] }
+        ]));
+        assert_eq!(form(&spec).read().unwrap().as_object().unwrap().len(), 3);
     }
 }

@@ -9,7 +9,7 @@
 use serde_json::{Value, json};
 use turbo_vision::app::Application;
 use turbo_vision::core::event::{
-    Event, KB_ALT_O, KB_BACKSPACE, KB_DOWN, KB_ENTER, KB_ESC, KB_TAB, KB_UP,
+    Event, KB_ALT_O, KB_BACKSPACE, KB_DOWN, KB_ENTER, KB_ESC, KB_LEFT, KB_RIGHT, KB_TAB, KB_UP,
 };
 use turbo_vision::test_util::test_terminal;
 use tv_extensions::forms::json::{FormError, JsonForm, run};
@@ -17,6 +17,7 @@ use tv_extensions::forms::json::{FormError, JsonForm, run};
 const CUSTOMER: &str = include_str!("../examples/form_json_specs/customer.json");
 const DEPLOY: &str = include_str!("../examples/form_json_specs/deploy.json");
 const SURVEY: &str = include_str!("../examples/form_json_specs/survey.json");
+const LAYOUT: &str = include_str!("../examples/form_json_specs/layout.json");
 
 /// One thing a person does.
 enum Key {
@@ -25,13 +26,15 @@ enum Key {
     Tab,
     Down,
     Up,
+    Left,
+    Right,
     Enter,
     Backspace(usize),
     Esc,
     /// Alt+O: press OK.
     Ok,
 }
-use Key::{Backspace, Down, Enter, Esc, Ok as PressOk, Tab, Type, Up};
+use Key::{Backspace, Down, Enter, Esc, Left, Ok as PressOk, Right, Tab, Type, Up};
 
 fn app() -> Application {
     // Tall enough for the longest example form.
@@ -50,6 +53,8 @@ fn send(app: &mut Application, keys: &[Key]) {
             Tab => tx.send(Event::keyboard(KB_TAB)).unwrap(),
             Down => tx.send(Event::keyboard(KB_DOWN)).unwrap(),
             Up => tx.send(Event::keyboard(KB_UP)).unwrap(),
+            Left => tx.send(Event::keyboard(KB_LEFT)).unwrap(),
+            Right => tx.send(Event::keyboard(KB_RIGHT)).unwrap(),
             Enter => tx.send(Event::keyboard(KB_ENTER)).unwrap(),
             Backspace(n) => {
                 for _ in 0..*n {
@@ -81,6 +86,7 @@ fn every_example_spec_builds() {
         ("customer", CUSTOMER),
         ("deploy", DEPLOY),
         ("survey", SURVEY),
+        ("layout", LAYOUT),
     ] {
         if let Err(e) = JsonForm::from_spec(&spec(text)) {
             panic!("{name}.json: {e}");
@@ -450,4 +456,136 @@ fn form_errors_read_well() {
         FormError::Spec("fields: x".into()).to_string(),
         "invalid form: fields: x"
     );
+}
+
+// ---- more widgets and layout ------------------------------------------
+
+#[test]
+fn a_spinner_steps_with_the_arrows() {
+    let spec = json!({ "fields": [
+        { "name": "n", "type": "integer", "widget": "spinner", "min": 1, "max": 5, "default": 2 }
+    ]});
+    let answers = answer(&spec, &[Up, Up, Up, Up, Down, PressOk]).expect("answers");
+    assert_eq!(
+        answers,
+        json!({ "n": 4 }),
+        "2 + 4 steps, capped at 5, then back one"
+    );
+}
+
+#[test]
+fn a_slider_moves_with_left_and_right() {
+    let spec = json!({ "fields": [
+        { "name": "n", "type": "integer", "widget": "slider", "min": 0, "max": 10, "default": 5 }
+    ]});
+    let answers = answer(&spec, &[Right, Right, Left, PressOk]).expect("answers");
+    assert_eq!(answers, json!({ "n": 6 }));
+}
+
+#[test]
+fn a_multichoice_is_ticked_with_space() {
+    let spec = json!({ "fields": [
+        { "name": "t", "type": "multichoice", "required": true, "options": ["a", "b", "c"] }
+    ]});
+    let answers = answer(
+        &spec,
+        &[
+            PressOk,   // refused: nothing ticked
+            Type(" "), // a
+            Down,
+            Down,
+            Type(" "), // c
+            PressOk,
+        ],
+    )
+    .expect("answers");
+    assert_eq!(answers, json!({ "t": ["a", "c"] }));
+}
+
+#[test]
+fn tab_walks_through_groups_and_rows_in_order() {
+    let spec = json!({ "fields": [
+        { "type": "group", "label": "G", "fields": [
+            { "name": "first", "type": "text" },
+            { "type": "row", "fields": [
+                { "name": "second", "type": "text" },
+                { "name": "third", "type": "text" }
+            ] }
+        ] },
+        { "name": "fourth", "type": "text" }
+    ]});
+    let answers = answer(
+        &spec,
+        &[
+            Type("1"),
+            Tab,
+            Type("2"),
+            Tab,
+            Type("3"),
+            Tab,
+            Type("4"),
+            PressOk,
+        ],
+    )
+    .expect("answers");
+    assert_eq!(
+        answers,
+        json!({ "first": "1", "second": "2", "third": "3", "fourth": "4" })
+    );
+}
+
+#[test]
+fn the_layout_form_is_filled_in_and_answered_flat() {
+    let answers = answer(
+        &spec(LAYOUT),
+        &[
+            Type("Ada"),
+            Tab, // phone
+            Type("555"),
+            Tab, // regular guest
+            Type(" "),
+            Tab, // date
+            Type("2026-12-24"),
+            Tab, // people
+            Up,
+            Up,
+            Tab, // slider
+            Right,
+            Tab, // area: Space picks the focused radio button, Inside
+            Down,
+            Type(" "), // Terrace
+            Tab,       // extras
+            Down,
+            Type(" "), // Birthday cake
+            Tab,
+            Type("window"),
+            PressOk,
+        ],
+    )
+    .expect("answers");
+    assert_eq!(
+        answers,
+        json!({
+            "name": "Ada",
+            "phone": "555",
+            "vip": true,
+            "date": "2026-12-24",
+            "people": 4,
+            "arrival": 1,
+            "area": "terrace",
+            "extras": ["Birthday cake"],
+            "notes": "window"
+        })
+    );
+}
+
+#[test]
+fn labels_above_still_answer() {
+    let mut spec = spec(LAYOUT);
+    spec["labels"] = json!("above");
+    let answers = answer(
+        &spec,
+        &[Type("Ada"), Tab, Tab, Tab, Type("2026-12-24"), PressOk],
+    );
+    assert_eq!(answers.expect("answers")["date"], json!("2026-12-24"));
 }

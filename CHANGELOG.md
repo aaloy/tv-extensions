@@ -19,6 +19,11 @@ applications send a keyboard-pressed button's command at once.
   files) and `form_json_agent`; tests in `tests/forms_json.rs`.
 - `forms::json`: `"widget": "radio"` on a `choice` field shows its options as
   radio buttons instead of a drop-down (the `deploy` and `survey` specs use it).
+- `forms::json`: more widgets and layout. `integer` with `"widget": "spinner"`
+  or `"slider"`; the `multichoice` type (check boxes, answering a list);
+  `note`, `group` (nestable) and `row` (side by side) items; top-level `labels`
+  (`left`/`above`) and `label_align`. Answers stay flat. New example spec
+  `layout` for `form_json`.
 - `forms`: `Form` lays a dialog out from labelled fields with no
   coordinates (lines of fields, titled groups, sections, label placement,
   button alignment), and `Form::<T>::for_record` edits a struct of yours:

@@ -883,17 +883,24 @@ match run(&mut app, &spec) {
 It is the record form above with a JSON front end, so the person gets the
 same validation, the same errors in the dialog and the same keyboard and mouse.
 Field types are `text`, `memo`, `integer`, `number`, `boolean`, `choice`,
-`date` and `section` (a heading). Per field: `name` (the answer's key),
+`multichoice` (check boxes, answering a list), `date` and `section` (a
+heading). Layout items are `note` (some text), `group` (a titled box) and
+`row` (fields side by side). Per field: `name` (the answer's key),
 `label`, `required`, `default`, and by type `max_len`, `rows`, `min`, `max`,
 `options`, `widget`. A `choice` is a drop-down by default; `"widget": "radio"`
-shows the options as radio buttons (up to 32; arrows move, Space picks). Labels without a `~` get an Alt hot key picked for them. Unknown
+shows the options as radio buttons (up to 32; arrows move, Space picks), and an
+`integer` with `"widget": "spinner"` or `"slider"` (and whole `min`/`max`)
+steps with the arrows. `group` and `row` take a `fields` list of their own and
+nest; the answers stay one flat object. Top-level `labels` (`left` or `above`)
+and `label_align` (`left` or `right`) set how labels sit. Labels without a `~` get an Alt hot key picked for them. Unknown
 keys are refused, and a bad spec comes back as `FormError::Spec` with a
 message such as `fields[2].type: unknown type "txt"; expected one of ...`, so
 the agent that wrote it can fix it. See the module documentation of
 `tv_extensions::forms::json` for the full spec.
 
 `cargo run --example form_json --features native,json` runs the customer form
-and prints the answers; add `-- deploy` or `-- survey` for the other specs in
+and prints the answers; add `-- deploy`, `-- survey` or `-- layout` (groups, rows, spinner, slider,
+multichoice) for the other specs in
 `examples/form_json_specs/`, or `-- your-spec.json`. `form_json_agent` plays
 the calling side: it sends a spec with a mistake, reads the error message the
 way a model would, repairs the spec, and acts on the answer or the cancel.
