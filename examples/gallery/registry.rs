@@ -97,6 +97,15 @@ pub const DEMOS: &[Demo] = &[
         handle: None,
     },
     Demo {
+        name: "Form",
+        group: Group::Views,
+        module: "forms",
+        source: include_str!("demos/forms.rs"),
+        height: 3,
+        build: demos::forms::build,
+        handle: Some(demos::forms::handle),
+    },
+    Demo {
         name: "ScrollPane",
         group: Group::Views,
         module: "scroll_pane",

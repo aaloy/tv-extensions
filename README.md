@@ -124,6 +124,10 @@ let fruit_field = AutoCompleteBuilder::new()
 
 `cargo run --example autocomplete --features native` shows the combinations in one dialog.
 
+## Forms
+
+`Form` lays a dialog out from labelled fields, with no coordinates: labels in one column, fields in the next, lines of fields, titled groups, label placement, and buttons along the bottom, the dialog sized to fit and centred. `Form::<T>::for_record` binds the fields to a struct of yours (a database row, say) through typed fields, required fields, rules and a save step, and shows errors in the dialog. Always available, no feature flag; date and time fields (`NaiveDate`, `NaiveTime`) need `chrono`, on by default. [docs/forms.md](docs/forms.md) has the rest, and `cargo run --example form_layout --features native`, `form_labels` and `form_record` show it.
+
 ## DualList
 
 Two lists side by side for picking a subset of items, like Django admin's `filter_horizontal`: available items on the left, chosen ones on the right, a filter field over each, and `>` `>>` `<` `<<` buttons between them. Space marks items; Enter or a double-click moves them. Each item is a key and a label, and the chosen keys come back through an `Rc<RefCell<Vec<K>>>`. Always available, no feature flag. [docs/dual-list.md](docs/dual-list.md) has the rest.
@@ -231,7 +235,8 @@ let server = SshServer::new(config, || {
 
 | Feature | Enables | Implies |
 | --- | --- | --- |
-| *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `dual_list`, `keys` — builds for `wasm32-wasip1` | |
+| *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `dual_list`, `forms`, `keys` — builds for `wasm32-wasip1` | |
+| `chrono` (default) | date and time fields in record forms | |
 | `native` | a real terminal in turbo-vision (crossterm, OS clipboard) | |
 | `csv` | the `csv` module: the CSV table editor | |
 | `log` | the `log` module: `LogWindow`, `TerminalWidget` | |

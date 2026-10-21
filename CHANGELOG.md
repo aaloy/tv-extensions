@@ -7,6 +7,17 @@ applications send a keyboard-pressed button's command at once.
 
 ### Added
 
+- `forms`: `Form` lays a dialog out from labelled fields with no
+  coordinates (lines of fields, titled groups, sections, label placement,
+  button alignment), and `Form::<T>::for_record` edits a struct of yours:
+  typed fields (`input`, `check`, `memo`, `choice`, `bind`), required
+  fields and rules, errors shown in the dialog, and a save step whose
+  errors keep the dialog open. Moved here from turbo-vision's
+  `views::form`. Needs `GroupBox` and a public `Dialog::prepare_modal`,
+  which are in turbo-vision after 4.0.3. Feature `chrono` (default) adds
+  `NaiveDate` and `NaiveTime` fields. Examples: `form_layout`,
+  `form_labels`, `form_record`. Gallery: Form.
+
 - `autocomplete`: `AutoComplete` and `AutoCompleteBuilder`, a text field
   that filters a suggestion list as you type and highlights the matched
   text. Keyboard and mouse selection, ASCII and Latin-1 input, colours from

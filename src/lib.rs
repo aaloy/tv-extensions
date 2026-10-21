@@ -11,6 +11,8 @@
 //!   area larger than its screen bounds (TV Tool Box style).
 //! - [`dual_list`]: [`DualList`], two lists side by side for picking a
 //!   subset of items, with filters (Django admin's `filter_horizontal`).
+//! - [`forms`]: dialogs laid out from labelled fields with no coordinates,
+//!   and record forms that edit a struct of yours with validation.
 //! - [`mod@popup_menu`]: modal context menus and check-mark menu items,
 //!   reusing the framework's `MenuBox`.
 //! - [`autocomplete`]: [`AutoComplete`], a text field that filters a
@@ -42,6 +44,7 @@ pub mod autocomplete;
 #[cfg_attr(docsrs, doc(cfg(feature = "csv")))]
 pub mod csv;
 pub mod dual_list;
+pub mod forms;
 #[cfg(feature = "graphics")]
 #[cfg_attr(docsrs, doc(cfg(feature = "graphics")))]
 pub mod graphics;

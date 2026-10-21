@@ -50,7 +50,7 @@ chrono = "0.4.45"
 flate2 = "1"
 
 [features]
-default = []
+default = ["chrono"]
 # A real terminal (crossterm, OS clipboard) in turbo-vision.
 native = ["turbo-vision/native"]
 # LogWindow and TerminalWidget, with a tracing subscriber.
@@ -63,6 +63,8 @@ remote-input = ["native", "dep:log"]
 ssh = ["native", "dep:russh", "dep:russh-keys", "dep:async-trait", "dep:parking_lot", "dep:tokio", "dep:rand", "dep:ssh-key", "dep:log"]
 # The CSV table editor.
 csv = []
+# Date and time fields (`NaiveDate`, `NaiveTime`) in record forms. On by default.
+chrono = ["dep:chrono"]
 # PNG screenshots of the terminal buffer, forwarded from turbo-vision core.
 screenshot = ["turbo-vision/screenshot"]
 
@@ -112,6 +114,18 @@ required-features = ["native"]
 
 [[example]]
 name = "controls"
+required-features = ["native"]
+
+[[example]]
+name = "form_layout"
+required-features = ["native"]
+
+[[example]]
+name = "form_labels"
+required-features = ["native"]
+
+[[example]]
+name = "form_record"
 required-features = ["native"]
 
 [[example]]

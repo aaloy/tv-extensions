@@ -36,6 +36,7 @@ let cells = app.terminal.buffer();
 - [ScrollPane and popup menus](scroll-pane.md): a scrolling interior for oversized dialogs, and modal context menus (always available, no feature flag).
 - [AutoComplete](autocomplete.md): a text field that filters a suggestion list as you type, taking free text or requiring one of the items (always available, no feature flag).
 - [DualList](dual-list.md): two lists side by side for picking a subset of items, with filters (always available, no feature flag).
+- [Forms](forms.md): dialogs laid out from labelled fields with no coordinates, and record forms that edit a struct of yours with validation (always available; date fields need the default `chrono` feature).
 - [CSV editor](csv.md) (feature `csv`): a table editor, host-driven like `host`.
 - [Log window](log.md) (feature `log`): a scrolling output pane, and a window that shows `tracing` events in it.
 - [Graphics](graphics.md) (feature `graphics`): ANSI-art backgrounds and bitmap images over the Kitty graphics protocol.
