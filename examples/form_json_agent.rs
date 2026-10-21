@@ -36,15 +36,15 @@ fn corrected(why: &str) -> Value {
 }
 
 /// Build the form, repairing the spec once if it is refused.
-fn build(spec: Value) -> Result<JsonForm, FormError> {
-    match JsonForm::from_spec(&spec) {
+fn build(spec: &Value) -> Result<JsonForm, FormError> {
+    match JsonForm::from_spec(spec) {
         Err(FormError::Spec(why)) => JsonForm::from_spec(&corrected(&why)),
         other => other,
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut form = build(first_attempt())?;
+    let mut form = build(&first_attempt())?;
 
     let answer = {
         let mut app = Application::new()?;

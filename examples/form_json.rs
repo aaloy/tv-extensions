@@ -20,8 +20,8 @@ const CUSTOMER: &str = include_str!("form_json_specs/customer.json");
 const DEPLOY: &str = include_str!("form_json_specs/deploy.json");
 const SURVEY: &str = include_str!("form_json_specs/survey.json");
 
-fn load(which: Option<String>) -> Result<Value, Box<dyn std::error::Error>> {
-    let text = match which.as_deref() {
+fn load(which: Option<&str>) -> Result<Value, Box<dyn std::error::Error>> {
+    let text = match which {
         None | Some("customer") => CUSTOMER.to_string(),
         Some("deploy") => DEPLOY.to_string(),
         Some("survey") => SURVEY.to_string(),
@@ -31,7 +31,7 @@ fn load(which: Option<String>) -> Result<Value, Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let spec = load(std::env::args().nth(1))?;
+    let spec = load(std::env::args().nth(1).as_deref())?;
 
     let result = {
         let mut app = Application::new()?;
