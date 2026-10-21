@@ -46,7 +46,7 @@
 //! | `integer` | an input line that must be a whole number | number, or `null` when left empty |
 //! | `number` | an input line that must be a number | number, or `null` when left empty |
 //! | `boolean` | a check box | `true` / `false` |
-//! | `choice` | a drop-down of `options` | the chosen option's value |
+//! | `choice` | a drop-down of `options`, or radio buttons with `"widget": "radio"` | the chosen option's value |
 //! | `date` | an input line for `YYYY-MM-DD` (feature `chrono`) | `"YYYY-MM-DD"`, or `null` |
 //! | `section` | a heading, no answer | |
 //!
@@ -55,18 +55,19 @@
 //! default; a `~` marks the Alt hot key, and one is picked for you when there
 //! is none), `required`, `default` (the value shown at first), `max_len`
 //! (`text`), `rows` (`memo`), `min` and `max` (`integer`, `number`), and
-//! `options` (`choice`): each a string, number or boolean standing for itself,
+//! `options` and `widget` (`choice`; `"dropdown"`, the default, or `"radio"`, at most 32 options): each option a string, number or boolean standing for itself,
 //! or `{ "label": "Wholesale", "value": 2 }`. A `choice` must be answered; a
 //! `boolean` with `required: true` must be checked.
 //!
 //! The person cannot close the form with OK while a field is invalid: the
 //! errors show in the dialog and the focus moves to the first one.
 
-use super::{Editor, Form};
+use super::{Editor, Form, size};
 use serde_json::{Map, Number, Value};
 use std::collections::HashSet;
 use std::fmt;
 use turbo_vision::app::Application;
+use turbo_vision::views::cluster_group::{MAX_CLUSTER_ITEMS, RadioButtons};
 
 /// Why a form gave no answers.
 #[derive(Debug, Clone, PartialEq)]
@@ -208,6 +209,7 @@ fn slot_json(slot: &Slot) -> Value {
 const SPEC_KEYS: &[&str] = &["title", "fields"];
 const FIELD_KEYS: &[&str] = &[
     "name", "type", "label", "required", "default", "max_len", "rows", "min", "max", "options",
+    "widget",
 ];
 const TYPES: &str = "text, memo, integer, number, boolean, choice, date, section";
 
@@ -255,6 +257,9 @@ fn build(spec: &Value) -> Result<JsonForm, String> {
             .ok_or(format!("{at}.name: required"))?;
         if !names.insert(name.to_string()) {
             return Err(format!("{at}.name: \"{name}\" is used twice"));
+        }
+        if field.contains_key("widget") && kind != "choice" {
+            return Err(format!("{at}.widget: only a choice has a widget"));
         }
         let label = hot_keys.label(field, name, &at)?;
         let plain_label = plain(&label);
@@ -346,6 +351,15 @@ fn build(spec: &Value) -> Result<JsonForm, String> {
             }
             "choice" => {
                 let options = options_key(field, &at)?;
+                let radio = match str_key(field, "widget", &at)? {
+                    None | Some("dropdown") => false,
+                    Some("radio") => true,
+                    Some(other) => {
+                        return Err(format!(
+                            "{at}.widget: unknown widget \"{other}\"; expected dropdown or radio"
+                        ));
+                    }
+                };
                 let value = match default {
                     None => Value::Null,
                     Some(v) if options.iter().any(|(_, o)| o == v) => v.clone(),
@@ -354,7 +368,11 @@ fn build(spec: &Value) -> Result<JsonForm, String> {
                     }
                 };
                 slots.push(Slot::Choice(value));
-                form.choice(&label, options, move |r| choice_of(r, index));
+                if radio {
+                    add_radio(&mut form, &label, options, index, &at)?;
+                } else {
+                    form.choice(&label, options, move |r| choice_of(r, index));
+                }
             }
             #[cfg(feature = "chrono")]
             "date" => {
@@ -393,6 +411,45 @@ fn build(spec: &Value) -> Result<JsonForm, String> {
         initial: Values(slots),
         answers,
     })
+}
+
+/// A choice shown as radio buttons, one per option, bound to the same slot a
+/// drop-down would use.
+fn add_radio(
+    form: &mut Form<Values>,
+    label: &str,
+    options: Vec<(String, Value)>,
+    index: usize,
+    at: &str,
+) -> Result<(), String> {
+    if options.len() > MAX_CLUSTER_ITEMS {
+        return Err(format!(
+            "{at}.options: radio buttons take at most {MAX_CLUSTER_ITEMS} options; use the dropdown widget"
+        ));
+    }
+    let captions: Vec<String> = options.iter().map(|(caption, _)| caption.clone()).collect();
+    let values: Vec<Value> = options.into_iter().map(|(_, value)| value).collect();
+    let rows = i16::try_from(captions.len()).unwrap_or(i16::MAX);
+    let for_write = values.clone();
+    form.bind(
+        label,
+        RadioButtons::new(size(0, rows), captions),
+        move |r| choice_of(r, index),
+        // Nothing selected is the bitmask 0, which `RadioButtons::selected`
+        // does not report as none.
+        move |radio: &RadioButtons| match radio.value() {
+            0 => Err("must be chosen".to_string()),
+            bits => Ok(values[bits.trailing_zeros() as usize].clone()),
+        },
+        move |radio: &mut RadioButtons, value: &Value| {
+            let bits = for_write
+                .iter()
+                .position(|v| v == value)
+                .map_or(0, |i| 1_u32 << i);
+            radio.set_value(bits);
+        },
+    );
+    Ok(())
 }
 
 fn range_check(
@@ -735,6 +792,57 @@ mod tests {
         );
         assert_eq!(label(2), "~K~ind", "an explicit mark is kept");
         assert_eq!(label(3), "~Z~ip");
+    }
+
+    fn radio(extra: Value) -> Value {
+        let mut field = json!({
+            "name": "env", "type": "choice", "widget": "radio",
+            "options": ["staging", { "label": "Production", "value": 2 }]
+        });
+        field
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        json!({ "fields": [field] })
+    }
+
+    #[test]
+    fn radio_buttons_hold_the_default_and_answer_with_the_options_value() {
+        assert_eq!(
+            form(&radio(json!({ "default": 2 }))).read().unwrap(),
+            json!({ "env": 2 })
+        );
+        assert_eq!(
+            form(&radio(json!({ "default": "staging" })))
+                .read()
+                .unwrap(),
+            json!({ "env": "staging" })
+        );
+    }
+
+    #[test]
+    fn radio_buttons_with_nothing_chosen_are_refused() {
+        let errors = form(&radio(json!({}))).read().expect_err("nothing chosen");
+        assert!(errors.to_string().contains("must be chosen"), "{errors}");
+    }
+
+    #[test]
+    fn the_widget_is_checked() {
+        assert_eq!(
+            why(&radio(json!({ "widget": "slider" }))),
+            "fields[0].widget: unknown widget \"slider\"; expected dropdown or radio"
+        );
+        assert_eq!(
+            why(&json!({ "fields": [{ "name": "a", "type": "text", "widget": "radio" }] })),
+            "fields[0].widget: only a choice has a widget"
+        );
+        let many: Vec<String> = (0..33).map(|i| format!("o{i}")).collect();
+        assert!(why(&radio(json!({ "options": many }))).contains("at most 32 options"),);
+        // The dropdown takes as many as you like.
+        let many: Vec<String> = (0..40).map(|i| format!("o{i}")).collect();
+        assert!(
+            JsonForm::from_spec(&radio(json!({ "widget": "dropdown", "options": many }))).is_ok()
+        );
     }
 
     #[test]

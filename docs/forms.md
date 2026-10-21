@@ -885,7 +885,8 @@ same validation, the same errors in the dialog and the same keyboard and mouse.
 Field types are `text`, `memo`, `integer`, `number`, `boolean`, `choice`,
 `date` and `section` (a heading). Per field: `name` (the answer's key),
 `label`, `required`, `default`, and by type `max_len`, `rows`, `min`, `max`,
-`options`. Labels without a `~` get an Alt hot key picked for them. Unknown
+`options`, `widget`. A `choice` is a drop-down by default; `"widget": "radio"`
+shows the options as radio buttons (up to 32; arrows move, Space picks). Labels without a `~` get an Alt hot key picked for them. Unknown
 keys are refused, and a bad spec comes back as `FormError::Spec` with a
 message such as `fields[2].type: unknown type "txt"; expected one of ...`, so
 the agent that wrote it can fix it. See the module documentation of

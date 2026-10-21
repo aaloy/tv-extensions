@@ -2,7 +2,7 @@
   "title": "Quick survey",
   "fields": [
     { "type": "section", "label": "About you" },
-    { "name": "role", "type": "choice",
+    { "name": "role", "type": "choice", "widget": "radio",
       "options": [ { "label": "Developer", "value": 1 }, { "label": "Designer", "value": 2 }, { "label": "Other", "value": 3 } ] },
     { "name": "years", "type": "number", "label": "Years of experience", "min": 0, "max": 60 },
     { "name": "born", "type": "date" },

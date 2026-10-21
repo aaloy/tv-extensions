@@ -1,7 +1,7 @@
 {
   "title": "Deploy to production?",
   "fields": [
-    { "name": "environment", "type": "choice", "default": "staging",
+    { "name": "environment", "type": "choice", "widget": "radio", "default": "staging",
       "options": ["staging", "production"] },
     { "name": "reason", "type": "text", "label": "Reason", "required": true, "max_len": 80 },
     { "name": "replicas", "type": "integer", "default": 3, "min": 1, "max": 20 },

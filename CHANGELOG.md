@@ -17,6 +17,8 @@ applications send a keyboard-pressed button's command at once.
   `FormError::Cancelled`. A bad spec is `FormError::Spec` with a message
   naming the path and the problem. Examples: `form_json` (with three spec
   files) and `form_json_agent`; tests in `tests/forms_json.rs`.
+- `forms::json`: `"widget": "radio"` on a `choice` field shows its options as
+  radio buttons instead of a drop-down (the `deploy` and `survey` specs use it).
 - `forms`: `Form` lays a dialog out from labelled fields with no
   coordinates (lines of fields, titled groups, sections, label placement,
   button alignment), and `Form::<T>::for_record` edits a struct of yours:

@@ -8,7 +8,9 @@
 
 use serde_json::{Value, json};
 use turbo_vision::app::Application;
-use turbo_vision::core::event::{Event, KB_ALT_O, KB_BACKSPACE, KB_DOWN, KB_ENTER, KB_ESC, KB_TAB};
+use turbo_vision::core::event::{
+    Event, KB_ALT_O, KB_BACKSPACE, KB_DOWN, KB_ENTER, KB_ESC, KB_TAB, KB_UP,
+};
 use turbo_vision::test_util::test_terminal;
 use tv_extensions::forms::json::{FormError, JsonForm, run};
 
@@ -22,13 +24,14 @@ enum Key {
     Type(&'static str),
     Tab,
     Down,
+    Up,
     Enter,
     Backspace(usize),
     Esc,
     /// Alt+O: press OK.
     Ok,
 }
-use Key::{Backspace, Down, Enter, Esc, Ok as PressOk, Tab, Type};
+use Key::{Backspace, Down, Enter, Esc, Ok as PressOk, Tab, Type, Up};
 
 fn app() -> Application {
     // Tall enough for the longest example form.
@@ -46,6 +49,7 @@ fn send(app: &mut Application, keys: &[Key]) {
             }
             Tab => tx.send(Event::keyboard(KB_TAB)).unwrap(),
             Down => tx.send(Event::keyboard(KB_DOWN)).unwrap(),
+            Up => tx.send(Event::keyboard(KB_UP)).unwrap(),
             Enter => tx.send(Event::keyboard(KB_ENTER)).unwrap(),
             Backspace(n) => {
                 for _ in 0..*n {
@@ -129,7 +133,8 @@ fn deploy_needs_a_reason_and_a_ticked_backup_box() {
     let answers = answer(
         &spec(DEPLOY),
         &[
-            Type(""), // environment keeps "staging"
+            Down,      // environment: focus moves to "production"
+            Type(" "), // and Space picks it
             Tab,
             PressOk, // refused: no reason
             Type("hotfix"),
@@ -144,7 +149,7 @@ fn deploy_needs_a_reason_and_a_ticked_backup_box() {
     assert_eq!(
         answers,
         json!({
-            "environment": "staging",
+            "environment": "production",
             "reason": "hotfix",
             "replicas": 3,
             "i_have_a_backup": true
@@ -157,7 +162,7 @@ fn the_survey_leaves_optional_fields_null() {
     let answers = answer(
         &spec(SURVEY),
         &[
-            Down, // role: Developer (the first option is chosen by Down)
+            Type(" "), // role: Space picks the focused radio button, Developer
             Tab,
             Tab, // years
             Tab, // born
@@ -172,6 +177,55 @@ fn the_survey_leaves_optional_fields_null() {
     assert_eq!(answers["rating"], json!(4));
     assert_eq!(answers["comments"], json!(""));
     assert_eq!(answers["contact_me"], json!(false));
+}
+
+// ---- radio buttons ----------------------------------------------------
+
+fn radio_spec() -> Value {
+    json!({ "fields": [
+        { "name": "size", "type": "choice", "widget": "radio",
+          "options": [
+              { "label": "Small", "value": "s" },
+              { "label": "Medium", "value": "m" },
+              { "label": "Large", "value": "l" }
+          ] }
+    ]})
+}
+
+#[test]
+fn arrows_move_and_space_picks_among_radio_buttons() {
+    let answers = answer(&radio_spec(), &[Down, Down, Type(" "), PressOk]).expect("answers");
+    assert_eq!(
+        answers,
+        json!({ "size": "l" }),
+        "two steps down from the first"
+    );
+}
+
+#[test]
+fn radio_buttons_can_go_back_up() {
+    let answers = answer(&radio_spec(), &[Down, Down, Up, Type(" "), PressOk]).expect("answers");
+    assert_eq!(answers, json!({ "size": "m" }));
+}
+
+#[test]
+fn space_picks_the_focused_radio_button() {
+    let answers = answer(&radio_spec(), &[Type(" "), PressOk]).expect("answers");
+    assert_eq!(answers, json!({ "size": "s" }));
+}
+
+#[test]
+fn radio_buttons_must_be_answered_and_the_form_waits() {
+    // The first Alt+O is refused: nothing is chosen yet.
+    let answers = answer(&radio_spec(), &[PressOk, Down, Type(" "), PressOk]).expect("answers");
+    assert!(answers["size"].is_string());
+}
+
+#[test]
+fn a_radio_default_is_what_you_get_when_nothing_is_touched() {
+    let mut spec = radio_spec();
+    spec["fields"][0]["default"] = json!("m");
+    assert_eq!(answer(&spec, &[PressOk]), Ok(json!({ "size": "m" })));
 }
 
 // ---- validation keeps the form open -----------------------------------
