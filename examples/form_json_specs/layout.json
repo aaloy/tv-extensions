@@ -7,7 +7,7 @@
     { "type": "group", "label": "Guest", "fields": [
       { "name": "name", "type": "text", "required": true, "max_len": 40 },
       { "type": "row", "fields": [
-        { "name": "phone", "type": "text", "max_len": 15 },
+        { "name": "phone", "type": "text", "mask": "###-###-###" },
         { "name": "vip", "type": "boolean", "label": "Regular guest" }
       ] }
     ] },

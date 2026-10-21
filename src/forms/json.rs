@@ -63,7 +63,10 @@
 //! or `{ "label": "Wholesale", "value": 2 }`. A `choice` must be answered; a
 //! `boolean` with `required: true` must be checked.
 //!
-//! `integer` takes `"widget": "input"` (the default), `"spinner"` or
+//! A `text` with a `mask` is typed against a picture (`#` digit, `@` letter,
+//! `&` upper-case letter, `!` any character; other characters are filled in
+//! for the person) and is refused until it fits; empty is allowed unless
+//! `required`. `integer` takes `"widget": "input"` (the default), `"spinner"` or
 //! `"slider"`; the last two need whole-number `min` and `max`, start on
 //! `default` or `min`, and always have a value. A `multichoice` has the
 //! `choice` options and a `default` list; `required` means at least one is
@@ -83,11 +86,15 @@
 
 use super::{Editor, Field, Form, LabelAlign, LabelPosition, Line, TextValue, size};
 use serde_json::{Map, Number, Value};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt;
+use std::rc::Rc;
 use turbo_vision::app::Application;
 use turbo_vision::views::View;
 use turbo_vision::views::cluster_group::{CheckBoxes, MAX_CLUSTER_ITEMS, RadioButtons};
+use turbo_vision::views::input_line::InputLine;
+use turbo_vision::views::picture_validator::PictureValidator;
 use turbo_vision::views::slider::Slider;
 use turbo_vision::views::spinner::Spinner;
 use turbo_vision::views::static_text::StaticText;
@@ -235,7 +242,7 @@ fn slot_json(slot: &Slot) -> Value {
 const SPEC_KEYS: &[&str] = &["title", "fields", "labels", "label_align"];
 const FIELD_KEYS: &[&str] = &[
     "name", "type", "label", "required", "default", "max_len", "rows", "min", "max", "options",
-    "widget", "text", "fields",
+    "widget", "text", "fields", "mask",
 ];
 const TYPES: &str =
     "text, memo, integer, number, boolean, choice, multichoice, date, section, note, group, row";
@@ -499,6 +506,9 @@ fn add_field(
     if !ctx.names.insert(name.to_string()) {
         return Err(format!("{at}.name: \"{name}\" is used twice"));
     }
+    if field.contains_key("mask") && kind != "text" {
+        return Err(format!("{at}.mask: only a text can have a mask"));
+    }
     let widget = widget(field, kind, at)?;
     let label = ctx.hot_keys.label(field, name, at)?;
     let plain_label = plain(&label);
@@ -514,12 +524,21 @@ fn add_field(
                 Some(_) => return Err(format!("{at}.default: must be a string")),
             };
             ctx.slots.push(Slot::Text(value));
-            let mut f = target.input(&label, move |r| text_of(r, index));
-            if required {
-                f = f.required();
-            }
-            if let Some(max) = uint_key(field, "max_len", at)? {
-                f.max_len(max);
+            if let Some(mask) = str_key(field, "mask", at)? {
+                if field.contains_key("max_len") {
+                    return Err(format!(
+                        "{at}.max_len: a masked text is as long as its mask"
+                    ));
+                }
+                add_masked(target, &label, mask, index, required, at)?;
+            } else {
+                let mut f = target.input(&label, move |r| text_of(r, index));
+                if required {
+                    f = f.required();
+                }
+                if let Some(max) = uint_key(field, "max_len", at)? {
+                    f.max_len(max);
+                }
             }
         }
         "memo" => {
@@ -739,6 +758,49 @@ fn add_radio(
                 .map_or(0, |i| 1_u32 << i);
             radio.set_value(bits);
         },
+    );
+    Ok(())
+}
+
+/// A text that must fit a picture mask (`#` digit, `@` letter, `&` letter
+/// forced to upper case, `!` any character; anything else is typed for the
+/// person). Empty is allowed unless the field is required.
+fn add_masked(
+    target: &mut Target<'_, '_>,
+    label: &str,
+    mask: &str,
+    index: usize,
+    required: bool,
+    at: &str,
+) -> Result<(), String> {
+    if mask.is_empty() {
+        return Err(format!("{at}.mask: must not be empty"));
+    }
+    let width =
+        i16::try_from(mask.chars().count() + 1).map_err(|_| format!("{at}.mask: too long"))?;
+    let validator = Rc::new(RefCell::new(PictureValidator::new(mask)));
+    let view = InputLine::with_validator(size(width, 1), mask.chars().count(), validator);
+    let shown = mask.to_string();
+    let name = plain(label);
+    target.bind(
+        label,
+        view,
+        move |r| text_of(r, index),
+        move |line: &InputLine| {
+            let text = line.text();
+            if text.trim().is_empty() {
+                if required {
+                    Err(format!("{name} is required"))
+                } else {
+                    Ok(String::new())
+                }
+            } else if line.is_valid() {
+                Ok(text.to_string())
+            } else {
+                Err(format!("must look like {shown}"))
+            }
+        },
+        |line: &mut InputLine, text: &String| line.set_text(text),
     );
     Ok(())
 }
@@ -1433,5 +1495,61 @@ mod tests {
             ] }
         ]));
         assert_eq!(form(&spec).read().unwrap().as_object().unwrap().len(), 3);
+    }
+
+    // ---- masks ----
+
+    fn masked(extra: Value) -> Value {
+        let mut field = json!({ "name": "phone", "type": "text", "mask": "(###) ###-####" });
+        field
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        fields(json!([field]))
+    }
+
+    #[test]
+    fn a_masked_text_accepts_what_fits_and_refuses_the_rest() {
+        let ok = masked(json!({ "default": "(555) 123-4567" }));
+        assert_eq!(
+            form(&ok).read().unwrap(),
+            json!({ "phone": "(555) 123-4567" })
+        );
+        let bad = masked(json!({ "default": "555" }));
+        let errors = form(&bad).read().expect_err("does not fit the mask");
+        assert!(
+            errors.to_string().contains("must look like (###) ###-####"),
+            "{errors}"
+        );
+    }
+
+    #[test]
+    fn an_empty_masked_text_is_fine_unless_required() {
+        assert_eq!(
+            form(&masked(json!({}))).read().unwrap(),
+            json!({ "phone": "" })
+        );
+        let errors = form(&masked(json!({ "required": true })))
+            .read()
+            .expect_err("required");
+        assert!(errors.to_string().contains("is required"), "{errors}");
+    }
+
+    #[test]
+    fn a_mask_is_checked_where_it_is_written() {
+        assert_eq!(
+            why(&masked(json!({ "mask": "" }))),
+            "fields[0].mask: must not be empty"
+        );
+        assert_eq!(
+            why(&masked(json!({ "max_len": 5 }))),
+            "fields[0].max_len: a masked text is as long as its mask"
+        );
+        assert_eq!(
+            why(&fields(
+                json!([{ "name": "n", "type": "integer", "mask": "##" }])
+            )),
+            "fields[0].mask: only a text can have a mask"
+        );
     }
 }

@@ -540,9 +540,9 @@ fn the_layout_form_is_filled_in_and_answered_flat() {
         &spec(LAYOUT),
         &[
             Type("Ada"),
-            Tab, // phone
-            Type("555"),
-            Tab, // regular guest
+            Tab,               // phone
+            Type("555123456"), // the mask adds the dashes
+            Tab,               // regular guest
             Type(" "),
             Tab, // date
             Type("2026-12-24"),
@@ -567,7 +567,7 @@ fn the_layout_form_is_filled_in_and_answered_flat() {
         answers,
         json!({
             "name": "Ada",
-            "phone": "555",
+            "phone": "555-123-456",
             "vip": true,
             "date": "2026-12-24",
             "people": 4,
@@ -588,4 +588,33 @@ fn labels_above_still_answer() {
         &[Type("Ada"), Tab, Tab, Tab, Type("2026-12-24"), PressOk],
     );
     assert_eq!(answers.expect("answers")["date"], json!("2026-12-24"));
+}
+
+// ---- masked input -----------------------------------------------------
+
+fn phone_spec() -> Value {
+    json!({ "fields": [
+        { "name": "phone", "type": "text", "mask": "##/##/####", "required": true }
+    ]})
+}
+
+#[test]
+fn typing_into_a_mask_fills_in_the_literals() {
+    let answers = answer(&phone_spec(), &[Type("12052026"), PressOk]).expect("answers");
+    assert_eq!(answers, json!({ "phone": "12/05/2026" }));
+}
+
+#[test]
+fn a_mask_refuses_letters_and_an_unfinished_value() {
+    let answers = answer(
+        &phone_spec(),
+        &[
+            Type("12ab05"), // letters are not typed; "12/05" is as far as it gets
+            PressOk,        // refused: unfinished
+            Type("2026"),
+            PressOk,
+        ],
+    )
+    .expect("answers");
+    assert_eq!(answers, json!({ "phone": "12/05/2026" }));
 }

@@ -24,6 +24,9 @@ applications send a keyboard-pressed button's command at once.
   `note`, `group` (nestable) and `row` (side by side) items; top-level `labels`
   (`left`/`above`) and `label_align`. Answers stay flat. New example spec
   `layout` for `form_json`.
+- `forms::json`: a `text` field takes a `mask` (a picture such as
+  `###-###-###`): the literals are filled in as the person types and the
+  form refuses a value that does not fit.
 - `forms`: `Form` lays a dialog out from labelled fields with no
   coordinates (lines of fields, titled groups, sections, label placement,
   button alignment), and `Form::<T>::for_record` edits a struct of yours:

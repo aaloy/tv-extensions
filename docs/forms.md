@@ -892,7 +892,7 @@ shows the options as radio buttons (up to 32; arrows move, Space picks), and an
 `integer` with `"widget": "spinner"` or `"slider"` (and whole `min`/`max`)
 steps with the arrows. `group` and `row` take a `fields` list of their own and
 nest; the answers stay one flat object. Top-level `labels` (`left` or `above`)
-and `label_align` (`left` or `right`) set how labels sit. Labels without a `~` get an Alt hot key picked for them. Unknown
+and `label_align` (`left` or `right`) set how labels sit. A `text` with a `mask` such as `"##/##/####"` is typed against that picture. Labels without a `~` get an Alt hot key picked for them. Unknown
 keys are refused, and a bad spec comes back as `FormError::Spec` with a
 message such as `fields[2].type: unknown type "txt"; expected one of ...`, so
 the agent that wrote it can fix it. See the module documentation of
