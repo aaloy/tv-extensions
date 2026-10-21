@@ -60,6 +60,10 @@
 //! - **Groups** ([`group`](Form::group) ... [`end_group`](Form::end_group))
 //!   draw a titled box around their rows, as wide as the form. A group lines
 //!   up its own labels, and groups can nest.
+//! - **Tabs** ([`tab`](Form::tab) ... [`end_tabs`](Form::end_tabs)) put the
+//!   rows that follow each `tab` on a page of a tab pane as wide as the form
+//!   and as high as its tallest page. Fields on a page are not children of
+//!   the dialog: reach them through a record form's bindings.
 //! - **Full-width rows** ([`row`](Form::row)) start at the label column and
 //!   span the whole form or group; [`section`](Form::section) adds a heading
 //!   with a blank row above it.
@@ -84,11 +88,13 @@ use turbo_vision::core::geometry::Rect;
 use turbo_vision::core::state::{Grow, Options};
 use turbo_vision::views::button::Button;
 use turbo_vision::views::dialog::Dialog;
+use turbo_vision::views::group::Group as ViewGroup;
 use turbo_vision::views::group::GroupLike;
 use turbo_vision::views::group_box::GroupBox;
 use turbo_vision::views::handle::Handle;
 use turbo_vision::views::label::Label;
 use turbo_vision::views::static_text::StaticText;
+use turbo_vision::views::tabbed_pane::TabbedPane;
 use turbo_vision::views::view::{View, ViewId};
 
 pub mod data;
@@ -111,6 +117,12 @@ const MIN_LINE_FIELD: i16 = 10;
 const GROUP_PAD_X: i16 = 2;
 /// Columns a group's frame needs besides its title: corners and padding.
 const GROUP_TITLE_CHROME: i16 = 6;
+/// Columns between a tab page's border and its contents.
+const PAGE_PAD_X: i16 = 1;
+/// Rows a tab pane draws above its pages (the strip and its rule).
+const TAB_HEADER_ROWS: i16 = 3;
+/// Columns a tab's title takes besides its text: padding and a divider.
+const TAB_TITLE_CHROME: i16 = 4;
 /// Columns between two buttons.
 const BUTTON_GAP: i16 = 2;
 /// Narrowest button, as in Borland's standard dialogs.
@@ -196,6 +208,32 @@ enum Item {
     Gap(i16),
     /// A titled box around rows of its own.
     Group(Group),
+    /// Pages of rows under a strip of tabs.
+    Tabs(Tabs),
+}
+
+/// A tab pane and the rows of each of its pages.
+struct Tabs {
+    pane: ViewId,
+    /// Columns the strip of titles needs.
+    titles_width: i16,
+    pages: Vec<Vec<Item>>,
+}
+
+/// A tab page being built: its title, the container its views go into, and
+/// its rows.
+struct PageBuild {
+    title: String,
+    group: ViewGroup,
+    items: Vec<Item>,
+}
+
+/// The tab pane being built.
+struct TabsBuild {
+    /// How many groups were open when the tabs started; they stay open
+    /// around the tabs.
+    base: usize,
+    pages: Vec<PageBuild>,
 }
 
 /// A group: its frame, its title's width and its rows.
@@ -241,6 +279,10 @@ pub struct Form<R = ()> {
     items: Vec<Item>,
     /// Groups started and not yet ended, innermost last.
     open: Vec<Group>,
+    /// The tab pane started and not yet ended.
+    tabs: Option<TabsBuild>,
+    /// Every tab pane added to the dialog, to find the views on their pages.
+    panes: Vec<ViewId>,
     buttons: Vec<FormButton>,
     style: Style,
     button_align: ButtonAlign,
@@ -282,6 +324,8 @@ impl<R> Form<R> {
             title_width: display_width(title),
             items: Vec::new(),
             open: Vec::new(),
+            tabs: None,
+            panes: Vec::new(),
             buttons: Vec::new(),
             style: Style {
                 spacing: 1,
@@ -375,7 +419,7 @@ impl<R> Form<R> {
     /// stretches to the full width if it was built with no width.
     pub fn row<T: View + 'static>(&mut self, view: T) -> Handle<T> {
         let extent = Extent::of(&view);
-        let handle = self.dialog.add_typed(view);
+        let handle = Handle::from_id(self.add_view(Box::new(view)));
         self.items_mut().push(Item::Full {
             view: handle.id(),
             extent,
@@ -386,7 +430,7 @@ impl<R> Form<R> {
     /// Add a heading over the rows that follow, with a blank row above it
     /// (unless it is the first row).
     pub fn section(&mut self, title: &str) -> &mut Self {
-        let view = self.dialog.add(StaticText::new(Rect::default(), title));
+        let view = self.add_view(Box::new(StaticText::new(Rect::default(), title)));
         let width = display_width(title);
         self.items_mut().push(Item::Section { view, width });
         self
@@ -403,7 +447,7 @@ impl<R> Form<R> {
     /// form. The group lines up its own labels. Groups can nest; `build`
     /// closes any group left open.
     pub fn group(&mut self, title: &str) -> &mut Self {
-        let frame = self.dialog.add(GroupBox::new(Rect::default(), title));
+        let frame = self.add_view(Box::new(GroupBox::new(Rect::default(), title)));
         self.open.push(Group {
             frame,
             title_width: display_width(title),
@@ -414,9 +458,80 @@ impl<R> Form<R> {
 
     /// End the group started last. Does nothing when no group is open.
     pub fn end_group(&mut self) -> &mut Self {
-        if let Some(group) = self.open.pop() {
+        let base = self.tabs.as_ref().map_or(0, |t| t.base);
+        if self.open.len() > base
+            && let Some(group) = self.open.pop()
+        {
             self.items_mut().push(Item::Group(group));
         }
+        self
+    }
+
+    /// Start a strip of tabs: the rows added after each [`tab`](Self::tab)
+    /// until [`end_tabs`](Self::end_tabs) go on that tab's page, and only the
+    /// active page is shown. The pane is as wide as the form and as high as
+    /// its tallest page. Tabs cannot nest, and the fields on a page are
+    /// reached through a record form's bindings, not through `Handle`s on
+    /// the dialog.
+    pub fn tabs(&mut self) -> &mut Self {
+        if self.tabs.is_none() {
+            self.tabs = Some(TabsBuild {
+                base: self.open.len(),
+                pages: Vec::new(),
+            });
+        }
+        self
+    }
+
+    /// Start a page titled `title` (a `~` marks its Alt hot key), closing
+    /// any group left open on the previous page. Starts the tabs if
+    /// [`tabs`](Self::tabs) was not called.
+    pub fn tab(&mut self, title: &str) -> &mut Self {
+        self.tabs();
+        let base = self.tabs.as_ref().map_or(0, |t| t.base);
+        while self.open.len() > base {
+            self.end_group();
+        }
+        if let Some(tabs) = self.tabs.as_mut() {
+            tabs.pages.push(PageBuild {
+                title: title.to_string(),
+                group: ViewGroup::new(Rect::default()),
+                items: Vec::new(),
+            });
+        }
+        self
+    }
+
+    /// End the tabs started last. Does nothing when none are open or no page
+    /// was added.
+    pub fn end_tabs(&mut self) -> &mut Self {
+        let Some(base) = self.tabs.as_ref().map(|t| t.base) else {
+            return self;
+        };
+        while self.open.len() > base {
+            self.end_group();
+        }
+        let Some(build) = self.tabs.take() else {
+            return self;
+        };
+        if build.pages.is_empty() {
+            return self;
+        }
+        let mut pane = TabbedPane::new(Rect::default());
+        let mut titles_width = 0;
+        let mut pages = Vec::new();
+        for page in build.pages {
+            titles_width += display_width(&page.title) + TAB_TITLE_CHROME;
+            pane.add_page(&page.title, page.group);
+            pages.push(page.items);
+        }
+        let pane = self.dialog.add_boxed(Box::new(pane));
+        self.panes.push(pane);
+        self.items_mut().push(Item::Tabs(Tabs {
+            pane,
+            titles_width,
+            pages,
+        }));
         self
     }
 
@@ -455,11 +570,11 @@ impl<R> Form<R> {
     /// Add `view` to the dialog with its label, linked to it.
     fn cell<T: View + 'static>(&mut self, label: &str, view: T) -> (Handle<T>, Cell) {
         let extent = Extent::of(&view);
-        let handle = self.dialog.add_typed(view);
+        let handle = Handle::from_id(self.add_view(Box::new(view)));
         let label = (!label.is_empty()).then(|| {
             let mut l = Label::new(Rect::default(), label);
             l.set_link(handle.id());
-            (self.dialog.add(l), display_width(label))
+            (self.add_view(Box::new(l)), display_width(label))
         });
         let cell = Cell {
             label,
@@ -471,15 +586,30 @@ impl<R> Form<R> {
 
     /// Where new rows go: the innermost open group, or the form itself.
     fn items_mut(&mut self) -> &mut Vec<Item> {
+        let base = self.tabs.as_ref().map_or(0, |t| t.base);
+        if self.open.len() <= base
+            && let Some(page) = self.tabs.as_mut().and_then(|t| t.pages.last_mut())
+        {
+            return &mut page.items;
+        }
         match self.open.last_mut() {
             Some(group) => &mut group.items,
             None => &mut self.items,
         }
     }
 
+    /// Add `view` where new views go: the open tab page, or the dialog.
+    fn add_view(&mut self, view: Box<dyn View>) -> ViewId {
+        match self.tabs.as_mut().and_then(|t| t.pages.last_mut()) {
+            Some(page) => page.group.add_boxed(view),
+            None => self.dialog.add_boxed(view),
+        }
+    }
+
     /// Close any open group, place every view, size the dialog and focus its
     /// first field.
     fn lay_out(&mut self) {
+        self.end_tabs();
         while !self.open.is_empty() {
             self.end_group();
         }
@@ -490,7 +620,7 @@ impl<R> Form<R> {
         self.dialog
             .set_bounds(size(layout.width + 2, layout.height + 2));
         for (id, bounds, grow) in &layout.places {
-            if let Some(view) = self.dialog.child_by_id_mut(*id) {
+            if let Some(view) = find_view_mut(&mut self.dialog, *id) {
                 view.set_bounds(*bounds);
                 if self.resizable {
                     view.set_grow_mode(*grow);
@@ -664,6 +794,10 @@ fn min_width(items: &[Item], style: Style) -> i16 {
             Item::Gap(_) => 0,
             Item::Group(group) => (min_width(&group.items, style) + 2 * GROUP_PAD_X)
                 .max(group.title_width + GROUP_TITLE_CHROME),
+            Item::Tabs(tabs) => {
+                let pages = tabs.pages.iter().map(|p| min_width(p, style)).max();
+                (pages.unwrap_or(0) + 2 + 2 * PAGE_PAD_X).max(tabs.titles_width + 2)
+            }
         })
         .max()
         .unwrap_or(0)
@@ -722,6 +856,27 @@ fn place(items: &[Item], area: Area, style: Style, places: &mut Vec<Place>) -> i
                 bottom = place(&group.items, inside, style, places).max(inside.y) + 1;
                 let r = Rect::new(area.x, y, area.x + area.width, bottom);
                 places.push((group.frame, r, Grow::HI_X));
+            }
+            Item::Tabs(tabs) => {
+                // Every page's rows are placed inside its page, whose corner
+                // is the pane's inner corner: one blank row under the strip.
+                let inside = Area {
+                    x: PAGE_PAD_X,
+                    y: 1,
+                    width: area.width - 2 - 2 * PAGE_PAD_X,
+                };
+                // The pane goes first: its bounds also move its pages.
+                let at = places.len();
+                places.push((tabs.pane, Rect::default(), Grow::HI_X));
+                let rows = tabs
+                    .pages
+                    .iter()
+                    .map(|page| place(page, inside, style, places).max(inside.y))
+                    .max()
+                    .unwrap_or(inside.y);
+                // A blank row under the rows, then the pane's border.
+                bottom = y + TAB_HEADER_ROWS + rows + 2;
+                places[at].1 = Rect::new(area.x, y, area.x + area.width, bottom);
             }
         }
         first = false;
@@ -822,6 +977,78 @@ fn stretch(width: Option<i16>, column: i16) -> (i16, Grow) {
         Some(w) => (w, Grow::empty()),
         None => (column, Grow::HI_X),
     }
+}
+
+/// The view `id` in the dialog or on one of its tab pages.
+pub(crate) fn find_view_mut(dialog: &mut Dialog, id: ViewId) -> Option<&mut (dyn View + '_)> {
+    if dialog.child_by_id(id).is_some() {
+        return dialog.child_by_id_mut(id);
+    }
+    let (pane, page) = locate(dialog, id)?;
+    let pane = dialog.group_mut().child_at_mut(pane);
+    let pane = pane.as_any_mut().downcast_mut::<TabbedPane>()?;
+    pane.page_mut(page)?.child_by_id_mut(id)
+}
+
+/// Where `id` is among the dialog's tab panes: the pane's index in the
+/// dialog and the page's in the pane.
+fn locate(dialog: &mut Dialog, id: ViewId) -> Option<(usize, usize)> {
+    for i in 0..dialog.group().len() {
+        let child = dialog.group_mut().child_at_mut(i);
+        let Some(pane) = child.as_any_mut().downcast_mut::<TabbedPane>() else {
+            continue;
+        };
+        for page in 0..pane.page_count() {
+            if pane
+                .page_mut(page)
+                .is_some_and(|p| p.child_by_id(id).is_some())
+            {
+                return Some((i, page));
+            }
+        }
+    }
+    None
+}
+
+/// Give the focus to the view `id`, showing its tab page first if it is on
+/// one. Returns whether it was found.
+pub(crate) fn focus_view(dialog: &mut Dialog, id: ViewId) -> bool {
+    if dialog.group_mut().focus_by_view_id(id) {
+        return true;
+    }
+    let Some((pane, page)) = locate(dialog, id) else {
+        return false;
+    };
+    let Some(pane_id) = dialog.group().view_id_at(pane) else {
+        return false;
+    };
+    if let Some(p) = dialog
+        .group_mut()
+        .child_at_mut(pane)
+        .as_any_mut()
+        .downcast_mut::<TabbedPane>()
+    {
+        p.set_active(page);
+    }
+    dialog.group_mut().focus_by_view_id(pane_id);
+    dialog
+        .group_mut()
+        .child_at_mut(pane)
+        .as_any_mut()
+        .downcast_mut::<TabbedPane>()
+        .and_then(|p| p.page_mut(page))
+        .is_some_and(|p| p.focus_by_view_id(id))
+}
+
+/// The view with the focus, looking inside the active tab page.
+pub(crate) fn focused_view(dialog: &mut Dialog) -> Option<ViewId> {
+    let id = dialog.group().focused_view_id()?;
+    let inside = dialog
+        .child_by_id_mut(id)
+        .and_then(|v| v.as_any_mut().downcast_mut::<TabbedPane>())
+        .and_then(|pane| pane.active_page_mut())
+        .and_then(|page| page.focused_view_id());
+    inside.or(Some(id))
 }
 
 /// Columns `text` takes on screen: its characters, without the `~` that
@@ -1337,5 +1564,110 @@ mod tests {
         let mut alt_o = Event::keyboard(turbo_vision::core::event::KB_ALT_O);
         d.handle_event(&mut alt_o);
         assert_eq!(d.end_state(), CM_OK);
+    }
+
+    // ---- tabs ----
+
+    fn panes(d: &Dialog) -> Vec<Rect> {
+        (0..d.child_count())
+            .filter(|&i| d.child_at(i).as_any().is::<TabbedPane>())
+            .map(|i| d.child_at(i).bounds())
+            .collect()
+    }
+
+    #[test]
+    fn tabs_hold_their_pages_fields_and_the_pane_is_as_high_as_the_tallest_page() {
+        let mut form = Form::new("T");
+        form.tab("~O~ne");
+        let a = form.field("~A~", input());
+        form.field("~B~", input());
+        form.tab("~T~wo");
+        let c = form.field("~C~", input());
+        form.end_tabs();
+        form.ok_cancel();
+        let mut dialog = form.build();
+
+        // The fields are on pages, not in the dialog.
+        assert!(dialog.get(a).is_none());
+        let first = find_view_mut(&mut dialog, a.id())
+            .expect("on page one")
+            .bounds();
+        let third = find_view_mut(&mut dialog, c.id())
+            .expect("on page two")
+            .bounds();
+        assert_eq!(first.a.y, 1, "a blank row under the strip");
+        assert_eq!(third.a.y, 1, "every page starts at the same row");
+
+        let pane = panes(&dialog)[0];
+        // Strip (3 rows), the taller page (3 rows: two fields and a gap),
+        // a blank row and the border.
+        assert_eq!(pane.height(), 3 + 1 + 3 + 1 + 1);
+        assert_eq!(pane.width(), dialog.bounds().width() - 2 - 2 * MARGIN_X);
+    }
+
+    #[test]
+    fn the_dialog_is_wide_enough_for_the_tab_titles_and_the_widest_page() {
+        let mut form = Form::new("T");
+        form.tab("A long first title");
+        form.field("x", InputLine::new(size(8, 1), 8));
+        form.tab("Second title");
+        form.field("y", InputLine::new(size(40, 1), 40));
+        form.end_tabs();
+        let dialog = form.build();
+        let pane = panes(&dialog)[0];
+        // The 40-column field, its label and gap, and the pane's borders.
+        assert!(pane.width() >= 40 + 2 + 2 * PAGE_PAD_X, "{pane:?}");
+        let titles = display_width("A long first title") + display_width("Second title");
+        assert!(pane.width() >= titles + 2 * TAB_TITLE_CHROME, "{pane:?}");
+    }
+
+    #[test]
+    fn rows_after_the_tabs_go_below_the_pane() {
+        let mut form = Form::new("T");
+        let before = form.field("~F~irst", input());
+        form.tab("One");
+        form.field("a", input());
+        form.end_tabs();
+        let after = form.field("~L~ast", input());
+        let dialog = form.build();
+        let pane = panes(&dialog)[0];
+        assert!(bounds(&dialog, before).b.y <= pane.a.y);
+        assert!(bounds(&dialog, after).a.y > pane.b.y - 1);
+    }
+
+    #[test]
+    fn tabs_end_themselves_at_build_and_groups_work_on_a_page() {
+        let mut form = Form::new("T");
+        form.tab("One");
+        form.group("G");
+        let a = form.field("a", input());
+        let dialog = {
+            let mut dialog_form = form;
+            dialog_form.tab("Two");
+            dialog_form.field("b", input());
+            dialog_form.build() // closes the tabs
+        };
+        assert_eq!(panes(&dialog).len(), 1);
+        let mut dialog = dialog;
+        assert!(find_view_mut(&mut dialog, a.id()).is_some());
+    }
+
+    #[test]
+    fn a_resizable_form_stretches_its_pane() {
+        let mut form = Form::new("T");
+        form.resizable(true);
+        form.tab("One");
+        form.field("a", input());
+        form.end_tabs();
+        let mut dialog = form.build();
+        let before = panes(&dialog)[0].width();
+        let bounds = dialog.bounds();
+        dialog.set_bounds(Rect::new(
+            bounds.a.x,
+            bounds.a.y,
+            bounds.b.x + 10,
+            bounds.b.y,
+        ));
+        assert_eq!(panes(&dialog)[0].width(), before + 10);
     }
 }

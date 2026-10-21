@@ -53,6 +53,7 @@
 //! | `note` | a few lines of text (`text`), no answer | |
 //! | `group` | a titled box around `fields` | |
 //! | `row` | `fields` side by side on one line | |
+//! | `tabs` | `pages` of `fields`, one shown at a time | |
 //!
 //! Every field except `section` has a unique `name`, the key of its answer.
 //! Optional keys: `label` (the name with the first letter capitalised by
@@ -66,7 +67,9 @@
 //! A `text` with a `mask` is typed against a picture (`#` digit, `@` letter,
 //! `&` upper-case letter, `!` any character; other characters are filled in
 //! for the person) and is refused until it fits; empty is allowed unless
-//! `required`. `integer` takes `"widget": "input"` (the default), `"spinner"` or
+//! `required`. `tabs` has a list of `pages`, each an object with a `label` (a
+//! `~` marks its Alt hot key) and its own `fields`; it goes at the top level
+//! or in a group, not in a row or in another `tabs`. `integer` takes `"widget": "input"` (the default), `"spinner"` or
 //! `"slider"`; the last two need whole-number `min` and `max`, start on
 //! `default` or `min`, and always have a value. A `multichoice` has the
 //! `choice` options and a `default` list; `required` means at least one is
@@ -242,10 +245,9 @@ fn slot_json(slot: &Slot) -> Value {
 const SPEC_KEYS: &[&str] = &["title", "fields", "labels", "label_align"];
 const FIELD_KEYS: &[&str] = &[
     "name", "type", "label", "required", "default", "max_len", "rows", "min", "max", "options",
-    "widget", "text", "fields", "mask",
+    "widget", "text", "fields", "mask", "pages",
 ];
-const TYPES: &str =
-    "text, memo, integer, number, boolean, choice, multichoice, date, section, note, group, row";
+const TYPES: &str = "text, memo, integer, number, boolean, choice, multichoice, date, section, note, group, row, tabs";
 
 /// The widest a spinner or slider is drawn.
 const SPINNER_WIDTH: i16 = 12;
@@ -258,6 +260,8 @@ struct Ctx {
     /// Each answer's key and its slot, in the spec's order.
     answers: Vec<(String, usize)>,
     names: HashSet<String>,
+    /// Whether a `tabs` item is being filled in (they do not nest).
+    in_tabs: bool,
 }
 
 /// Where a field goes: on a row of its own, or on a line beside others.
@@ -361,6 +365,7 @@ fn build(spec: &Value) -> Result<JsonForm, String> {
         slots: Vec::new(),
         answers: Vec::new(),
         names: HashSet::new(),
+        in_tabs: false,
     };
     add_items(&mut form, fields, "fields", &mut ctx)?;
     if ctx.answers.is_empty() {
@@ -425,6 +430,33 @@ fn add_items(
                 add_items(form, inner, &format!("{at}.fields"), ctx)?;
                 form.end_group();
             }
+            "tabs" => {
+                only(field, &["type", "pages"], &at)?;
+                if ctx.in_tabs {
+                    return Err(format!("{at}.type: tabs cannot be inside tabs"));
+                }
+                let pages = field
+                    .get("pages")
+                    .and_then(Value::as_array)
+                    .filter(|list| !list.is_empty())
+                    .ok_or(format!("{at}.pages: a list of pages is required"))?;
+                ctx.in_tabs = true;
+                form.tabs();
+                for (i, page) in pages.iter().enumerate() {
+                    let page_at = format!("{at}.pages[{i}]");
+                    let page = page
+                        .as_object()
+                        .ok_or(format!("{page_at}: must be an object"))?;
+                    reject_unknown(page, &["label", "fields"], &format!("{page_at}."))?;
+                    let title = str_key(page, "label", &page_at)?
+                        .ok_or(format!("{page_at}.label: a page needs a label"))?;
+                    let inner = children(page, &page_at)?;
+                    form.tab(title);
+                    add_items(form, inner, &format!("{page_at}.fields"), ctx)?;
+                }
+                form.end_tabs();
+                ctx.in_tabs = false;
+            }
             "row" => {
                 only(field, &["type", "fields"], &at)?;
                 let inner = children(field, &at)?;
@@ -436,7 +468,7 @@ fn add_items(
                         .ok_or(format!("{child_at}: must be an object"))?;
                     reject_unknown(child, FIELD_KEYS, &format!("{child_at}."))?;
                     if let Some(kind) = str_key(child, "type", &child_at)?
-                        && matches!(kind, "memo" | "section" | "note" | "group" | "row")
+                        && matches!(kind, "memo" | "section" | "note" | "group" | "row" | "tabs")
                     {
                         return Err(format!(
                             "{child_at}.type: a {kind} cannot be in a row; put it outside"
@@ -489,7 +521,7 @@ fn add_field(
     ctx: &mut Ctx,
 ) -> Result<(), String> {
     let kind = str_key(field, "type", at)?.ok_or(format!("{at}.type: required ({TYPES})"))?;
-    if matches!(kind, "section" | "note" | "group" | "row") {
+    if matches!(kind, "section" | "note" | "group" | "row" | "tabs") {
         return Err(format!("{at}.type: a {kind} cannot be here"));
     }
     if field.contains_key("text") || field.contains_key("fields") {
@@ -995,6 +1027,21 @@ impl HotKeys {
                 if matches!(kind, Some("group" | "row")) {
                     if let Some(inner) = field.get("fields").and_then(Value::as_array) {
                         collect(inner, taken);
+                    }
+                } else if kind == Some("tabs") {
+                    for page in field
+                        .get("pages")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Some(c) = page.get("label").and_then(Value::as_str).and_then(marked)
+                        {
+                            taken.insert(c);
+                        }
+                        if let Some(inner) = page.get("fields").and_then(Value::as_array) {
+                            collect(inner, taken);
+                        }
                     }
                 } else if !matches!(kind, Some("section" | "note"))
                     && let Some(label) = field.get("label").and_then(Value::as_str)
@@ -1551,5 +1598,84 @@ mod tests {
             )),
             "fields[0].mask: only a text can have a mask"
         );
+    }
+
+    // ---- tabs ----
+
+    fn tabs(pages: Value) -> Value {
+        fields(json!([{ "type": "tabs", "pages": pages }]))
+    }
+
+    #[test]
+    fn tab_pages_hold_fields_and_answers_stay_flat() {
+        let spec = tabs(json!([
+            { "label": "One", "fields": [
+                { "name": "a", "type": "text", "default": "x" },
+                { "type": "group", "label": "G", "fields": [{ "name": "b", "type": "integer", "default": 2 }] }
+            ] },
+            { "label": "Two", "fields": [
+                { "type": "row", "fields": [{ "name": "c", "type": "boolean" }, { "name": "d", "type": "text" }] }
+            ] }
+        ]));
+        assert_eq!(
+            form(&spec).read().unwrap(),
+            json!({ "a": "x", "b": 2, "c": false, "d": "" })
+        );
+    }
+
+    #[test]
+    fn a_required_field_on_any_page_is_checked() {
+        let spec = tabs(json!([
+            { "label": "One", "fields": [{ "name": "a", "type": "text" }] },
+            { "label": "Two", "fields": [{ "name": "b", "type": "text", "required": true }] }
+        ]));
+        let errors = form(&spec).read().expect_err("b is missing");
+        assert!(errors.to_string().contains("B is required"), "{errors}");
+    }
+
+    #[test]
+    fn tabs_are_checked() {
+        assert_eq!(
+            why(&fields(json!([{ "type": "tabs" }]))),
+            "fields[0].pages: a list of pages is required"
+        );
+        assert_eq!(
+            why(&tabs(
+                json!([{ "fields": [{ "name": "a", "type": "text" }] }])
+            )),
+            "fields[0].pages[0].label: a page needs a label"
+        );
+        assert_eq!(
+            why(&tabs(json!([{ "label": "One" }]))),
+            "fields[0].pages[0].fields: a list of fields is required"
+        );
+        assert!(
+            why(&tabs(
+                json!([{ "label": "One", "fields": [], "name": "x" }])
+            ))
+            .starts_with("fields[0].pages[0].name: unknown key")
+        );
+        let nested = tabs(json!([{ "label": "One", "fields": [
+            { "type": "tabs", "pages": [{ "label": "Inner", "fields": [{ "name": "a", "type": "text" }] }] }
+        ] }]));
+        assert_eq!(
+            why(&nested),
+            "fields[0].pages[0].fields[0].type: tabs cannot be inside tabs"
+        );
+        let in_row =
+            fields(json!([{ "type": "row", "fields": [{ "type": "tabs", "pages": [] }] }]));
+        assert_eq!(
+            why(&in_row),
+            "fields[0].fields[0].type: a tabs cannot be in a row; put it outside"
+        );
+    }
+
+    #[test]
+    fn two_tab_sets_in_one_form_are_independent() {
+        let spec = fields(json!([
+            { "type": "tabs", "pages": [{ "label": "A", "fields": [{ "name": "a", "type": "text", "default": "1" }] }] },
+            { "type": "tabs", "pages": [{ "label": "B", "fields": [{ "name": "b", "type": "text", "default": "2" }] }] }
+        ]));
+        assert_eq!(form(&spec).read().unwrap(), json!({ "a": "1", "b": "2" }));
     }
 }

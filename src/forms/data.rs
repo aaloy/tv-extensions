@@ -80,7 +80,7 @@
 //! label ("Name is required"); the messages your rules return are shown as
 //! they are.
 
-use super::{Cell, Form, Item, Line, size};
+use super::{Cell, Form, Item, Line, find_view_mut, focus_view, focused_view, size};
 use std::cell::Cell as StdCell;
 use std::fmt;
 use turbo_vision::app::{Application, ModalTick};
@@ -437,7 +437,7 @@ pub(crate) trait Binding<R> {
     fn load(&self, record: &mut R, dialog: &mut Dialog);
     /// Check the field and write its value into the record; the error
     /// message otherwise.
-    fn store(&self, dialog: &Dialog, record: &mut R) -> Result<(), String>;
+    fn store(&self, dialog: &mut Dialog, record: &mut R) -> Result<(), String>;
 }
 
 /// A field of control type `V` bound to a member of type `T`.
@@ -468,8 +468,8 @@ impl<R, V: View + 'static, T> Binding<R> for Bound<R, V, T> {
         }
     }
 
-    fn store(&self, dialog: &Dialog, record: &mut R) -> Result<(), String> {
-        let Some(view) = view_ref::<V>(dialog, self.id.0) else {
+    fn store(&self, dialog: &mut Dialog, record: &mut R) -> Result<(), String> {
+        let Some(view) = view_mut::<V>(dialog, self.id.0) else {
             return Ok(());
         };
         let raw = (self.read)(view);
@@ -927,12 +927,13 @@ fn field_name(label: &str) -> String {
     }
 }
 
+#[cfg(test)]
 fn view_ref<V: 'static>(dialog: &Dialog, id: ViewId) -> Option<&V> {
     dialog.child_by_id(id)?.as_any().downcast_ref()
 }
 
 fn view_mut<V: 'static>(dialog: &mut Dialog, id: ViewId) -> Option<&mut V> {
-    dialog.child_by_id_mut(id)?.as_any_mut().downcast_mut()
+    find_view_mut(dialog, id)?.as_any_mut().downcast_mut()
 }
 
 // ---- the editor ------------------------------------------------------------
@@ -1003,7 +1004,7 @@ impl<R: Clone + 'static> Editor<R> {
         let mut saved = None;
         // Once errors have been shown, check again whenever the focus moves.
         let mut live = false;
-        let mut focus = dialog.group().focused_view_id();
+        let mut focus = focused_view(dialog);
 
         *command = app.execute_modal(dialog, |_, dialog| {
             let end = dialog.end_state();
@@ -1018,11 +1019,11 @@ impl<R: Clone + 'static> Editor<R> {
                         display(dialog, bindings, *error_line, errors);
                         dialog.end_modal(0); // stay open
                         live = true;
-                        focus = dialog.group().focused_view_id();
+                        focus = focused_view(dialog);
                     }
                 }
             } else if live {
-                let now = dialog.group().focused_view_id();
+                let now = focused_view(dialog);
                 if now != focus {
                     focus = now;
                     *errors = read_record(bindings, rules, base, dialog)
@@ -1063,12 +1064,12 @@ impl<R: Clone + 'static> Editor<R> {
     /// # Panics
     ///
     /// If no record was loaded yet ([`load`](Self::load) or `edit`).
-    pub fn read(&self) -> Result<R, ValidationErrors> {
+    pub fn read(&mut self) -> Result<R, ValidationErrors> {
         let base = self
             .record
             .as_ref()
             .expect("Editor::read needs a record: call load or edit first");
-        read_record(&self.bindings, &self.rules, base, &self.dialog)
+        read_record(&self.bindings, &self.rules, base, &mut self.dialog)
     }
 
     /// Show `errors` in the dialog: invalid fields' labels in red, the
@@ -1111,7 +1112,7 @@ fn read_record<R: Clone>(
     bindings: &[Box<dyn Binding<R>>],
     rules: &[RecordRule<R>],
     base: &R,
-    dialog: &Dialog,
+    dialog: &mut Dialog,
 ) -> Result<R, ValidationErrors> {
     let mut record = base.clone();
     let mut errors = ValidationErrors::new();
@@ -1131,7 +1132,7 @@ fn read_record<R: Clone>(
 /// Move the focus to the first field with an error.
 fn focus_first_error(dialog: &mut Dialog, errors: &ValidationErrors) {
     if let Some(field) = errors.iter().find_map(|e| e.field) {
-        dialog.group_mut().focus_by_view_id(field.0);
+        focus_view(dialog, field.0);
     }
 }
 
@@ -1150,7 +1151,7 @@ fn display<R>(
             label.set_error(errors.field(binding.id()).is_some());
         }
     }
-    let focused = dialog.group().focused_view_id().map(FieldId);
+    let focused = focused_view(dialog).map(FieldId);
     let text = summary(errors, focused);
     if let Some(line) = view_mut::<ErrorLine>(dialog, error_line) {
         line.text = text;
@@ -1338,7 +1339,7 @@ mod tests {
             .set_text(text);
     }
 
-    fn message(e: &Editor<Customer>, id: FieldId) -> Option<String> {
+    fn message(e: &mut Editor<Customer>, id: FieldId) -> Option<String> {
         e.read().err()?.field(id).map(str::to_string)
     }
 
@@ -1389,9 +1390,16 @@ mod tests {
         e.load(ada());
         set_text(&mut e, ids.name, "   ");
         set_text(&mut e, ids.age, "");
-        assert_eq!(message(&e, ids.name).as_deref(), Some("Name is required"));
-        assert_eq!(message(&e, ids.age).as_deref(), Some("Age is required"));
-        assert_eq!(message(&e, ids.discount), None, "optional: empty is fine");
+        assert_eq!(
+            message(&mut e, ids.name).as_deref(),
+            Some("Name is required")
+        );
+        assert_eq!(message(&mut e, ids.age).as_deref(), Some("Age is required"));
+        assert_eq!(
+            message(&mut e, ids.discount),
+            None,
+            "optional: empty is fine"
+        );
     }
 
     #[test]
@@ -1401,11 +1409,11 @@ mod tests {
         set_text(&mut e, ids.age, "thirty");
         set_text(&mut e, ids.since, "July 1843");
         assert_eq!(
-            message(&e, ids.age).as_deref(),
+            message(&mut e, ids.age).as_deref(),
             Some("Age must be a whole number")
         );
         assert_eq!(
-            message(&e, ids.since).as_deref(),
+            message(&mut e, ids.since).as_deref(),
             Some("Since must be a date like 2026-12-31")
         );
     }
@@ -1445,7 +1453,7 @@ mod tests {
         c.email = None;
         e.load(c);
         assert_eq!(
-            message(&e, ids.email).as_deref(),
+            message(&mut e, ids.email).as_deref(),
             Some("VIP customers need an email")
         );
         // With a field error, the record rule does not run.
@@ -1462,7 +1470,10 @@ mod tests {
         view_mut::<ComboBox>(e.dialog_mut(), ids.kind.0)
             .unwrap()
             .set_selected(None);
-        assert_eq!(message(&e, ids.kind).as_deref(), Some("Kind is required"));
+        assert_eq!(
+            message(&mut e, ids.kind).as_deref(),
+            Some("Kind is required")
+        );
         view_mut::<ComboBox>(e.dialog_mut(), ids.kind.0)
             .unwrap()
             .set_selected(Some(0));
@@ -1503,7 +1514,10 @@ mod tests {
         set_text(&mut e, ids.name, "ada");
         e.read().expect("lower case passes the filter");
         set_text(&mut e, ids.name, "Ada 2");
-        assert_eq!(message(&e, ids.name).as_deref(), Some("Name is not valid"));
+        assert_eq!(
+            message(&mut e, ids.name).as_deref(),
+            Some("Name is not valid")
+        );
     }
 
     #[test]

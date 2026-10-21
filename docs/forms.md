@@ -127,6 +127,14 @@ above its field, and the form gets narrower and taller:
 - **Groups** (`form.group("Title")` … `form.end_group()`) draw a titled box,
   as wide as the form, around the rows added in between. A group lines up its
   own labels, independently of the rows outside it. Groups can be nested.
+- **Tabs** (`form.tab("~G~eneral")`, then the rows of that page, then the
+  next `form.tab(..)` … `form.end_tabs()`) put each page's rows under a strip
+  of tabs. The pane is as wide as the form and as high as its tallest page;
+  F6 or Ctrl+PgDn change page, and so does Alt plus a `~` letter of a title.
+  Groups and lines work inside a page; tabs do not nest. Fields on a page
+  are not children of the dialog, so read them through a record form's
+  bindings, not `dialog.get(handle)`. An error on another page brings that
+  page forward.
 - **Full-width rows** (`form.row(view)`) start at the label column and span
   the whole form (or group). Use them for a long check box caption, a note, a
   list.
@@ -729,6 +737,7 @@ All in `tv_extensions::forms`.
 | `form.row(view)` | A row spanning the whole form (or group), no label. | `Handle<T>` |
 | `form.group(title)` | Start a titled box around the rows that follow. | `&mut Form` |
 | `form.end_group()` | End the innermost open group. | `&mut Form` |
+| `form.tab(title)` / `form.end_tabs()` | Start a tab page (and the tabs); end the tab pane. | `&mut Form` |
 | `form.section(title)` | A heading, with an extra blank row above. | `&mut Form` |
 | `form.gap(rows)` | Extra blank rows. | `&mut Form` |
 | `form.button(title, command)` | A button on the bottom row. | `Handle<Button>` |
@@ -763,7 +772,7 @@ Record forms (`Form::<R>::for_record`) add:
 | `form.build_editor()` | Lay out and return the editor (`R: Clone`). | `Editor<R>` |
 | `editor.edit(&mut app, record)` | Run it; the edited record once valid. | `Option<R>` |
 | `editor.edit_with(&mut app, record, \|r\| save(r))` | The same, saving before closing. | `Option<R>` |
-| `editor.load(record)` / `editor.read()` | Fill the fields / check and read them, without running. | `()` / `Result<R, ValidationErrors>` |
+| `editor.load(record)` / `editor.read()` (needs `&mut`) | Fill the fields / check and read them, without running. | `()` / `Result<R, ValidationErrors>` |
 | `editor.show_errors(errors)` / `editor.errors()` | Show errors / the errors shown. | |
 | `editor.command()` | The button that closed the dialog last. | `CommandId` |
 | `editor.dialog()` / `editor.dialog_mut()` | The dialog. | `&Dialog` |
@@ -799,6 +808,7 @@ Follow these and the result needs no coordinates and no adjustment:
    field but the main one a `size(w, 1)`.
 7. Wrap related rows in `form.group("Title")` … `form.end_group()`; pair
    every `group` with an `end_group`.
+   For tabs, `form.tab(title)` per page and one `form.end_tabs()`.
 8. Exactly one `default_button` (or `ok_cancel()`) per form.
 9. Compare `execute`'s result with the button commands you added; `CM_CANCEL`
    also comes back when the user presses Esc or closes the window.
@@ -885,14 +895,14 @@ same validation, the same errors in the dialog and the same keyboard and mouse.
 Field types are `text`, `memo`, `integer`, `number`, `boolean`, `choice`,
 `multichoice` (check boxes, answering a list), `date` and `section` (a
 heading). Layout items are `note` (some text), `group` (a titled box) and
-`row` (fields side by side). Per field: `name` (the answer's key),
+`row` (fields side by side) and `tabs` (pages of fields). Per field: `name` (the answer's key),
 `label`, `required`, `default`, and by type `max_len`, `rows`, `min`, `max`,
 `options`, `widget`. A `choice` is a drop-down by default; `"widget": "radio"`
 shows the options as radio buttons (up to 32; arrows move, Space picks), and an
 `integer` with `"widget": "spinner"` or `"slider"` (and whole `min`/`max`)
 steps with the arrows. `group` and `row` take a `fields` list of their own and
 nest; the answers stay one flat object. Top-level `labels` (`left` or `above`)
-and `label_align` (`left` or `right`) set how labels sit. A `text` with a `mask` such as `"##/##/####"` is typed against that picture. Labels without a `~` get an Alt hot key picked for them. Unknown
+and `label_align` (`left` or `right`) set how labels sit. A `tabs` item has `pages`, each with a `label` and its own `fields`; the answers stay flat, and an error on another page brings that page forward. A `text` with a `mask` such as `"##/##/####"` is typed against that picture. Labels without a `~` get an Alt hot key picked for them. Unknown
 keys are refused, and a bad spec comes back as `FormError::Spec` with a
 message such as `fields[2].type: unknown type "txt"; expected one of ...`, so
 the agent that wrote it can fix it. See the module documentation of
@@ -900,7 +910,7 @@ the agent that wrote it can fix it. See the module documentation of
 
 `cargo run --example form_json --features native,json` runs the customer form
 and prints the answers; add `-- deploy`, `-- survey` or `-- layout` (groups, rows, spinner, slider,
-multichoice) for the other specs in
+multichoice) or `-- tabs` for the other specs in
 `examples/form_json_specs/`, or `-- your-spec.json`. `form_json_agent` plays
 the calling side: it sends a spec with a mistake, reads the error message the
 way a model would, repairs the spec, and acts on the answer or the cancel.

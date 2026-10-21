@@ -9,14 +9,17 @@
 use serde_json::{Value, json};
 use turbo_vision::app::Application;
 use turbo_vision::core::event::{
-    Event, KB_ALT_O, KB_BACKSPACE, KB_DOWN, KB_ENTER, KB_ESC, KB_LEFT, KB_RIGHT, KB_TAB, KB_UP,
+    Event, KB_ALT_O, KB_BACKSPACE, KB_DOWN, KB_ENTER, KB_ESC, KB_F6, KB_LEFT, KB_RIGHT, KB_TAB,
+    KB_UP,
 };
 use turbo_vision::test_util::test_terminal;
+use turbo_vision::views::button::set_press_animation;
 use tv_extensions::forms::json::{FormError, JsonForm, run};
 
 const CUSTOMER: &str = include_str!("../examples/form_json_specs/customer.json");
 const DEPLOY: &str = include_str!("../examples/form_json_specs/deploy.json");
 const SURVEY: &str = include_str!("../examples/form_json_specs/survey.json");
+const TABS: &str = include_str!("../examples/form_json_specs/tabs.json");
 const LAYOUT: &str = include_str!("../examples/form_json_specs/layout.json");
 
 /// One thing a person does.
@@ -28,13 +31,15 @@ enum Key {
     Up,
     Left,
     Right,
+    /// F6: the next tab.
+    NextTab,
     Enter,
     Backspace(usize),
     Esc,
     /// Alt+O: press OK.
     Ok,
 }
-use Key::{Backspace, Down, Enter, Esc, Left, Ok as PressOk, Right, Tab, Type, Up};
+use Key::{Backspace, Down, Enter, Esc, Left, NextTab, Ok as PressOk, Right, Tab, Type, Up};
 
 fn app() -> Application {
     // Tall enough for the longest example form.
@@ -54,6 +59,7 @@ fn send(app: &mut Application, keys: &[Key]) {
             Down => tx.send(Event::keyboard(KB_DOWN)).unwrap(),
             Up => tx.send(Event::keyboard(KB_UP)).unwrap(),
             Left => tx.send(Event::keyboard(KB_LEFT)).unwrap(),
+            NextTab => tx.send(Event::keyboard(KB_F6)).unwrap(),
             Right => tx.send(Event::keyboard(KB_RIGHT)).unwrap(),
             Enter => tx.send(Event::keyboard(KB_ENTER)).unwrap(),
             Backspace(n) => {
@@ -87,6 +93,7 @@ fn every_example_spec_builds() {
         ("deploy", DEPLOY),
         ("survey", SURVEY),
         ("layout", LAYOUT),
+        ("tabs", TABS),
     ] {
         if let Err(e) = JsonForm::from_spec(&spec(text)) {
             panic!("{name}.json: {e}");
@@ -617,4 +624,65 @@ fn a_mask_refuses_letters_and_an_unfinished_value() {
     )
     .expect("answers");
     assert_eq!(answers, json!({ "phone": "12/05/2026" }));
+}
+
+// ---- tabs ----------------------------------------------------------------
+
+#[test]
+fn the_tabs_form_is_filled_in_page_by_page() {
+    let answers = answer(
+        &spec(TABS),
+        &[
+            Type("Ada"),
+            Tab, // the first field of the Contact page
+            Type("ada@example.com"),
+            Tab,
+            Type("555123456"),
+            NextTab, // Job: the radio buttons
+            Down,
+            Type(" "), // Designer
+            Tab,
+            Type("2026-12-01"),
+            Tab,
+            Type(" "), // remote
+            NextTab,   // Notes
+            Type("hello"),
+            PressOk,
+        ],
+    )
+    .expect("answers");
+    assert_eq!(
+        answers,
+        json!({
+            "name": "Ada",
+            "email": "ada@example.com",
+            "phone": "555-123-456",
+            "city": "",
+            "role": "design",
+            "start": "2026-12-01",
+            "remote": true,
+            "notes": "hello"
+        })
+    );
+}
+
+#[test]
+fn an_error_on_another_page_brings_that_page_forward() {
+    // The refusal must come before the keys that follow it, so OK is pressed
+    // at once instead of after the 100 ms a person sees it go down.
+    set_press_animation(std::time::Duration::ZERO);
+    let answers = answer(
+        &spec(TABS),
+        &[
+            Type("Ada"),
+            Tab,     // into the tabs: Contact
+            NextTab, // Job
+            NextTab, // Notes
+            PressOk, // refused: the email on the Contact page is missing
+            Type("ada@example.com"),
+            PressOk,
+        ],
+    )
+    .expect("answers");
+    assert_eq!(answers["email"], json!("ada@example.com"));
 }

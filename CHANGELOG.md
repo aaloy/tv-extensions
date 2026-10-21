@@ -27,6 +27,12 @@ applications send a keyboard-pressed button's command at once.
 - `forms::json`: a `text` field takes a `mask` (a picture such as
   `###-###-###`): the literals are filled in as the person types and the
   form refuses a value that does not fit.
+- `forms`: tabs. `Form::tab(title)` starts a page of a tab pane and
+  `Form::end_tabs()` ends it; the rows after each `tab` go on that page, and
+  groups and lines work inside. `forms::json` gets a `tabs` item with `pages`
+  (new example spec `tabs`). An error on another page brings that page
+  forward. **Breaking:** `Editor::read` takes `&mut self`, since reading a
+  field on a tab page needs the pane mutably.
 - `forms`: `Form` lays a dialog out from labelled fields with no
   coordinates (lines of fields, titled groups, sections, label placement,
   button alignment), and `Form::<T>::for_record` edits a struct of yours:

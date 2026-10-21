@@ -7,7 +7,7 @@
 //!
 //! Run with: `cargo run --example form_json --features native,json`
 //! One of the specs in `examples/form_json_specs/`: add `-- deploy`,
-//! `-- survey` or `-- layout` (groups, rows, spinner, slider; the default is `customer`).
+//! `-- survey`, `-- tabs` or `-- layout` (groups, rows, spinner, slider; the default is `customer`).
 //! Your own: `-- path/to/spec.json`
 
 // (C) 2026 - Antoni Aloy
@@ -20,6 +20,7 @@ const CUSTOMER: &str = include_str!("form_json_specs/customer.json");
 const DEPLOY: &str = include_str!("form_json_specs/deploy.json");
 const SURVEY: &str = include_str!("form_json_specs/survey.json");
 const LAYOUT: &str = include_str!("form_json_specs/layout.json");
+const TABS: &str = include_str!("form_json_specs/tabs.json");
 
 fn load(which: Option<&str>) -> Result<Value, Box<dyn std::error::Error>> {
     let text = match which {
@@ -27,6 +28,7 @@ fn load(which: Option<&str>) -> Result<Value, Box<dyn std::error::Error>> {
         Some("deploy") => DEPLOY.to_string(),
         Some("survey") => SURVEY.to_string(),
         Some("layout") => LAYOUT.to_string(),
+        Some("tabs") => TABS.to_string(),
         Some(path) => std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?,
     };
     Ok(serde_json::from_str(&text)?)

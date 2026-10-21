@@ -1,0 +1,22 @@
+{
+  "title": "New employee",
+  "fields": [
+    { "name": "name", "type": "text", "required": true, "max_len": 40 },
+    { "type": "tabs", "pages": [
+      { "label": "~C~ontact", "fields": [
+        { "name": "email", "type": "text", "required": true },
+        { "name": "phone", "type": "text", "mask": "###-###-###" },
+        { "name": "city", "type": "text" }
+      ] },
+      { "label": "~J~ob", "fields": [
+        { "name": "role", "type": "choice", "widget": "radio", "default": "dev",
+          "options": [ { "label": "Developer", "value": "dev" }, { "label": "Designer", "value": "design" } ] },
+        { "name": "start", "type": "date" },
+        { "name": "remote", "type": "boolean", "label": "Works remotely" }
+      ] },
+      { "label": "~N~otes", "fields": [
+        { "name": "notes", "type": "memo", "rows": 4 }
+      ] }
+    ] }
+  ]
+}
