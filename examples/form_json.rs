@@ -9,12 +9,19 @@
 //! One of the specs in `examples/form_json_specs/`: add `-- deploy`,
 //! `-- survey`, `-- tabs` or `-- layout` (groups, rows, spinner, slider; the default is `customer`).
 //! Your own: `-- path/to/spec.json`
+//!
+//! The spec is shown in a window at the left of the screen, with the form
+//! beside it, laid out to fit (a form is modal, so the window cannot
+//! scroll); `--no-spec` leaves the window out.
 
 // (C) 2026 - Antoni Aloy
 
 use serde_json::Value;
 use turbo_vision::app::Application;
 use tv_extensions::forms::json::{FormError, run};
+
+#[path = "support/spec_window.rs"]
+mod spec_window;
 
 const CUSTOMER: &str = include_str!("form_json_specs/customer.json");
 const DEPLOY: &str = include_str!("form_json_specs/deploy.json");
@@ -35,10 +42,16 @@ fn load(which: Option<&str>) -> Result<Value, Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let spec = load(std::env::args().nth(1).as_deref())?;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let show = !args.iter().any(|a| a == "--no-spec");
+    let which = args.iter().find(|a| *a != "--no-spec").map(String::as_str);
+    let spec = load(which)?;
 
     let result = {
         let mut app = Application::new()?;
+        if show {
+            spec_window::show(&mut app, &spec)?;
+        }
         run(&mut app, &spec)
     }; // the application is dropped here: the terminal is restored
 

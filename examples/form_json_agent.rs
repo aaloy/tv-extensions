@@ -17,6 +17,9 @@ use serde_json::{Value, json};
 use turbo_vision::app::Application;
 use tv_extensions::forms::json::{FormError, JsonForm};
 
+#[path = "support/spec_window.rs"]
+mod spec_window;
+
 /// What the "model" sends first, with a typo, and what it sends once told.
 fn first_attempt() -> Value {
     json!({
@@ -35,19 +38,24 @@ fn corrected(why: &str) -> Value {
     spec
 }
 
-/// Build the form, repairing the spec once if it is refused.
-fn build(spec: &Value) -> Result<JsonForm, FormError> {
+/// Build the form, repairing the spec once if it is refused. Returns the
+/// spec that was accepted, to show beside the form.
+fn build(spec: &Value) -> Result<(JsonForm, Value), FormError> {
     match JsonForm::from_spec(spec) {
-        Err(FormError::Spec(why)) => JsonForm::from_spec(&corrected(&why)),
-        other => other,
+        Err(FormError::Spec(why)) => {
+            let fixed = corrected(&why);
+            Ok((JsonForm::from_spec(&fixed)?, fixed))
+        }
+        other => other.map(|form| (form, spec.clone())),
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut form = build(&first_attempt())?;
+    let (mut form, spec) = build(&first_attempt())?;
 
     let answer = {
         let mut app = Application::new()?;
+        spec_window::show(&mut app, &spec)?;
         form.run(&mut app)
     };
 
