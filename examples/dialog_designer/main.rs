@@ -14,6 +14,7 @@
 //! click) edits its properties, F9 runs the dialog for real. Help > Keys
 //! lists every key.
 
+mod keys;
 mod model;
 mod props;
 mod surface;
@@ -85,36 +86,6 @@ const CM_INSERT: CommandId = CM_USER + 50;
 
 const INSPECTOR_WIDTH: i16 = 32;
 
-const KEYS: &str = "\
-Mouse
-  Click            select a control
-  Drag             move it
-  Drag the yellow  resize it (or the dialog)
-    corner
-  Drag the frame   move the dialog about the desktop
-  Double click     properties
-  Inspector tree   click / arrows select a control, Enter edits it,
-                   drag a control onto a container to move it
-  Right click      insert a control
-
-Keys
-  Tab / Shift+Tab  next / previous control
-  Esc              select the container
-  Arrows           move one cell (the dialog: move it)
-  Shift/Ctrl+Arrow resize one cell
-  Enter            properties
-  Ins              insert a control
-  Del              delete
-  Ctrl+D           duplicate
-  F7 / F8          earlier / later in tab order
-  F6               move to another container
-  Ctrl+PgUp/PgDn   previous / next tab page
-  Ctrl+O           show tab order
-  Ctrl+Z / Ctrl+Y  undo / redo
-  F9               test the dialog
-  F4               show the JSON
-  Ctrl+G           save the code to use it
-  F2 / F3          save / open";
 
 /// The inspector window: the tree of controls over the selection's JSON.
 #[derive(Clone, Copy)]
@@ -574,7 +545,7 @@ impl AppHandler for Designer {
             }
             CM_INSPECTOR => self.toggle_inspector(app),
             CM_INSERT_MENU => self.insert_menu(app),
-            CM_KEYS => show_text(app, "Keys", KEYS),
+            CM_KEYS => show_text(app, "Keys", &keys::help(keys::current())),
             CM_ABOUT => {
                 message_box_ok(
                     app,
@@ -904,19 +875,20 @@ fn item_shown(text: &str, command: CommandId, shortcut: &str) -> MenuItem {
 }
 
 fn menu_bar(width: i16) -> MenuBar {
+    let k = keys::current();
     let mut bar = MenuBar::new(Rect::new(0, 0, width, 1));
     bar.add_submenu(SubMenu::new(
         "~F~ile",
         Menu::from_items(vec![
             item("~N~ew", CM_NEW, Some("Ctrl+N")),
-            item("~O~pen...", CM_OPEN_SPEC, Some("F3")),
-            item("~S~ave", CM_SAVE_SPEC, Some("F2")),
+            item("~O~pen...", CM_OPEN_SPEC, Some(k.open)),
+            item("~S~ave", CM_SAVE_SPEC, Some(k.save)),
             item("Save ~a~s...", CM_SAVE_AS, None),
             MenuItem::separator(),
             item("New from ~t~emplate...", CM_NEW_TEMPLATE, None),
             item("Save as te~m~plate...", CM_SAVE_TEMPLATE, None),
             MenuItem::separator(),
-            item("E~x~it", CM_EXIT, Some("Alt+X")),
+            item("E~x~it", CM_EXIT, Some(k.exit)),
         ]),
     ));
     bar.add_submenu(SubMenu::new(
@@ -927,18 +899,18 @@ fn menu_bar(width: i16) -> MenuBar {
             MenuItem::separator(),
             item_shown("~P~roperties...", CM_PROPERTIES, "Enter"),
             item("~D~uplicate", CM_DUPLICATE, Some("Ctrl+D")),
-            item_shown("De~l~ete", CM_DELETE, "Del"),
+            item_shown("De~l~ete", CM_DELETE, k.delete),
             MenuItem::separator(),
-            item("~E~arlier in tab order", CM_EARLIER, Some("F7")),
-            item("La~t~er in tab order", CM_LATER, Some("F8")),
+            item("~E~arlier in tab order", CM_EARLIER, Some(k.earlier)),
+            item("La~t~er in tab order", CM_LATER, Some(k.later)),
             MenuItem::separator(),
-            item("~M~ove to container...", CM_MOVE_MENU, Some("F6")),
+            item("~M~ove to container...", CM_MOVE_MENU, Some(k.move_to)),
         ]),
     ));
     // Short, so every entry can be clicked on any screen: the full list is
     // Ins, and each section opens its own small menu.
     let mut insert = vec![
-        item("C~h~oose...", CM_INSERT_MENU, Some("Ins")),
+        item("C~h~oose...", CM_INSERT_MENU, Some(k.insert)),
         MenuItem::separator(),
     ];
     insert.extend(
@@ -952,16 +924,16 @@ fn menu_bar(width: i16) -> MenuBar {
         "~D~ialog",
         Menu::from_items(vec![
             item("~P~roperties...", CM_DIALOG_PROPERTIES, None),
-            item("~T~est", CM_TEST, Some("F9")),
+            item("~T~est", CM_TEST, Some(k.test)),
             MenuItem::separator(),
-            item("Show ~J~SON", CM_SHOW_JSON, Some("F4")),
+            item("Show ~J~SON", CM_SHOW_JSON, Some(k.json)),
             item("~C~ode to use it...", CM_CODE, Some("Ctrl+G")),
         ]),
     ));
     bar.add_submenu(SubMenu::new(
         "~V~iew",
         Menu::from_items(vec![
-            item("~T~ab order", CM_TAB_ORDER, Some("Ctrl+O")),
+            item("~T~ab order", CM_TAB_ORDER, Some(k.order)),
             item("~I~nspector", CM_INSPECTOR, None),
         ]),
     ));
@@ -976,9 +948,10 @@ fn menu_bar(width: i16) -> MenuBar {
 }
 
 fn status_line(width: i16, height: i16) -> StatusLine {
+    let k = keys::current();
     let entry = |text: &str, key: &str, command: CommandId| {
         StatusItemBuilder::new()
-            .text(text)
+            .text(format!("~{}~ {text}", keys::label(key)))
             .key(key)
             .command(command)
             .build()
@@ -986,12 +959,12 @@ fn status_line(width: i16, height: i16) -> StatusLine {
     StatusLine::new(
         Rect::new(0, height - 1, width, height),
         vec![
-            entry("~Alt-X~ Exit", "Alt+X", CM_EXIT),
-            entry("~F2~ Save", "F2", CM_SAVE_SPEC),
-            entry("~Ins~ Insert", "Ins", CM_INSERT_MENU),
-            entry("~F9~ Test", "F9", CM_TEST),
-            entry("~F4~ JSON", "F4", CM_SHOW_JSON),
-            entry("~Ctrl-O~ Order", "Ctrl+O", CM_TAB_ORDER),
+            entry("Exit", k.exit, CM_EXIT),
+            entry("Save", k.save, CM_SAVE_SPEC),
+            entry("Insert", k.insert, CM_INSERT_MENU),
+            entry("Test", k.test, CM_TEST),
+            entry("JSON", k.json, CM_SHOW_JSON),
+            entry("Order", k.order, CM_TAB_ORDER),
         ],
     )
 }

@@ -5,7 +5,7 @@
 
 use super::*;
 use turbo_vision::core::palette::Attr;
-use turbo_vision::core::event::{KB_DOWN, KB_ENTER, KB_INS, KB_LEFT, KB_RIGHT, KB_UP, MB_LEFT_BUTTON};
+use turbo_vision::core::event::{KB_DOWN, KB_ENTER, KB_LEFT, KB_RIGHT, KB_UP, MB_LEFT_BUTTON};
 use turbo_vision::test_util::test_terminal;
 use turbo_vision::views::button::set_press_animation;
 
@@ -91,7 +91,7 @@ fn ins_opens_the_insert_menu_and_picks_a_control() {
         tx.send(Event::keyboard(KB_DOWN)).unwrap();
     }
     tx.send(Event::keyboard(KB_ENTER)).unwrap();
-    key(&mut app, &mut designer, KB_INS);
+    command(&mut app, &mut designer, CM_INSERT_MENU);
     let design = designer.design.borrow();
     assert_eq!(design.selected().unwrap().type_name(), "input");
 }
@@ -392,7 +392,7 @@ fn the_insert_menu_has_a_line_between_its_sections() {
         tx.send(Event::keyboard(KB_DOWN)).unwrap();
     }
     tx.send(Event::keyboard(KB_ENTER)).unwrap();
-    key(&mut app, &mut designer, KB_INS);
+    command(&mut app, &mut designer, CM_INSERT_MENU);
     let design = designer.design.borrow();
     assert_eq!(design.selected().unwrap().type_name(), "tree");
 }
@@ -542,7 +542,7 @@ fn the_insert_menu_fits_on_screen_so_its_last_item_can_be_clicked() {
     tx.send(Event::mouse(EventType::MouseDown, last, MB_LEFT_BUTTON, false)).unwrap();
     tx.send(Event::mouse(EventType::MouseUp, last, 0, false)).unwrap();
     tx.send(Event::keyboard(turbo_vision::core::event::KB_ESC)).unwrap();
-    key(&mut app, &mut designer, KB_INS);
+    command(&mut app, &mut designer, CM_INSERT_MENU);
     let d = designer.design.borrow();
     assert_eq!(d.selected().map(tv_extensions::dialog_spec::Control::type_name), Some("error_line"));
 }
@@ -558,7 +558,7 @@ fn on_a_short_screen_the_insert_menu_asks_for_the_section_first() {
     designer.refresh(&mut app);
     // Text and lines, then its third item: the line.
     queue(&mut app, &[KB_ENTER, KB_DOWN, KB_DOWN, KB_ENTER]);
-    key(&mut app, &mut designer, KB_INS);
+    command(&mut app, &mut designer, CM_INSERT_MENU);
     let d = designer.design.borrow();
     assert_eq!(d.selected().map(tv_extensions::dialog_spec::Control::type_name), Some("line"));
 }
@@ -587,4 +587,19 @@ fn a_selected_container_is_marked_by_its_frame_only() {
     app.draw();
     let r = designer.design.borrow().rect_of(Sel::top(1));
     assert_eq!(attr_at(&app, &designer, Point::new(r.a.x + 3, r.a.y)).bg, marked);
+}
+
+#[test]
+fn backspace_deletes_like_del() {
+    use turbo_vision::core::event::{KB_BACKSPACE, KB_DEL, KB_TAB};
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    designer.refresh(&mut app);
+    for code in [KB_DEL, KB_BACKSPACE] {
+        key(&mut app, &mut designer, KB_TAB);
+        let before = designer.design.borrow().spec.controls.len();
+        key(&mut app, &mut designer, code);
+        let after = designer.design.borrow().spec.controls.len();
+        assert_eq!(after, before - 1, "{code:#x}");
+    }
 }

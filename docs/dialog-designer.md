@@ -85,6 +85,30 @@ way to reach a control hidden under another or on a tab page.
 | Save code to use it... | | Ctrl+G |
 | Save / open / new | | F2 / F3 / Ctrl+N |
 
+### On a Mac
+
+A Mac keyboard has no Insert, no Delete (its key sends Backspace), no Page
+Up/Down and no easy F-keys, so on macOS the designer binds these Ctrl keys
+instead, and the menus, the status line and Help ▸ Keys show them:
+
+| Action | PC | Mac |
+|---|---|---|
+| Insert a control | Ins | Ctrl+A |
+| Delete | Del | Backspace |
+| Save / open | F2 / F3 | Ctrl+S / Ctrl+O |
+| Earlier / later in tab order | F7 / F8 | Ctrl+U / Ctrl+L |
+| Move to container | F6 | Ctrl+P |
+| Test the dialog | F9 | Ctrl+E |
+| Show the JSON | F4 | Ctrl+K |
+| Show the tab order | Ctrl+O | Ctrl+T |
+| Previous / next tab page | Ctrl+PgUp / Ctrl+PgDn | Ctrl+W / Ctrl+V |
+| Exit | Alt+X | Ctrl+Q |
+
+Everything else (Ctrl+N, Ctrl+Z, Ctrl+Y, Ctrl+D, Ctrl+G, Enter, Tab, the
+arrows) is the same. The designer picks the set from the operating system;
+`DIALOG_DESIGNER_KEYS=mac` or `=pc` overrides it, for a Mac with a full
+keyboard or a PC terminal that sends Ctrl+letters.
+
 A drag is one undo step. Moves and resizes keep a control inside its
 container, the dialog or its tab page.
 

@@ -10,7 +10,7 @@ use std::rc::Rc;
 use turbo_vision::core::command::CommandId;
 use turbo_vision::core::draw::Cell;
 use turbo_vision::core::event::{
-    Event, EventType, KB_DEL, KB_DOWN, KB_ENTER, KB_ESC, KB_LEFT, KB_PGDN, KB_PGUP, KB_RIGHT,
+    Event, EventType, KB_BACKSPACE, KB_CTRL_V, KB_CTRL_W, KB_DEL, KB_DOWN, KB_ENTER, KB_ESC, KB_LEFT, KB_PGDN, KB_PGUP, KB_RIGHT,
     KB_SHIFT_TAB, KB_TAB, KB_UP, MB_LEFT_BUTTON, MB_RIGHT_BUTTON,
 };
 use turbo_vision::core::geometry::{Point, Rect};
@@ -301,8 +301,12 @@ impl Surface {
             KB_TAB => design.select_next(true),
             KB_SHIFT_TAB => design.select_next(false),
             KB_ESC => design.select_parent(),
-            KB_PGUP | KB_PGDN if mods.contains(KeyModifiers::CONTROL) => {
-                let forward = event.key_code == KB_PGDN;
+            // Ctrl+PgUp/PgDn, or Ctrl+W/Ctrl+V where there are no page keys.
+            KB_PGUP | KB_PGDN | KB_CTRL_W | KB_CTRL_V
+                if matches!(event.key_code, KB_CTRL_W | KB_CTRL_V)
+                    || mods.contains(KeyModifiers::CONTROL) =>
+            {
+                let forward = matches!(event.key_code, KB_PGDN | KB_CTRL_V);
                 let sel = design.sel;
                 if let Some(tabs) = design.tabs_of(sel)
                     && let Some(Kind::Tabs { pages, active }) =
@@ -323,7 +327,7 @@ impl Surface {
                 Self::send(event, self.commands.properties);
                 return;
             }
-            KB_DEL => {
+            KB_DEL | KB_BACKSPACE => {
                 drop(design);
                 Self::send(event, self.commands.delete);
                 return;
