@@ -247,3 +247,18 @@ fn tab_pages_and_the_extras_are_drawn_with_the_tab_order() {
         assert!(text.contains(expected), "{expected} missing:\n{text}");
     }
 }
+
+#[test]
+#[ignore = "prints the screen for the docs"]
+fn print_for_docs() {
+    set_press_animation(std::time::Duration::ZERO);
+    let mut app = Application::with_terminal(test_terminal(90, 22));
+    let (width, height) = app.terminal.size();
+    app.set_menu_bar(menu_bar(width));
+    app.set_status_line(status_line(width, height));
+    let mut designer = open_designer(&mut app, customer());
+    designer.design.borrow_mut().select(Sel::Top(3));
+    designer.refresh(&mut app);
+    app.draw();
+    println!("{}", screen(&app));
+}

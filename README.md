@@ -128,6 +128,27 @@ let fruit_field = AutoCompleteBuilder::new()
 
 `Form` lays a dialog out from labelled fields, with no coordinates: labels in one column, fields in the next, lines of fields, titled groups, label placement, and buttons along the bottom, the dialog sized to fit and centred. `Form::<T>::for_record` binds the fields to a struct of yours (a database row, say) through typed fields, required fields, rules and a save step, and shows errors in the dialog. Always available, no feature flag; date and time fields (`NaiveDate`, `NaiveTime`) need `chrono`, on by default. [docs/forms.md](docs/forms.md) has the rest, and `cargo run --example form_layout --features native`, `form_labels` and `form_record` show it.
 
+## Dialog designer and JSON dialogs (feature `dialog`)
+
+Lay a dialog out with the mouse in the dialog designer, in the spirit of TV Dialog Design, try it, and save it as JSON; then load it in the application and give it its rules and actions in code. Every core dialog control is there, plus `AutoComplete`, `DualList`, tab pages, group boxes and an error line. [docs/dialog-designer.md](docs/dialog-designer.md) has the designer's keys, the JSON format, and how to extend a dialog with validation and actions.
+
+```sh
+cargo run --example dialog_designer --features native,dialog -- customer.json
+```
+
+```rust,ignore
+use serde_json::json;
+use tv_extensions::dialog_spec::{Flow, JsonDialog};
+
+let mut dialog = JsonDialog::load("customer.json")?;
+dialog.set_data(&json!({ "name": "Ada" }))?;
+dialog.rule("email", |v| if v.as_str().is_some_and(|e| e.contains('@')) { Ok(()) } else { Err("Email must contain @".into()) });
+dialog.on("lookup", |ctx| { ctx.set_value("email", &json!("ada@example.org")).unwrap(); Flow::Stay });
+if let Some(answer) = dialog.run(&mut app) {
+    println!("{} {}", answer.action, answer.data); // ok {"name":"Ada","email":"ada@example.org",...}
+}
+```
+
 ## DualList
 
 Two lists side by side for picking a subset of items, like Django admin's `filter_horizontal`: available items on the left, chosen ones on the right, a filter field over each, and `>` `>>` `<` `<<` buttons between them. Space marks items; Enter or a double-click moves them. Each item is a key and a label, and the chosen keys come back through an `Rc<RefCell<Vec<K>>>`. Always available, no feature flag. [docs/dual-list.md](docs/dual-list.md) has the rest.
@@ -237,6 +258,8 @@ let server = SshServer::new(config, || {
 | --- | --- | --- |
 | *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `dual_list`, `forms`, `keys` — builds for `wasm32-wasip1` | |
 | `chrono` (default) | date and time fields in record forms | |
+| `json` | `forms::json`: forms described and answered as JSON | |
+| `dialog` | the `dialog_spec` module: designed dialogs saved as JSON, the dialog designer example | `json` |
 | `native` | a real terminal in turbo-vision (crossterm, OS clipboard) | |
 | `csv` | the `csv` module: the CSV table editor | |
 | `log` | the `log` module: `LogWindow`, `TerminalWidget` | |

@@ -68,6 +68,7 @@ nav:
   - AutoComplete: autocomplete.md
   - DualList: dual-list.md
   - Forms: forms.md
+  - Dialog designer: dialog-designer.md
   - CSV editor: csv.md
   - Log window: log.md
   - Graphics: graphics.md
