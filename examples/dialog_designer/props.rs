@@ -226,6 +226,9 @@ fn plain(text: &str) -> String {
     text.chars().filter(|&c| c != '~').collect()
 }
 
+/// What the "On change action" setting means, under it.
+const ON_CHANGE_NOTE: &str = "A name, such as volume_changed. Your program runs code under that\nname each time this control changes; Ctrl+G writes the empty handler.";
+
 fn on_change(value: Option<&String>) -> Value {
     text(
         "on_change",
@@ -335,6 +338,7 @@ fn sheet(c: &Control, others: &[String]) -> Value {
                 v.push(ticks("checked", "C~h~ecked", items, checked));
             }
             v.push(on_change(oc.as_ref()));
+            v.push(note(ON_CHANGE_NOTE));
             v
         }
         Kind::RadioButtons {
@@ -353,6 +357,7 @@ fn sheet(c: &Control, others: &[String]) -> Value {
                 ));
             }
             v.push(on_change(oc.as_ref()));
+            v.push(note(ON_CHANGE_NOTE));
             v
         }
         Kind::ComboBox {
@@ -365,6 +370,7 @@ fn sheet(c: &Control, others: &[String]) -> Value {
             pick("selected", "~S~elected", items, *selected, true),
             flag("required", "~R~equired", *required),
             on_change(oc.as_ref()),
+            note(ON_CHANGE_NOTE),
         ],
         Kind::ListBox {
             items,
@@ -389,6 +395,7 @@ fn sheet(c: &Control, others: &[String]) -> Value {
             text("suffix", "Su~f~fix", suffix),
             flag("wrap", "~W~rap around", *wrap),
             on_change(oc.as_ref()),
+            note(ON_CHANGE_NOTE),
         ],
         Kind::Slider {
             min,
@@ -400,6 +407,7 @@ fn sheet(c: &Control, others: &[String]) -> Value {
             json!({ "type": "row", "fields": [int("min", "M~i~n", *min), int("max", "M~a~x", *max)] }),
             json!({ "type": "row", "fields": [int("value", "~V~alue", *value), int("step", "~S~tep", *step)] }),
             on_change(oc.as_ref()),
+            note(ON_CHANGE_NOTE),
         ],
         Kind::ProgressBar {
             max,

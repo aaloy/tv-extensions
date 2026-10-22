@@ -692,6 +692,8 @@ fn skeleton(spec: &DialogSpec, path: Option<&Path>) -> String {
     );
     let mut fields = Vec::new();
     let mut actions = Vec::new();
+    // Each on_change action with the control it belongs to.
+    let mut changes: Vec<(String, String)> = Vec::new();
     let mut validators = Vec::new();
     spec.visit(&mut |c| {
         if c.kind.has_value() && !c.name.is_empty() {
@@ -722,7 +724,10 @@ fn skeleton(spec: &DialogSpec, path: Option<&Path>) -> String {
             }
             | Kind::Slider {
                 on_change: Some(a), ..
-            } => action(a),
+            } => {
+                action(a);
+                changes.push((a.clone(), c.name.clone()));
+            }
             Kind::Input {
                 validator: Some(tv_extensions::dialog_spec::ValidatorSpec::Custom { name }),
                 ..
@@ -776,10 +781,13 @@ fn skeleton(spec: &DialogSpec, path: Option<&Path>) -> String {
     }
     out.push_str("    dialog.validate_data(|data, errors| {\n        // Rules over several fields: errors.add(\"name\", \"message\");\n        let _ = (data, errors);\n    });\n");
     for a in &actions {
-        let _ = write!(
-            out,
-            "    dialog.on(\"{a}\", |_ctx| {{\n        // _ctx.value(\"name\"), set_value(\"name\", &serde_json::json!(...)), app\n        Flow::Stay\n    }});\n"
-        );
+        let hint = match changes.iter().find(|(action, _)| action == a) {
+            Some((_, control)) if !control.is_empty() => format!(
+                "        // Runs when \"{control}\" changes: _ctx.value(\"{control}\") is its new value.\n        // _ctx.set_value(\"other\", &serde_json::json!(...)) changes another control.\n"
+            ),
+            _ => "        // _ctx.value(\"name\"), set_value(\"name\", &serde_json::json!(...)), app\n".to_string(),
+        };
+        let _ = write!(out, "    dialog.on(\"{a}\", |_ctx| {{\n{hint}        Flow::Stay\n    }});\n");
     }
     out.push_str("    debug_assert!(dialog.unbound().is_empty(), \"{:?}\", dialog.unbound());\n");
     out.push_str("    let answer = dialog.run(app)?;\n");

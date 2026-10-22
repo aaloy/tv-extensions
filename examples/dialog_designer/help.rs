@@ -275,9 +275,17 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              buttons, combo boxes, spinners and sliders. Use it to keep one\n\
              control in step with another.\n\
              \n\
-             In the designer: open the control's properties and type a name\n\
-             in \"On change action\", for instance volume_changed. Nothing\n\
-             else happens here; the name is only saved in the JSON.\n\
+             In the designer:\n\
+             1. Select the control and press Enter.\n\
+             2. On General, type a name in \"On change action\", for\n\
+                instance volume_changed. Any name will do; it is only saved\n\
+                in the JSON.\n\
+             3. Press Ctrl+G (Dialog > Code to use it) to save the Rust that\n\
+                loads the dialog. It has an empty handler for each name, with\n\
+                a comment saying which control it is for.\n\
+             \n\
+             Dialog > Test runs the form but not your handlers, so changing\n\
+             the control does nothing there; they run in your program.\n\
              \n\
              In your program: attach code to that name.\n\
              \n\
