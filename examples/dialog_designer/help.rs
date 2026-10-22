@@ -3,6 +3,9 @@
 //! Contextual help: what the selected control is for and what its
 //! properties mean.
 
+use crate::keys::Keys;
+use crate::model::KINDS;
+
 /// The help on a control type (the JSON `type`).
 #[allow(clippy::too_many_lines)] // one arm of prose per control type
 pub fn control(type_name: &str) -> &'static str {
@@ -192,16 +195,143 @@ pub fn for_selection(type_name: Option<&str>) -> String {
     )
 }
 
+/// A help topic: its title in the contents and its text.
+pub struct Topic {
+    pub title: String,
+    pub text: String,
+}
+
+fn topic(title: &str, text: &str) -> Topic {
+    Topic {
+        title: title.to_string(),
+        text: text.to_string(),
+    }
+}
+
+/// The contents: the general topics, then one per control type.
+#[allow(clippy::too_many_lines)] // prose
+pub fn topics(keys: &Keys) -> Vec<Topic> {
+    let mut all = vec![
+        topic(
+            "Getting started",
+            "The dialog is drawn in the middle, exactly as it will look.\n\
+             \n\
+             1. Insert a control: right click, the Insert menu, or the insert\n\
+                key. It goes below the selected one.\n\
+             2. Move it by dragging or with the arrows; resize it by its\n\
+                yellow corner.\n\
+             3. Press Enter (or double click) to edit its properties: its\n\
+                text, its name, what it validates.\n\
+             4. Test the dialog, then save it. The file is JSON that\n\
+                JsonDialog::load reads.\n\
+             \n\
+             Give a control a name and its value comes back under that name\n\
+             when the dialog is accepted.",
+        ),
+        topic("Keys", &crate::keys::help(keys)),
+        topic(
+            "Selecting and moving",
+            "Click a control to select it; Tab and Shift+Tab walk them in\n\
+             tab order; Esc selects the container it is in (a group box, a\n\
+             tab pane, then the dialog).\n\
+             \n\
+             Drag a control to move it, or use the arrows; Shift+arrows and\n\
+             Ctrl+arrows resize it. With the dialog selected the arrows move\n\
+             the whole dialog about the desktop, and so does dragging its\n\
+             frame.\n\
+             \n\
+             The inspector at the right lists every control as a tree. It is\n\
+             the way to reach one hidden under another or on a tab page.",
+        ),
+        topic(
+            "Containers",
+            "A group box draws a frame with a title around other controls. A\n\
+             tabs control holds pages; each page has its own controls. Both\n\
+             place what is inside from their inner corner. Group boxes nest,\n\
+             tabs do not hold tabs.\n\
+             \n\
+             To put a control in a container, use Edit > Move to container,\n\
+             or drag its row in the inspector onto the container's row.\n\
+             Selecting a container highlights its frame only, so you can see\n\
+             what you are about to move.",
+        ),
+        topic(
+            "Tab order",
+            "Tab goes through the controls of a container in the order of\n\
+             its list, and the data and the validation use the same order.\n\
+             \n\
+             View > Tab order numbers the controls. Earlier / Later move the\n\
+             selected control one place. Set tab order opens its neighbours\n\
+             as a list: Move up and Move down shift the one under the\n\
+             cursor, OK applies the whole order as one edit that Undo takes\n\
+             back.",
+        ),
+        topic(
+            "Properties",
+            "Enter, or a double click, opens the property sheet of the\n\
+             selected control; with the dialog selected, the dialog's.\n\
+             \n\
+             General holds the control's own settings; Place its name,\n\
+             position, size and hover hint; an input also has a Validator\n\
+             page. Lists (items, pages, columns, rows) are one per line.\n\
+             \n\
+             Renaming a control carries along the labels linked to it. A\n\
+             sheet that breaks a rule, such as a duplicate name, says why and\n\
+             opens again with what you typed.\n\
+             \n\
+             F1 explains the selected control and each of its settings.",
+        ),
+        topic(
+            "Templates",
+            "File > Save as template saves the dialog under a name in the\n\
+             templates folder (./templates, or $DIALOG_TEMPLATES). File >\n\
+             New from template lists them: Use starts a new dialog from one,\n\
+             Rename and Delete look after the folder.\n\
+             \n\
+             Samples come with the designer: login, contact form, find and\n\
+             replace, settings, confirm, about, list picker, table browser\n\
+             and progress.",
+        ),
+        topic(
+            "Testing and using it",
+            "Dialog > Test runs the dialog as an application would: type, tab,\n\
+             press its buttons, and see what it answers. Dialog > Show JSON\n\
+             shows what is saved.\n\
+             \n\
+             Dialog > Code to use it saves Rust that loads the file and binds\n\
+             every named control and action; paste it into your program.\n\
+             \n\
+             Save writes the JSON; Open reads it back. The designer asks\n\
+             before it throws away changes.",
+        ),
+    ];
+    all.extend(KINDS.iter().map(|(name, _)| {
+        topic(
+            &format!("Control: {}", name.replace('_', " ")),
+            control(name),
+        )
+    }));
+    all
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::KINDS;
 
     #[test]
     fn every_control_has_help() {
         for (name, _) in KINDS {
             assert!(!control(name).is_empty(), "{name}");
         }
+    }
+
+    #[test]
+    fn the_contents_lists_the_topics_then_every_control() {
+        let all = topics(&crate::keys::PC);
+        assert_eq!(all.len(), 8 + KINDS.len());
+        assert!(all.iter().all(|t| !t.title.is_empty() && !t.text.is_empty()));
+        assert_eq!(all.last().unwrap().title, "Control: error line");
+        assert!(all[1].text.contains("F9"));
     }
 
     #[test]

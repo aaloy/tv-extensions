@@ -33,7 +33,7 @@ use std::rc::Rc;
 use surface::{Commands, Surface};
 use tree::ControlTree;
 use turbo_vision::app::{AppHandler, Application};
-use turbo_vision::core::command::{CM_NO, CM_OK, CM_QUIT, CM_USER, CM_YES, CommandId};
+use turbo_vision::core::command::{CM_CANCEL, CM_NO, CM_OK, CM_QUIT, CM_USER, CM_YES, CommandId};
 use turbo_vision::core::event::{Event, EventType, KB_ALT_X};
 use turbo_vision::core::geometry::{Point, Rect};
 use turbo_vision::core::menu_data::{Menu, MenuItem, MenuItemBuilder};
@@ -82,6 +82,7 @@ const CM_INSERT_SECTION: CommandId = CM_USER + 80;
 const CM_MOVE_MENU: CommandId = CM_USER + 24;
 const CM_SET_ORDER: CommandId = CM_USER + 25;
 const CM_HELP_ON: CommandId = CM_USER + 26;
+const CM_HELP_CONTENTS: CommandId = CM_USER + 27;
 /// `CM_MOVE_TO + i` moves the selection to the i-th target of the move menu.
 const CM_MOVE_TO: CommandId = CM_USER + 100;
 /// `CM_INSERT + i` inserts `KINDS[i]`.
@@ -553,6 +554,7 @@ impl AppHandler for Designer {
                 design.borrow_mut().reorder(1);
             }
             CM_SET_ORDER => self.set_order(app),
+            CM_HELP_CONTENTS => help_contents(app),
             CM_HELP_ON => {
                 let text = {
                     let d = design.borrow();
@@ -836,7 +838,7 @@ fn manage_templates(app: &mut Application, dir: &Path) -> Option<DialogSpec> {
             ("~U~se", CM_OK, 10, true),
             ("~R~ename", CM_YES, 12, false),
             ("~D~elete", CM_NO, 12, false),
-            ("Close", turbo_vision::core::command::CM_CANCEL, 10, false),
+            ("Close", CM_CANCEL, 10, false),
         ];
         let total: i16 = buttons.iter().map(|b| b.2 + 2).sum::<i16>() - 2;
         let mut x = ((w - 2 - total) / 2).max(0);
@@ -915,7 +917,7 @@ fn edit_order(app: &mut Application, rows: &[String], selected: usize) -> Option
             ("Move ~u~p", CM_YES, 12, false),
             ("Move ~d~own", CM_NO, 14, false),
             ("~O~K", CM_OK, 8, true),
-            ("Cancel", turbo_vision::core::command::CM_CANCEL, 10, false),
+            ("Cancel", CM_CANCEL, 10, false),
         ];
         let total: i16 = buttons.iter().map(|b| b.2 + 2).sum::<i16>() - 2;
         let mut x = ((w - 2 - total) / 2).max(0);
@@ -948,6 +950,44 @@ fn edit_order(app: &mut Application, rows: &[String], selected: usize) -> Option
             CM_OK => return Some(order),
             _ => return None,
         }
+    }
+}
+
+/// Help > Contents: a list of topics, each shown in turn until Close.
+fn help_contents(app: &mut Application) {
+    let topics = help::topics(keys::current());
+    let mut at = 0;
+    loop {
+        let (sw, sh) = app.terminal.size();
+        let rows = i16::try_from(topics.len()).unwrap_or(i16::MAX).min(sh - 9).max(4);
+        let w: i16 = 44.min(sw);
+        let h: i16 = rows + 6;
+        let mut dialog = Dialog::new(centred(Rect::new(0, 0, sw, sh), w, h), "Help contents");
+        let mut list = ListBox::new(Rect::new(1, 0, w - 3, rows), CM_OK);
+        list.set_items(topics.iter().map(|t| t.title.clone()).collect());
+        list.set_selection(at);
+        let list = dialog.add_typed(list);
+        let buttons = [("~V~iew", CM_OK, 10, true), ("Close", CM_CANCEL, 10, false)];
+        let total: i16 = buttons.iter().map(|b| b.2 + 2).sum::<i16>() - 2;
+        let mut x = ((w - 2 - total) / 2).max(0);
+        for (text, command, width, default) in buttons {
+            dialog.add(Button::new(
+                Rect::new(x, rows + 1, x + width, rows + 3),
+                text,
+                command,
+                default,
+            ));
+            x += width + 2;
+        }
+        dialog.set_initial_focus();
+        if dialog.execute(app) != CM_OK {
+            return;
+        }
+        let Some(picked) = dialog.get(list).and_then(ListBox::get_selection) else {
+            return;
+        };
+        at = picked.min(topics.len() - 1);
+        show_text(app, &topics[at].title, &topics[at].text);
     }
 }
 
@@ -1049,6 +1089,7 @@ fn menu_bar(width: i16) -> MenuBar {
         "~H~elp",
         Menu::from_items(vec![
             item("~H~elp on selection", CM_HELP_ON, Some(k.help)),
+            item("~C~ontents...", CM_HELP_CONTENTS, None),
             item("~K~eys", CM_KEYS, None),
             item("~A~bout", CM_ABOUT, None),
         ]),

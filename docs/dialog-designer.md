@@ -173,7 +173,10 @@ control goes after the selected one, so it starts in a sensible place.
 F1 (Help > Help on selection) explains the selected control: what it is
 for, the JSON keys in its property sheet and what each does, and what value
 it gives your code. With the dialog selected it explains the dialog.
-Help > Keys lists every key for this keyboard.
+Help > Contents lists the topics (getting started, keys, selecting and
+moving, containers, tab order, properties, templates, testing, and one per
+control type): pick one and View shows it, Close leaves. Help > Keys lists
+every key for this keyboard.
 
 ### Properties
 

@@ -682,10 +682,23 @@ fn cancelling_the_tab_order_changes_nothing() {
 }
 
 #[test]
-fn help_shows_what_is_selected() {
+fn f1_shows_help_on_the_selected_control() {
+    use turbo_vision::core::event::KB_F1;
     let mut app = app();
     let mut designer = open_designer(&mut app, customer());
-    designer.design.borrow_mut().select(Sel::top(1));
+    designer.design.borrow_mut().select(Sel::top(1)); // the name input
+    // The help window is modal: queue the key that closes it, then look at
+    // the screen the moment it is up.
     queue(&mut app, &[KB_ENTER]);
-    command(&mut app, &mut designer, CM_HELP_ON);
+    key(&mut app, &mut designer, KB_F1);
+}
+
+#[test]
+fn help_contents_shows_a_topic_and_comes_back_to_the_list() {
+    use turbo_vision::core::event::{KB_DOWN, KB_ESC};
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    // View the second topic, close its text, then close the contents.
+    queue(&mut app, &[KB_DOWN, KB_ENTER, KB_ENTER, KB_ESC]);
+    command(&mut app, &mut designer, CM_HELP_CONTENTS);
 }
