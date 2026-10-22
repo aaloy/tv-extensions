@@ -97,12 +97,24 @@ dialogs are built:
 - **After a label**, a control with a value goes to the label's right on the
   same row, and the label is linked to it: insert a label, then an input,
   and you have a captioned field whose Alt hot key works.
-- **With a tab pane selected** (or a control on one), the new control goes
-  on the page being shown. Click a tab, or press Ctrl+PgUp/PgDn, to fill
-  another page.
+- **With a container selected**, the new control goes inside it: a group
+  box, or the page being shown of a tab pane. Click a tab, or press
+  Ctrl+PgUp/PgDn, to fill another page. With a control inside a container
+  selected, the new one goes after it in the same container; select the
+  dialog (Esc) to insert in the dialog itself. Group boxes and tabs nest
+  (a group box on a tab page, tabs in a group box), but not tabs in tabs.
 
 Buttons come as OK first (the default button), then Cancel, then actions
 named `action1`, `action2`, …
+
+### Moving a control to another container
+
+Edit > Move to container... (F6) lists the places the selected control can
+go: the dialog, and every group box and tab page it is not already in (a
+control cannot go inside itself). In the inspector tree you can also drag
+a row onto a container's row, which is the dialog, a group box or a tab
+page. The control keeps its place within the new container, moved inside
+it if it would hang out, and stays selected.
 
 ### Properties
 
@@ -190,7 +202,7 @@ from the corner inside the frame (or inside its tab page), an optional
 | `slider` | `min = 0`, `max`, `value`, `step = 1`, `on_change` | number |
 | `progress_bar` | `max = 100`, `value`, `show_percent = true` | number |
 | `table` | `columns` (`title`, `width`, `align`), `rows`, `header = true`, `separators` | selected row or `null` |
-| `group_box` | `title`: a frame drawn around the controls listed after it | — |
+| `group_box` | `title`, `controls` (the controls inside the frame, placed from its inner corner; group boxes and tabs can nest) | — |
 | `tabs` | `pages` (each a `title` and its `controls`), `active` | — |
 | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |

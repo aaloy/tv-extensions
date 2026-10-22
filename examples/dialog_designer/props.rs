@@ -412,7 +412,7 @@ fn sheet(c: &Control, others: &[String]) -> Value {
                 flag("separators", "Column ~s~eparators", *separators),
             ]
         }
-        Kind::GroupBox { title } => vec![text("title", "~T~itle", title)],
+        Kind::GroupBox { title, .. } => vec![text("title", "~T~itle", title)],
         Kind::Tabs { pages, active } => {
             let titles: Vec<String> = pages.iter().map(|p| p.title.clone()).collect();
             vec![
@@ -823,8 +823,9 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
                 separators: a.bool("separators"),
             }
         }
-        Kind::GroupBox { .. } => Kind::GroupBox {
+        Kind::GroupBox { controls, .. } => Kind::GroupBox {
             title: a.str("title"),
+            controls: controls.clone(),
         },
         Kind::Tabs { pages, .. } => {
             let titles = a.lines("pages");

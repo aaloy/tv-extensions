@@ -21,6 +21,8 @@ mod templates;
 mod tree;
 
 use model::{Design, KINDS, SECTION_ENDS, Sel};
+#[cfg(test)]
+use model::Place;
 use serde_json::Value;
 use std::cell::RefCell;
 use std::fmt::Write as _;
@@ -72,6 +74,10 @@ const CM_KEYS: CommandId = CM_USER + 19;
 const CM_ABOUT: CommandId = CM_USER + 20;
 const CM_NEW_TEMPLATE: CommandId = CM_USER + 21;
 const CM_SAVE_TEMPLATE: CommandId = CM_USER + 22;
+const CM_MOVE_DROPPED: CommandId = CM_USER + 23;
+const CM_MOVE_MENU: CommandId = CM_USER + 24;
+/// `CM_MOVE_TO + i` moves the selection to the i-th target of the move menu.
+const CM_MOVE_TO: CommandId = CM_USER + 100;
 /// `CM_INSERT + i` inserts `KINDS[i]`.
 const CM_INSERT: CommandId = CM_USER + 50;
 
@@ -85,7 +91,8 @@ Mouse
     corner
   Drag the frame   move the dialog about the desktop
   Double click     properties
-  Inspector tree   click / arrows select a control, Enter edits it
+  Inspector tree   click / arrows select a control, Enter edits it,
+                   drag a control onto a container to move it
   Right click      insert a control
 
 Keys
@@ -98,6 +105,7 @@ Keys
   Del              delete
   Ctrl+D           duplicate
   F7 / F8          earlier / later in tab order
+  F6               move to another container
   Ctrl+PgUp/PgDn   previous / next tab page
   Ctrl+O           show tab order
   Ctrl+Z / Ctrl+Y  undo / redo
@@ -153,25 +161,25 @@ impl Designer {
         }
     }
 
+    fn tree_mut<'a>(&self, app: &'a mut Application) -> Option<&'a mut ControlTree> {
+        let inspector = self.inspector?;
+        app.desktop
+            .get_mut(inspector.window)
+            .and_then(|w| w.get_mut(inspector.tree))
+    }
+
     /// Select in the design what the person moved to in the tree, then
     /// bring the tree up to date with the design.
     fn follow_tree(&mut self, app: &mut Application) {
-        let Some(inspector) = self.inspector else {
-            return;
-        };
-        let Some(tree) = app
-            .desktop
-            .get_mut(inspector.window)
-            .and_then(|w| w.get_mut(inspector.tree))
-        else {
+        let Some(tree) = self.tree_mut(app) else {
             return;
         };
         let mut design = self.design.borrow_mut();
         if let Some(entry) = tree.moved() {
             if let Some((tabs, page)) = entry.page {
                 design.show_page(tabs, page);
-            } else if let Sel::Page { tabs, page, .. } = entry.sel {
-                design.show_page(tabs, page);
+            } else {
+                design.reveal(entry.sel);
             }
             design.select(entry.sel);
         }
@@ -363,23 +371,49 @@ impl Designer {
         show_text(app, "Test result", &format!("{report}{note}"));
     }
 
+    /// The screen position just under the selection, for a popup menu.
+    fn popup_point(&self, app: &Application) -> Point {
+        let design = self.design.borrow();
+        let r = design.rect_of(design.sel);
+        let corner = app
+            .desktop
+            .get(self.surface)
+            .map_or(Point::new(0, 0), |s| s.bounds().a);
+        let desk = app.desktop.bounds().a;
+        let y = if design.sel == Sel::Dialog {
+            r.a.y
+        } else {
+            r.b.y
+        };
+        Point::new(desk.x + corner.x + 1 + r.a.x, desk.y + corner.y + 1 + y)
+    }
+
+    /// Ask where to move the selected control: another container.
+    fn move_menu(&mut self, app: &mut Application) {
+        let targets = self.design.borrow().move_targets();
+        if targets.is_empty() {
+            message_box_ok(app, "There is no other container to move it to.");
+            return;
+        }
+        let items = targets
+            .iter()
+            .zip(0..)
+            .map(|((_, label), i)| {
+                let label: String = label.chars().filter(|&c| c != '~').collect();
+                item(&label, CM_MOVE_TO + i, None)
+            })
+            .collect();
+        let at = self.popup_point(app);
+        if let Some(command) = popup_menu(&mut app.terminal, at, Menu::from_items(items))
+            && let Some((container, _)) = targets.get(usize::from(command - CM_MOVE_TO))
+        {
+            self.design.borrow_mut().move_selected(*container);
+        }
+    }
+
     /// Open the insert menu under the selection.
     fn insert_menu(&mut self, app: &mut Application) {
-        let at = {
-            let design = self.design.borrow();
-            let r = design.rect_of(design.sel);
-            let corner = app
-                .desktop
-                .get(self.surface)
-                .map_or(Point::new(0, 0), |s| s.bounds().a);
-            let desk = app.desktop.bounds().a;
-            let y = if design.sel == Sel::Dialog {
-                r.a.y
-            } else {
-                r.b.y
-            };
-            Point::new(desk.x + corner.x + 1 + r.a.x, desk.y + corner.y + 1 + y)
-        };
+        let at = self.popup_point(app);
         let menu = Menu::from_items(insert_items());
         if let Some(command) = popup_menu(&mut app.terminal, at, menu) {
             self.insert(command);
@@ -452,6 +486,15 @@ impl AppHandler for Designer {
             }
             CM_DUPLICATE => {
                 design.borrow_mut().duplicate();
+            }
+            CM_MOVE_MENU => self.move_menu(app),
+            CM_MOVE_DROPPED => {
+                let dropped = self.tree_mut(app).and_then(ControlTree::take_dropped);
+                if let Some((sel, to)) = dropped {
+                    let mut d = design.borrow_mut();
+                    d.select(sel);
+                    d.move_selected(to);
+                }
             }
             CM_EARLIER => {
                 design.borrow_mut().reorder(-1);
@@ -540,7 +583,7 @@ fn open_inspector(app: &mut Application) -> Inspector {
     window.set_grow_mode(Grow::LO_X | Grow::HI_X | Grow::HI_Y);
     // The tree of controls takes the top half, the selection's JSON the rest.
     let split = ((h - 2) / 2).max(4);
-    let mut tree = ControlTree::new(Rect::new(0, 0, w - 2, split), CM_PROPERTIES);
+    let mut tree = ControlTree::new(Rect::new(0, 0, w - 2, split), CM_PROPERTIES, CM_MOVE_DROPPED);
     tree.set_grow_mode(Grow::HI_X);
     let tree = window.add_typed(tree);
     let mut viewer = TextViewer::new(Rect::new(0, split, w - 2, h - 2)).with_scrollbars(true);
@@ -829,6 +872,8 @@ fn menu_bar(width: i16) -> MenuBar {
             MenuItem::separator(),
             item("~E~arlier in tab order", CM_EARLIER, Some("F7")),
             item("La~t~er in tab order", CM_LATER, Some("F8")),
+            MenuItem::separator(),
+            item("~M~ove to container...", CM_MOVE_MENU, Some("F6")),
         ]),
     ));
     let mut insert = insert_items();

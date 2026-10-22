@@ -17,19 +17,152 @@ pub const MIN_DIALOG: (i16, i16) = (16, 6);
 /// How many edits undo remembers.
 const UNDO_DEPTH: usize = 200;
 
+/// How deep controls nest: a control on a page of tabs inside a group box
+/// inside the dialog is three steps down.
+pub const MAX_DEPTH: usize = 4;
+
+/// Where a control is: from the dialog down, each step names the list of
+/// controls to look in (`slot`: a group box has one, tabs have one per
+/// page; the first step's is always 0, the dialog's own list) and the
+/// control's index in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Place {
+    steps: [(usize, usize); MAX_DEPTH],
+    len: usize,
+}
+
+impl Place {
+    /// The control at `index` in the dialog's own list.
+    pub fn top(index: usize) -> Self {
+        let mut steps = [(0, 0); MAX_DEPTH];
+        steps[0] = (0, index);
+        Self { steps, len: 1 }
+    }
+
+    /// The control at `index` in list `slot` of this control; `None` if
+    /// that is nested too deep.
+    pub fn child(self, slot: usize, index: usize) -> Option<Self> {
+        if self.len >= MAX_DEPTH {
+            return None;
+        }
+        let mut path = self;
+        path.steps[self.len] = (slot, index);
+        path.len += 1;
+        Some(path)
+    }
+
+    pub fn steps(&self) -> &[(usize, usize)] {
+        &self.steps[..self.len]
+    }
+
+    pub fn depth(&self) -> usize {
+        self.len
+    }
+
+    /// The control's index in its list.
+    pub fn index(&self) -> usize {
+        self.steps[self.len - 1].1
+    }
+
+    /// The list of its container it is in.
+    pub fn slot(&self) -> usize {
+        self.steps[self.len - 1].0
+    }
+
+    /// The same place in the list, at `index`.
+    pub fn with_index(self, index: usize) -> Self {
+        let mut path = self;
+        path.steps[self.len - 1].1 = index;
+        path
+    }
+
+    /// The control that holds this one, `None` at the top level.
+    pub fn owner(&self) -> Option<Self> {
+        (self.len > 1).then(|| Self {
+            steps: self.steps,
+            len: self.len - 1,
+        })
+    }
+
+    /// Whether `other` is this control or inside it.
+    pub fn contains(&self, other: &Self) -> bool {
+        other.len >= self.len && other.steps[..self.len] == self.steps[..self.len]
+    }
+
+    /// This path, for a control still there after the control at `removed`
+    /// is taken out of its list: later siblings move up one.
+    pub fn after_removal_of(self, removed: &Self) -> Self {
+        let d = removed.len;
+        let same_list = self.len >= d
+            && self.steps[..d - 1] == removed.steps[..d - 1]
+            && self.steps[d - 1].0 == removed.steps[d - 1].0;
+        if same_list && self.steps[d - 1].1 > removed.steps[d - 1].1 {
+            let mut path = self;
+            path.steps[d - 1].1 -= 1;
+            path
+        } else {
+            self
+        }
+    }
+
+    /// The list this control is in.
+    pub fn container(&self) -> Container {
+        match self.owner() {
+            None => Container::Dialog,
+            Some(owner) => Container::In {
+                owner,
+                slot: self.slot(),
+            },
+        }
+    }
+}
+
+/// A list of controls: the dialog's, or one inside a control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Container {
+    Dialog,
+    /// List `slot` of the control at `owner`: a group box's, or a tab page.
+    In { owner: Place, slot: usize },
+}
+
+impl Container {
+    /// The path of the control at `index` in this list.
+    pub fn at(self, index: usize) -> Option<Place> {
+        match self {
+            Self::Dialog => Some(Place::top(index)),
+            Self::In { owner, slot } => owner.child(slot, index),
+        }
+    }
+}
+
 /// What is selected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sel {
     /// The dialog itself.
     Dialog,
-    /// A control of the dialog, by index.
-    Top(usize),
-    /// A control on a tab page: the tabs' index, the page, the control.
-    Page {
-        tabs: usize,
-        page: usize,
-        index: usize,
-    },
+    /// A control, wherever it is.
+    At(Place),
+}
+
+impl Sel {
+    /// The control at `index` in the dialog's own list.
+    #[cfg(test)]
+    pub fn top(index: usize) -> Self {
+        Self::At(Place::top(index))
+    }
+
+    /// A control on page `page` of the tabs at `tabs` in the dialog's list.
+    #[cfg(test)]
+    pub fn page(tabs: usize, page: usize, index: usize) -> Self {
+        Self::At(Place::top(tabs).child(page, index).expect("two steps fit"))
+    }
+
+    pub fn path(self) -> Option<Place> {
+        match self {
+            Self::Dialog => None,
+            Self::At(path) => Some(path),
+        }
+    }
 }
 
 /// Every control type the designer inserts: the JSON type and its menu
@@ -115,60 +248,79 @@ impl Design {
 
     /// The control `sel` names.
     pub fn control(&self, sel: Sel) -> Option<&Control> {
-        match sel {
-            Sel::Dialog => None,
-            Sel::Top(i) => self.spec.controls.get(i),
-            Sel::Page { tabs, page, index } => pages(&self.spec.controls, tabs)?
-                .get(page)?
-                .controls
-                .get(index),
+        self.at(sel.path()?)
+    }
+
+    fn at(&self, path: Place) -> Option<&Control> {
+        let mut list = &self.spec.controls;
+        let mut found: Option<&Control> = None;
+        for (k, &(slot, index)) in path.steps().iter().enumerate() {
+            if k > 0 {
+                list = found?.child_list(slot)?;
+            }
+            found = Some(list.get(index)?);
         }
+        found
     }
 
     fn control_mut(&mut self, sel: Sel) -> Option<&mut Control> {
-        match sel {
-            Sel::Dialog => None,
-            Sel::Top(i) => self.spec.controls.get_mut(i),
-            Sel::Page { tabs, page, index } => pages_mut(&mut self.spec.controls, tabs)?
-                .get_mut(page)?
-                .controls
-                .get_mut(index),
+        at_mut(&mut self.spec.controls, sel.path()?.steps())
+    }
+
+    /// The list of controls `container` is.
+    pub fn list(&self, container: Container) -> Option<&Vec<Control>> {
+        match container {
+            Container::Dialog => Some(&self.spec.controls),
+            Container::In { owner, slot } => self.at(owner)?.child_list(slot),
+        }
+    }
+
+    fn list_mut(&mut self, container: Container) -> Option<&mut Vec<Control>> {
+        match container {
+            Container::Dialog => Some(&mut self.spec.controls),
+            Container::In { owner, slot } => at_mut(&mut self.spec.controls, owner.steps())?
+                .child_list_mut(slot),
         }
     }
 
     /// The list of controls `sel` belongs to.
     fn siblings_mut(&mut self, sel: Sel) -> Option<&mut Vec<Control>> {
-        match sel {
-            Sel::Dialog => None,
-            Sel::Top(_) => Some(&mut self.spec.controls),
-            Sel::Page { tabs, page, .. } => Some(
-                &mut pages_mut(&mut self.spec.controls, tabs)?
-                    .get_mut(page)?
-                    .controls,
-            ),
+        self.list_mut(sel.path()?.container())
+    }
+
+    /// Where `container` starts inside the dialog's frame, and how big it
+    /// is: the dialog's inside, a group box's inside, or a tab page.
+    pub fn geometry(&self, container: Container) -> (Point, (i16, i16)) {
+        match container {
+            Container::Dialog => (Point::new(0, 0), self.spec.inner_size()),
+            Container::In { owner, .. } => {
+                let Some(c) = self.at(owner) else {
+                    return (Point::new(0, 0), (0, 0));
+                };
+                let (origin, _) = self.geometry(owner.container());
+                let area = inner_area(c);
+                (
+                    Point::new(origin.x + c.x + area.a.x, origin.y + c.y + area.a.y),
+                    (area.width(), area.height()),
+                )
+            }
         }
     }
 
     /// The size of the area `sel`'s control is placed in: the dialog's
-    /// inside, or a tab page.
+    /// inside, a group box's, or a tab page.
     pub fn container_size(&self, sel: Sel) -> (i16, i16) {
-        match sel {
-            Sel::Page { tabs, .. } => self.spec.controls.get(tabs).map_or((0, 0), |t| {
-                let area = page_area(t);
-                (area.width(), area.height())
-            }),
-            _ => self.spec.inner_size(),
+        match sel.path() {
+            Some(path) => self.geometry(path.container()).1,
+            None => self.spec.inner_size(),
         }
     }
 
     /// Where `sel`'s container starts, inside the dialog's frame.
     pub fn container_origin(&self, sel: Sel) -> Point {
-        match sel {
-            Sel::Page { tabs, .. } => self.spec.controls.get(tabs).map_or(Point::new(0, 0), |t| {
-                let area = page_area(t);
-                Point::new(t.x + area.a.x, t.y + area.a.y)
-            }),
-            _ => Point::new(0, 0),
+        match sel.path() {
+            Some(path) => self.geometry(path.container()).0,
+            None => Point::new(0, 0),
         }
     }
 
@@ -189,57 +341,60 @@ impl Design {
     }
 
     /// The front-most control at `p` (inside the frame), or the dialog.
-    /// Controls on the shown page of a tab pane come before the pane.
+    /// Controls inside a container (the shown page of tabs) come before
+    /// the container.
     pub fn hit(&self, p: Point) -> Sel {
-        for (i, c) in self.spec.controls.iter().enumerate().rev() {
-            if !self.rect_of(Sel::Top(i)).contains(p) {
+        self.hit_in(Container::Dialog, p).unwrap_or(Sel::Dialog)
+    }
+
+    fn hit_in(&self, container: Container, p: Point) -> Option<Sel> {
+        let list = self.list(container)?;
+        for (i, c) in list.iter().enumerate().rev() {
+            let path = container.at(i)?;
+            if !self.rect_of(Sel::At(path)).contains(p) {
                 continue;
             }
-            if let Kind::Tabs { pages, active } = &c.kind
-                && let Some(page) = pages.get(*active)
+            if let Some(slot) = shown_slot(c)
+                && let Some(inside) = self.hit_in(Container::In { owner: path, slot }, p)
             {
-                for (index, _) in page.controls.iter().enumerate().rev() {
-                    let sel = Sel::Page {
-                        tabs: i,
-                        page: *active,
-                        index,
-                    };
-                    if self.rect_of(sel).contains(p) {
-                        return sel;
-                    }
-                }
+                return Some(inside);
             }
-            return Sel::Top(i);
+            return Some(Sel::At(path));
         }
-        Sel::Dialog
+        None
     }
 
     /// Every selectable thing in tab order: the dialog, then each control,
-    /// a tab pane followed by the controls of its shown page.
+    /// a container followed by what is in it (a tab pane's shown page).
     pub fn order(&self) -> Vec<Sel> {
         let mut order = vec![Sel::Dialog];
-        for (i, c) in self.spec.controls.iter().enumerate() {
-            order.push(Sel::Top(i));
-            if let Kind::Tabs { pages, active } = &c.kind
-                && let Some(page) = pages.get(*active)
-            {
-                order.extend((0..page.controls.len()).map(|index| Sel::Page {
-                    tabs: i,
-                    page: *active,
-                    index,
-                }));
-            }
-        }
+        self.order_in(Container::Dialog, &mut order);
         order
     }
 
-    /// The tab pane `sel` is, or is on, with its index.
-    pub fn tabs_of(&self, sel: Sel) -> Option<usize> {
-        match sel {
-            Sel::Top(i) if matches!(self.spec.controls.get(i)?.kind, Kind::Tabs { .. }) => Some(i),
-            Sel::Page { tabs, .. } => Some(tabs),
-            _ => None,
+    fn order_in(&self, container: Container, out: &mut Vec<Sel>) {
+        let Some(list) = self.list(container) else {
+            return;
+        };
+        for (i, c) in list.iter().enumerate() {
+            let Some(path) = container.at(i) else {
+                continue;
+            };
+            out.push(Sel::At(path));
+            if let Some(slot) = shown_slot(c) {
+                self.order_in(Container::In { owner: path, slot }, out);
+            }
         }
+    }
+
+    /// The tab pane `sel` is, or is inside (the outermost), with its path.
+    pub fn tabs_of(&self, sel: Sel) -> Option<Place> {
+        let path = sel.path()?;
+        (1..=path.depth()).find_map(|n| {
+            let mut prefix = path;
+            prefix.len = n;
+            matches!(self.at(prefix)?.kind, Kind::Tabs { .. }).then_some(prefix)
+        })
     }
 
     /// Every name in use, on tab pages too.
@@ -281,12 +436,13 @@ impl Design {
         self.select(order[next]);
     }
 
-    /// Select what holds the selection: a page's tab pane, or the dialog.
+    /// Select what holds the selection: its container, or the dialog.
     pub fn select_parent(&mut self) {
-        let parent = match self.sel {
-            Sel::Page { tabs, .. } => Sel::Top(tabs),
-            _ => Sel::Dialog,
-        };
+        let parent = self
+            .sel
+            .path()
+            .and_then(|p| p.owner())
+            .map_or(Sel::Dialog, Sel::At);
         self.select(parent);
     }
 
@@ -351,52 +507,20 @@ impl Design {
     /// Insert a control of the JSON type `type_name`, select it, and return
     /// where it went.
     ///
-    /// It goes on the shown page when a tab pane (or a control on one) is
-    /// selected, else in the dialog; after the selected control in tab
-    /// order; below it, or, after a label with no link, to the label's
-    /// right and linked to it.
+    /// It goes inside the selected container (a group box, or the shown
+    /// page of tabs), else after the selected control in its own list, else
+    /// in the dialog; below the selection, or, after a label with no link,
+    /// to the label's right and linked to it. Tabs never go inside tabs.
     pub fn insert(&mut self, type_name: &str) -> Sel {
-        let on_page = (type_name != "tabs")
-            .then(|| self.tabs_of(self.sel))
-            .flatten()
-            .and_then(|tabs| match &self.spec.controls[tabs].kind {
-                Kind::Tabs { pages, active } if !pages.is_empty() => Some((tabs, *active)),
-                _ => None,
-            });
-        // Where the new control goes in its list.
-        let (into, at) = match (on_page, self.sel) {
-            (Some((tabs, page)), Sel::Page { index, .. }) => (
-                Sel::Page {
-                    tabs,
-                    page,
-                    index: 0,
-                },
-                index + 1,
-            ),
-            (Some((tabs, page)), _) => {
-                let len = pages(&self.spec.controls, tabs).map_or(0, |p| p[page].controls.len());
-                (
-                    Sel::Page {
-                        tabs,
-                        page,
-                        index: 0,
-                    },
-                    len,
-                )
-            }
-            (None, Sel::Top(i)) => (Sel::Top(0), i + 1),
-            (None, Sel::Page { tabs, .. }) => (Sel::Top(0), tabs + 1),
-            (None, Sel::Dialog) => (Sel::Top(0), self.spec.controls.len()),
-        };
-        let (cw, ch) = self.container_size(into);
+        let (into, at) = self.insert_point(type_name);
+        let (cw, ch) = self.geometry(into).1;
         let mut control = self.default_control(type_name, cw);
 
         // Place it: right of an unlinked label, below the selection, or at
         // the top left.
-        let anchor = if self.sel_in(into) {
-            self.selected().cloned()
-        } else {
-            None
+        let anchor = match self.sel {
+            Sel::At(p) if p.container() == into => self.selected().cloned(),
+            _ => None,
         };
         let mut link_label = false;
         match &anchor {
@@ -416,8 +540,19 @@ impl Design {
                 control.y = a.y + a.h.max(1) + usize_gap(type_name);
             }
             None => {
-                control.x = 2.min(cw - 1).max(0);
-                control.y = 1.min(ch - 1).max(0);
+                let (x, y) = match into {
+                    Container::In { owner, .. }
+                        if matches!(
+                            self.at(owner).map(|c| &c.kind),
+                            Some(Kind::GroupBox { .. })
+                        ) =>
+                    {
+                        (1, 0)
+                    }
+                    _ => (2, 1),
+                };
+                control.x = x.min(cw - 1).max(0);
+                control.y = y.min(ch - 1).max(0);
             }
         }
         fit(&mut control, cw, ch);
@@ -429,34 +564,36 @@ impl Design {
         {
             *link = Some(control.name.clone());
         }
-        let list = self.siblings_mut(into).expect("the container exists");
+        let list = self.list_mut(into).expect("the container exists");
         let at = at.min(list.len());
         list.insert(at, control);
-        let sel = match into {
-            Sel::Page { tabs, page, .. } => Sel::Page {
-                tabs,
-                page,
-                index: at,
-            },
-            _ => Sel::Top(at),
-        };
+        let sel = Sel::At(into.at(at).expect("the container has room"));
         self.sel = sel;
         self.changed();
         sel
     }
 
-    /// Whether the selection is a control in the same list as `into`.
-    fn sel_in(&self, into: Sel) -> bool {
-        match (self.sel, into) {
-            (Sel::Top(_), Sel::Top(_)) => true,
-            (
-                Sel::Page { tabs, page, .. },
-                Sel::Page {
-                    tabs: t, page: p, ..
-                },
-            ) => tabs == t && page == p,
-            _ => false,
+    /// The list a new `type_name` control goes in, and where in it.
+    fn insert_point(&self, type_name: &str) -> (Container, usize) {
+        let len_of = |c: Container| self.list(c).map_or(0, Vec::len);
+        let Sel::At(mut path) = self.sel else {
+            return (Container::Dialog, self.spec.controls.len());
+        };
+        if type_name == "tabs"
+            && let Some(outer) = self.tabs_of(self.sel)
+        {
+            // Tabs do not nest: go beside the tabs this is in.
+            path = outer;
         }
+        if let Some(c) = self.at(path)
+            && let Some(slot) = shown_slot(c)
+            && path.child(slot, 0).is_some()
+            && !(type_name == "tabs" && matches!(c.kind, Kind::Tabs { .. }))
+        {
+            let into = Container::In { owner: path, slot };
+            return (into, len_of(into));
+        }
+        (path.container(), path.index() + 1)
     }
 
     /// A new control of `type_name` with its usual size and settings, for a
@@ -620,6 +757,7 @@ impl Design {
                 (30, 6),
                 Kind::GroupBox {
                     title: "Group".into(),
+                    controls: Vec::new(),
                 },
             ),
             "tabs" => (
@@ -712,39 +850,29 @@ impl Design {
         }
     }
 
-    /// Remove the selected control (a tab pane with its pages), and any
-    /// label link to it. Selects what came before it.
+    /// Remove the selected control (with what is inside it), and any label
+    /// link to it. Selects what came before it.
     pub fn delete(&mut self) -> bool {
         let sel = self.sel;
         let Some(removed) = self.control(sel).cloned() else {
             return false;
         };
+        let Sel::At(path) = sel else {
+            return false;
+        };
         self.snapshot();
         let list = self.siblings_mut(sel).expect("a control has siblings");
-        let index = match sel {
-            Sel::Top(i) | Sel::Page { index: i, .. } => i,
-            Sel::Dialog => unreachable!(),
-        };
-        list.remove(index);
-        // Names that went away: the control's, and its pages' controls'.
+        list.remove(path.index());
+        // Names that went away: the control's, and those inside it.
         let mut gone = vec![removed.name.clone()];
-        if let Kind::Tabs { pages, .. } = &removed.kind {
-            gone.extend(
-                pages
-                    .iter()
-                    .flat_map(|p| p.controls.iter().map(|c| c.name.clone())),
-            );
+        for list in removed.child_lists() {
+            visit_all(list, &mut |c| gone.push(c.name.clone()));
         }
         unlink(&mut self.spec.controls, &gone);
-        self.sel = match sel {
-            Sel::Top(0) | Sel::Dialog => Sel::Dialog,
-            Sel::Top(i) => Sel::Top(i - 1),
-            Sel::Page { tabs, index: 0, .. } => Sel::Top(tabs),
-            Sel::Page { tabs, page, index } => Sel::Page {
-                tabs,
-                page,
-                index: index - 1,
-            },
+        self.sel = if path.index() > 0 {
+            Sel::At(path.with_index(path.index() - 1))
+        } else {
+            path.owner().map_or(Sel::Dialog, Sel::At)
         };
         self.changed();
         true
@@ -756,27 +884,24 @@ impl Design {
         let Some(mut copy) = self.control(sel).cloned() else {
             return false;
         };
+        let Sel::At(path) = sel else {
+            return false;
+        };
         let (cw, ch) = self.container_size(sel);
         self.rename_copy(&mut copy);
         copy.y += copy.h.max(1);
         fit(&mut copy, cw, ch);
         self.snapshot();
         let list = self.siblings_mut(sel).expect("a control has siblings");
-        let index = match sel {
-            Sel::Top(i) | Sel::Page { index: i, .. } => i + 1,
-            Sel::Dialog => unreachable!(),
-        };
+        let index = path.index() + 1;
         list.insert(index, copy);
-        self.sel = match sel {
-            Sel::Page { tabs, page, .. } => Sel::Page { tabs, page, index },
-            _ => Sel::Top(index),
-        };
+        self.sel = Sel::At(path.with_index(index));
         self.changed();
         true
     }
 
-    /// Give a copied control, and its pages' controls, names not in use,
-    /// keeping links among the copies.
+    /// Give a copied control, and the controls inside it, names not in
+    /// use, keeping links among the copies.
     fn rename_copy(&self, copy: &mut Control) {
         let mut taken = self.names();
         let mut fresh = |name: &str| -> String {
@@ -789,25 +914,36 @@ impl Design {
             new
         };
         copy.name = fresh(&copy.name);
-        if let Kind::Tabs { pages, .. } = &mut copy.kind {
-            let mut renames = Vec::new();
-            for c in pages.iter_mut().flat_map(|p| p.controls.iter_mut()) {
-                let new = fresh(&c.name);
-                renames.push((c.name.clone(), new.clone()));
-                c.name = new;
+        let mut renames = Vec::new();
+        let slots = copy.child_lists().len();
+        for slot in 0..slots {
+            if let Some(list) = copy.child_list_mut(slot) {
+                for_each_mut(list, &mut |c| {
+                    let new = fresh(&c.name);
+                    renames.push((c.name.clone(), new.clone()));
+                    c.name = new;
+                });
             }
-            for c in pages.iter_mut().flat_map(|p| p.controls.iter_mut()) {
-                if let Kind::Label {
-                    link: Some(link), ..
-                } = &mut c.kind
-                    && let Some((_, new)) = renames.iter().find(|(old, _)| old == link)
-                {
-                    *link = new.clone();
-                }
+        }
+        if slots == 0 {
+            if let Kind::Label { link, .. } = &mut copy.kind {
+                // A copied label captions nothing until it is linked again.
+                *link = None;
             }
-        } else if let Kind::Label { link, .. } = &mut copy.kind {
-            // A copied label captions nothing until it is linked again.
-            *link = None;
+            return;
+        }
+        for slot in 0..slots {
+            if let Some(list) = copy.child_list_mut(slot) {
+                for_each_mut(list, &mut |c| {
+                    if let Kind::Label {
+                        link: Some(link), ..
+                    } = &mut c.kind
+                        && let Some((_, new)) = renames.iter().find(|(old, _)| old == link)
+                    {
+                        *link = new.clone();
+                    }
+                });
+            }
         }
     }
 
@@ -869,35 +1005,28 @@ impl Design {
     /// in tab order, among its siblings.
     pub fn reorder(&mut self, delta: isize) -> bool {
         let sel = self.sel;
-        let index = match sel {
-            Sel::Top(i) | Sel::Page { index: i, .. } => i,
-            Sel::Dialog => return false,
+        let Sel::At(path) = sel else {
+            return false;
         };
+        let index = path.index();
         let len = self.siblings_mut(sel).map_or(0, |l| l.len());
         let Some(to) = index.checked_add_signed(delta).filter(|&to| to < len) else {
             return false;
         };
         self.snapshot();
         self.siblings_mut(sel).expect("checked").swap(index, to);
-        self.sel = match sel {
-            Sel::Page { tabs, page, .. } => Sel::Page {
-                tabs,
-                page,
-                index: to,
-            },
-            _ => Sel::Top(to),
-        };
+        self.sel = Sel::At(path.with_index(to));
         self.changed();
         true
     }
 
     /// Show page `page` of the tab pane at `tabs`; it is also the page the
     /// dialog opens on. Not an undoable edit.
-    pub fn show_page(&mut self, tabs: usize, page: usize) -> bool {
+    pub fn show_page(&mut self, tabs: Place, page: usize) -> bool {
         let Some(Control {
             kind: Kind::Tabs { pages, active },
             ..
-        }) = self.spec.controls.get_mut(tabs)
+        }) = self.control_mut(Sel::At(tabs))
         else {
             return false;
         };
@@ -905,11 +1034,141 @@ impl Design {
             return false;
         }
         *active = page;
-        if let Sel::Page { tabs: t, .. } = self.sel
-            && t == tabs
+        if let Sel::At(sel) = self.sel
+            && tabs.contains(&sel)
+            && sel != tabs
         {
-            self.sel = Sel::Top(tabs);
+            self.sel = Sel::At(tabs);
         }
+        self.changed();
+        true
+    }
+
+    /// Show the pages of tabs that lead to `sel`, so it can be seen.
+    pub fn reveal(&mut self, sel: Sel) {
+        let Some(path) = sel.path() else {
+            return;
+        };
+        for k in 1..path.depth() {
+            let mut tabs = path;
+            tabs.len = k;
+            if matches!(self.at(tabs).map(|c| &c.kind), Some(Kind::Tabs { .. })) {
+                self.show_page(tabs, path.steps()[k].0);
+            }
+        }
+    }
+
+    /// Where the selected control can be moved to, with a name for each:
+    /// the dialog, and the group boxes and tab pages it is not in or being.
+    pub fn move_targets(&self) -> Vec<(Container, String)> {
+        let Sel::At(from) = self.sel else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        if self.can_move(from, Container::Dialog) {
+            out.push((Container::Dialog, "Dialog".to_string()));
+        }
+        self.collect_targets(Container::Dialog, from, "", &mut out);
+        out
+    }
+
+    fn collect_targets(
+        &self,
+        container: Container,
+        from: Place,
+        prefix: &str,
+        out: &mut Vec<(Container, String)>,
+    ) {
+        let Some(list) = self.list(container) else {
+            return;
+        };
+        for (i, c) in list.iter().enumerate() {
+            let Some(path) = container.at(i) else {
+                continue;
+            };
+            let name = format!("{prefix}{}", c.describe());
+            for slot in 0..c.child_lists().len() {
+                let into = Container::In { owner: path, slot };
+                let label = match &c.kind {
+                    Kind::Tabs { pages, .. } => {
+                        let title: String =
+                            pages[slot].title.chars().filter(|&ch| ch != '~').collect();
+                        format!("{name} > page \"{title}\"")
+                    }
+                    _ => name.clone(),
+                };
+                if self.can_move(from, into) {
+                    out.push((into, label.clone()));
+                }
+                self.collect_targets(into, from, &format!("{label} > "), out);
+            }
+        }
+    }
+
+    /// Whether the control at `from` can go to the end of `to`: not where
+    /// it already is, not inside itself, not tabs in tabs, and not nested
+    /// too deep.
+    pub fn can_move(&self, from: Place, to: Container) -> bool {
+        let Some(control) = self.at(from) else {
+            return false;
+        };
+        if to == from.container() {
+            return false;
+        }
+        let new_depth = match to {
+            Container::Dialog => 1,
+            Container::In { owner, .. } => {
+                if from.contains(&owner) {
+                    return false;
+                }
+                owner.depth() + 1
+            }
+        };
+        if new_depth + height(control) - 1 > MAX_DEPTH {
+            return false;
+        }
+        let mut has_tabs = matches!(control.kind, Kind::Tabs { .. });
+        for list in control.child_lists() {
+            visit_all(list, &mut |c| has_tabs |= matches!(c.kind, Kind::Tabs { .. }));
+        }
+        if has_tabs
+            && let Container::In { owner, .. } = to
+            && self.tabs_of(Sel::At(owner)).is_some()
+        {
+            return false;
+        }
+        true
+    }
+
+    /// Move the selected control into `to`, at the end of its list, kept
+    /// inside it. The control stays selected, and its tab page is shown.
+    pub fn move_selected(&mut self, to: Container) -> bool {
+        let Sel::At(from) = self.sel else {
+            return false;
+        };
+        if !self.can_move(from, to) {
+            return false;
+        }
+        self.snapshot();
+        let mut control = self
+            .siblings_mut(self.sel)
+            .expect("a control has siblings")
+            .remove(from.index());
+        let to = match to {
+            Container::Dialog => Container::Dialog,
+            Container::In { owner, slot } => Container::In {
+                owner: owner.after_removal_of(&from),
+                slot,
+            },
+        };
+        let (cw, ch) = self.geometry(to).1;
+        fit(&mut control, cw, ch);
+        let list = self.list_mut(to).expect("the target exists");
+        list.push(control);
+        let index = list.len() - 1;
+        let sel = Sel::At(to.at(index).expect("the target has room"));
+        self.sel = sel;
+        self.reveal(sel);
         self.changed();
         true
     }
@@ -1000,26 +1259,61 @@ pub fn page_area(tabs: &Control) -> Rect {
     TabbedPane::new(Rect::new(0, 0, tabs.w, tabs.h)).page_area()
 }
 
-fn pages(controls: &[Control], tabs: usize) -> Option<&Vec<PageSpec>> {
-    match &controls.get(tabs)?.kind {
-        Kind::Tabs { pages, .. } => Some(pages),
+/// A container's inside, in the container's own space: the page area of
+/// tabs, the space within a group box's frame.
+fn inner_area(c: &Control) -> Rect {
+    match c.kind {
+        Kind::Tabs { .. } => page_area(c),
+        Kind::GroupBox { .. } => Rect::new(1, 1, (c.w - 1).max(1), (c.h - 1).max(1)),
+        _ => Rect::new(0, 0, 0, 0),
+    }
+}
+
+/// The list a container shows: the shown page of tabs, a group box's.
+fn shown_slot(c: &Control) -> Option<usize> {
+    match &c.kind {
+        Kind::Tabs { pages, active } if !pages.is_empty() => Some((*active).min(pages.len() - 1)),
+        Kind::GroupBox { .. } => Some(0),
         _ => None,
     }
 }
 
-fn pages_mut(controls: &mut [Control], tabs: usize) -> Option<&mut Vec<PageSpec>> {
-    match &mut controls.get_mut(tabs)?.kind {
-        Kind::Tabs { pages, .. } => Some(pages),
-        _ => None,
+/// How many levels a control spans: 1 for one with nothing inside it.
+fn height(c: &Control) -> usize {
+    1 + c
+        .child_lists()
+        .iter()
+        .flat_map(|l| l.iter())
+        .map(height)
+        .max()
+        .unwrap_or(0)
+}
+
+fn at_mut<'a>(list: &'a mut [Control], steps: &[(usize, usize)]) -> Option<&'a mut Control> {
+    let (&(_, index), rest) = steps.split_first()?;
+    let c = list.get_mut(index)?;
+    match rest.first() {
+        None => Some(c),
+        Some(&(slot, _)) => at_mut(c.child_list_mut(slot)?, rest),
+    }
+}
+
+fn visit_all(controls: &[Control], f: &mut impl FnMut(&Control)) {
+    for c in controls {
+        f(c);
+        for list in c.child_lists() {
+            visit_all(list, f);
+        }
     }
 }
 
 fn for_each_mut(controls: &mut [Control], f: &mut impl FnMut(&mut Control)) {
     for c in controls {
         f(c);
-        if let Kind::Tabs { pages, .. } = &mut c.kind {
-            for p in pages {
-                for_each_mut(&mut p.controls, f);
+        let slots = c.child_lists().len();
+        for slot in 0..slots {
+            if let Some(list) = c.child_list_mut(slot) {
+                for_each_mut(list, f);
             }
         }
     }
@@ -1059,7 +1353,7 @@ mod tests {
     fn inserting_names_places_and_selects() {
         let mut d = design();
         let sel = d.insert("input");
-        assert_eq!(sel, Sel::Top(0));
+        assert_eq!(sel, Sel::top(0));
         let c = d.selected().unwrap();
         assert_eq!(c.name, "input1");
         assert_eq!((c.x, c.y), (2, 1));
@@ -1076,8 +1370,8 @@ mod tests {
         let mut d = design();
         d.insert("label");
         d.insert("input");
-        let label = d.control(Sel::Top(0)).unwrap();
-        let input = d.control(Sel::Top(1)).unwrap();
+        let label = d.control(Sel::top(0)).unwrap();
+        let input = d.control(Sel::top(1)).unwrap();
         assert_eq!(input.y, label.y);
         assert_eq!(input.x, label.x + label.w + 1);
         assert_eq!(
@@ -1110,26 +1404,12 @@ mod tests {
         let mut d = design();
         d.insert("tabs");
         let sel = d.insert("check_box");
-        assert_eq!(
-            sel,
-            Sel::Page {
-                tabs: 0,
-                page: 0,
-                index: 0
-            }
-        );
+        assert_eq!(sel, Sel::page(0, 0, 0));
         // Another tab pane is never put on a page.
-        assert_eq!(d.insert("tabs"), Sel::Top(1));
-        d.select(Sel::Top(0));
-        d.show_page(0, 1);
-        assert_eq!(
-            d.insert("input"),
-            Sel::Page {
-                tabs: 0,
-                page: 1,
-                index: 0
-            }
-        );
+        assert_eq!(d.insert("tabs"), Sel::top(1));
+        d.select(Sel::top(0));
+        d.show_page(Place::top(0), 1);
+        assert_eq!(d.insert("input"), Sel::page(0, 1, 0));
     }
 
     #[test]
@@ -1142,8 +1422,8 @@ mod tests {
         let r = d.rect_of(page_child);
         assert_eq!(d.hit(r.a), page_child);
         // The pane's own strip is the pane.
-        let pane = d.rect_of(Sel::Top(1));
-        assert_eq!(d.hit(pane.a), Sel::Top(1));
+        let pane = d.rect_of(Sel::top(1));
+        assert_eq!(d.hit(pane.a), Sel::top(1));
         // A spot nothing covers is the dialog.
         let (w, h) = d.spec.inner_size();
         assert_eq!(d.hit(Point::new(w - 1, h - 1)), Sel::Dialog);
@@ -1176,9 +1456,9 @@ mod tests {
         d.insert("label");
         d.insert("input");
         assert!(d.delete());
-        assert_eq!(d.sel, Sel::Top(0));
+        assert_eq!(d.sel, Sel::top(0));
         assert!(matches!(
-            d.control(Sel::Top(0)).unwrap().kind,
+            d.control(Sel::top(0)).unwrap().kind,
             Kind::Label { link: None, .. }
         ));
         assert!(d.spec.check().is_ok());
@@ -1190,9 +1470,9 @@ mod tests {
         d.insert("tabs");
         d.insert("label");
         d.insert("input");
-        d.select(Sel::Top(0));
+        d.select(Sel::top(0));
         assert!(d.duplicate());
-        assert_eq!(d.sel, Sel::Top(1));
+        assert_eq!(d.sel, Sel::top(1));
         assert_eq!(d.selected().unwrap().name, "tabs2");
         assert!(d.spec.check().is_ok(), "{:?}", d.spec.check());
         // The copied page's label links to the copied input.
@@ -1214,7 +1494,7 @@ mod tests {
         d.insert("input");
         d.insert("memo");
         assert!(d.reorder(-1));
-        assert_eq!(d.sel, Sel::Top(0));
+        assert_eq!(d.sel, Sel::top(0));
         assert_eq!(d.selected().unwrap().name, "memo1");
         assert!(!d.reorder(-1));
     }
@@ -1226,13 +1506,13 @@ mod tests {
         d.insert("input");
         d.select(Sel::Dialog);
         d.select_next(true);
-        assert_eq!(d.sel, Sel::Top(0));
+        assert_eq!(d.sel, Sel::top(0));
         d.select_next(true);
-        assert!(matches!(d.sel, Sel::Page { .. }));
+        assert_eq!(d.sel.path().unwrap().depth(), 2);
         d.select_next(true);
         assert_eq!(d.sel, Sel::Dialog);
         d.select_next(false);
-        assert!(matches!(d.sel, Sel::Page { .. }));
+        assert_eq!(d.sel.path().unwrap().depth(), 2);
     }
 
     #[test]
@@ -1279,7 +1559,7 @@ mod tests {
         c.name = "email".into();
         d.replace_selected(&c).unwrap();
         assert!(matches!(
-            &d.control(Sel::Top(0)).unwrap().kind,
+            &d.control(Sel::top(0)).unwrap().kind,
             Kind::Label { link: Some(l), .. } if l == "email"
         ));
 
@@ -1289,5 +1569,151 @@ mod tests {
         let before = d.spec.clone();
         assert!(d.replace_selected(&c).is_err());
         assert_eq!(d.spec, before);
+    }
+
+    #[test]
+    fn controls_inserted_with_a_group_box_selected_go_inside_it() {
+        let mut d = design();
+        d.insert("group_box");
+        let sel = d.insert("input");
+        assert_eq!(sel, Sel::At(Place::top(0).child(0, 0).unwrap()));
+        let Kind::GroupBox { controls, .. } = &d.control(Sel::top(0)).unwrap().kind else {
+            unreachable!()
+        };
+        assert_eq!(controls.len(), 1);
+        // It sits inside the box's frame, and the next goes below it.
+        let r = d.rect_of(sel);
+        let frame = d.rect_of(Sel::top(0));
+        assert!(frame.contains(r.a) && frame.contains(Point::new(r.b.x - 1, r.b.y - 1)));
+        let second = d.insert("input");
+        assert_eq!(second, Sel::At(Place::top(0).child(0, 1).unwrap()));
+        assert!(d.rect_of(second).a.y > r.a.y);
+        assert!(d.spec.check().is_ok());
+        // With the dialog selected, a control goes in the dialog.
+        d.select(Sel::Dialog);
+        assert_eq!(d.insert("memo"), Sel::top(1));
+    }
+
+    #[test]
+    fn containers_nest_a_group_on_a_page_holds_controls() {
+        let mut d = design();
+        d.insert("tabs");
+        let group = d.insert("group_box");
+        assert_eq!(group, Sel::page(0, 0, 0));
+        let input = d.insert("input");
+        let path = input.path().unwrap();
+        assert_eq!(path.depth(), 3);
+        // Hit testing finds the innermost control.
+        let r = d.rect_of(input);
+        assert_eq!(d.hit(r.a), input);
+        // Tabs never go inside tabs, however deep the selection is.
+        let tabs = d.insert("tabs");
+        assert_eq!(tabs, Sel::top(1));
+        assert!(d.spec.check().is_ok(), "{:?}", d.spec.check());
+    }
+
+    #[test]
+    fn deleting_inside_a_group_selects_the_one_before_or_the_group() {
+        let mut d = design();
+        d.insert("group_box");
+        let first = d.insert("input");
+        d.insert("input");
+        assert!(d.delete());
+        assert_eq!(d.sel, first);
+        assert!(d.delete());
+        assert_eq!(d.sel, Sel::top(0));
+    }
+
+    #[test]
+    fn a_control_moves_to_another_container() {
+        let mut d = design();
+        d.insert("group_box");
+        d.select(Sel::Dialog);
+        d.insert("input");
+        let input = d.sel;
+        let into = Container::In {
+            owner: Place::top(0),
+            slot: 0,
+        };
+        assert!(d.move_targets().iter().any(|(c, _)| *c == into));
+        assert!(d.move_selected(into));
+        assert_eq!(d.sel, Sel::At(Place::top(0).child(0, 0).unwrap()));
+        assert_eq!(d.spec.controls.len(), 1);
+        // And back out; it is not offered where it already is.
+        assert!(!d.move_selected(into));
+        assert!(d.move_selected(Container::Dialog));
+        assert_eq!(d.sel, Sel::top(1));
+        assert_eq!(d.selected().unwrap().name, "input1");
+        let _ = input;
+        // One undo puts it back inside.
+        assert!(d.undo());
+        assert_eq!(d.spec.controls.len(), 1);
+    }
+
+    #[test]
+    fn a_move_is_refused_into_itself_or_tabs_in_tabs() {
+        let mut d = design();
+        d.insert("group_box");
+        d.insert("group_box"); // inside the first
+        d.select(Sel::top(0));
+        let inner = Container::In {
+            owner: Place::top(0).child(0, 0).unwrap(),
+            slot: 0,
+        };
+        assert!(!d.can_move(Place::top(0), inner), "into its own child");
+        assert!(d.move_targets().is_empty() || d.move_targets().iter().all(|(c, _)| *c != inner));
+        d.select(Sel::Dialog);
+        d.insert("tabs");
+        let tabs = d.sel;
+        d.select(Sel::Dialog);
+        d.insert("tabs");
+        let other = d.sel.path().unwrap();
+        let page = Container::In {
+            owner: tabs.path().unwrap(),
+            slot: 0,
+        };
+        assert!(!d.can_move(other, page), "tabs in tabs");
+    }
+
+    #[test]
+    fn moving_past_a_later_sibling_keeps_the_target() {
+        // The target group is after the control in the same list: taking
+        // the control out shifts the group's index.
+        let mut d = design();
+        d.insert("input");
+        d.select(Sel::Dialog);
+        d.insert("group_box");
+        d.select(Sel::top(0));
+        let group = Container::In {
+            owner: Place::top(1),
+            slot: 0,
+        };
+        assert!(d.move_selected(group));
+        assert_eq!(d.spec.controls.len(), 1);
+        assert_eq!(d.sel, Sel::At(Place::top(0).child(0, 0).unwrap()));
+        assert_eq!(d.selected().unwrap().name, "input1");
+    }
+
+    #[test]
+    fn duplicating_a_group_copies_what_is_inside_with_fresh_names() {
+        let mut d = design();
+        d.insert("group_box");
+        d.insert("label");
+        d.insert("input");
+        d.select(Sel::top(0));
+        assert!(d.duplicate());
+        assert!(d.spec.check().is_ok(), "{:?}", d.spec.check());
+        let copy = d.selected().unwrap();
+        let Kind::GroupBox { controls, .. } = &copy.kind else {
+            unreachable!()
+        };
+        assert_eq!(controls[1].name, "input2");
+        assert_eq!(
+            controls[0].kind,
+            Kind::Label {
+                text: "~L~abel".into(),
+                link: Some("input2".into())
+            }
+        );
     }
 }

@@ -164,7 +164,7 @@ fn enter_opens_the_property_sheet_and_ok_applies_it() {
     use turbo_vision::core::event::KB_ALT_O;
     let mut app = app();
     let mut designer = open_designer(&mut app, customer());
-    designer.design.borrow_mut().select(Sel::Top(1)); // the name input
+    designer.design.borrow_mut().select(Sel::top(1)); // the name input
     // The sheet opens on its General page, on "Starting text".
     queue_text(&mut app, "Ada");
     queue_key(&mut app, KB_ALT_O);
@@ -257,7 +257,7 @@ fn print_for_docs() {
     app.set_menu_bar(menu_bar(width));
     app.set_status_line(status_line(width, height));
     let mut designer = open_designer(&mut app, customer());
-    designer.design.borrow_mut().select(Sel::Top(3));
+    designer.design.borrow_mut().select(Sel::top(3));
     designer.refresh(&mut app);
     app.draw();
     println!("{}", screen(&app));
@@ -282,10 +282,10 @@ fn the_tree_lists_the_controls_and_follows_the_selection() {
     assert!(text.contains("input \"name\""), "{text}");
     assert!(text.contains("button \"Cancel\""), "{text}");
 
-    designer.design.borrow_mut().select(Sel::Top(3));
+    designer.design.borrow_mut().select(Sel::top(3));
     designer.refresh(&mut app);
     let row = tree(&mut app, &designer).current().unwrap();
-    assert_eq!(row.sel, Sel::Top(3));
+    assert_eq!(row.sel, Sel::top(3));
 }
 
 #[test]
@@ -293,13 +293,13 @@ fn moving_in_the_tree_selects_in_the_design() {
     let mut app = app();
     let mut designer = open_designer(&mut app, customer());
     designer.refresh(&mut app);
-    designer.design.borrow_mut().select(Sel::Top(1));
+    designer.design.borrow_mut().select(Sel::top(1));
     designer.refresh(&mut app);
     tree(&mut app, &designer).handle_event(&mut Event::keyboard(KB_DOWN));
     designer.refresh(&mut app);
-    assert_eq!(designer.design.borrow().sel, Sel::Top(2));
+    assert_eq!(designer.design.borrow().sel, Sel::top(2));
     // And the tree stays where the person put it.
-    assert_eq!(tree(&mut app, &designer).current().unwrap().sel, Sel::Top(2));
+    assert_eq!(tree(&mut app, &designer).current().unwrap().sel, Sel::top(2));
 }
 
 #[test]
@@ -320,11 +320,11 @@ fn tab_pages_are_rows_with_their_controls() {
     let mut designer = open_designer(&mut app, Design::new(spec, None));
     designer.refresh(&mut app);
     let found = tree(&mut app, &designer).entries().to_vec();
-    assert!(found.iter().any(|e| e.page == Some((16, 1))), "{found:?}");
+    assert!(found.iter().any(|e| e.page == Some((Place::top(16), 1))), "{found:?}");
     assert!(
         found
             .iter()
-            .any(|e| matches!(e.sel, Sel::Page { page: 1, .. })),
+            .any(|e| e.sel.path().is_some_and(|p| p.depth() == 2 && p.slot() == 1)),
         "{found:?}"
     );
 }
@@ -439,4 +439,88 @@ fn a_dialog_is_saved_as_a_template() {
     assert_eq!(saved.len(), 1, "{saved:?}");
     assert_eq!(saved[0].spec.title, "Customer");
     assert_eq!(saved[0].spec, designer.design.borrow().spec);
+}
+
+fn group_design() -> Design {
+    let spec = DialogSpec::from_json(
+        r#"{ "title": "G", "width": 50, "height": 16, "controls": [
+            { "type": "group_box", "x": 2, "y": 1, "w": 30, "h": 8, "title": "Box", "controls": [
+                { "type": "input", "name": "inside", "x": 1, "y": 1, "w": 10, "h": 1 }
+            ] },
+            { "type": "input", "name": "outside", "x": 2, "y": 10, "w": 10, "h": 1 }
+        ] }"#,
+    )
+    .unwrap();
+    Design::new(spec, None)
+}
+
+#[test]
+fn the_tree_nests_what_a_group_box_holds() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, group_design());
+    designer.refresh(&mut app);
+    let labels: Vec<String> = tree(&mut app, &designer)
+        .entries()
+        .iter()
+        .map(|e| e.label.clone())
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            "Dialog \"G\"",
+            "group_box \"Box\"",
+            "input \"inside\"",
+            "input \"outside\""
+        ]
+    );
+}
+
+#[test]
+fn dragging_a_row_onto_a_container_reparents_the_control() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, group_design());
+    designer.refresh(&mut app);
+    // Rows by line: 0 dialog, 1 group box, 2 inside, 3 outside.
+    let tree_at = |line: i16| Point::new(2, line);
+    let mut press = Event::mouse(EventType::MouseDown, tree_at(3), MB_LEFT_BUTTON, false);
+    tree(&mut app, &designer).handle_event(&mut press);
+    let mut release = Event::mouse(EventType::MouseUp, tree_at(1), MB_LEFT_BUTTON, false);
+    tree(&mut app, &designer).handle_event(&mut release);
+    assert_eq!(release.what, EventType::Command);
+    command(&mut app, &mut designer, release.command);
+    let d = designer.design.borrow();
+    assert_eq!(d.spec.controls.len(), 1, "it left the dialog's own list");
+    let Kind::GroupBox { controls, .. } = &d.spec.controls[0].kind else {
+        unreachable!()
+    };
+    assert_eq!(controls.len(), 2);
+    assert_eq!(controls[1].name, "outside");
+}
+
+#[test]
+fn dropping_on_a_plain_control_changes_nothing() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, group_design());
+    designer.refresh(&mut app);
+    let mut press = Event::mouse(EventType::MouseDown, Point::new(2, 3), MB_LEFT_BUTTON, false);
+    tree(&mut app, &designer).handle_event(&mut press);
+    let mut release = Event::mouse(EventType::MouseUp, Point::new(2, 2), MB_LEFT_BUTTON, false);
+    tree(&mut app, &designer).handle_event(&mut release);
+    assert_ne!(release.what, EventType::Command);
+    assert_eq!(designer.design.borrow().spec.controls.len(), 2);
+}
+
+#[test]
+fn the_move_menu_lists_the_other_containers() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, group_design());
+    designer.refresh(&mut app);
+    designer.design.borrow_mut().select(Sel::top(1)); // outside
+    let targets = designer.design.borrow().move_targets();
+    assert_eq!(targets.len(), 1, "{targets:?}");
+    assert!(targets[0].1.contains("Box"), "{targets:?}");
+    queue(&mut app, &[KB_ENTER]);
+    command(&mut app, &mut designer, CM_MOVE_MENU);
+    assert_eq!(designer.design.borrow().spec.controls.len(), 1);
+    assert_eq!(designer.design.borrow().sel.path().unwrap().depth(), 2);
 }

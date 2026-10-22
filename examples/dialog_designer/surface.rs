@@ -175,12 +175,13 @@ impl Surface {
         let sel = design.hit(inner);
 
         // A click on a tab pane's strip shows that page.
-        if let Sel::Top(i) = sel
-            && let Some(c) = design.spec.controls.get(i)
+        if let Sel::At(path) = sel
+            && let Some(c) = design.control(sel)
             && matches!(c.kind, Kind::Tabs { .. })
-            && inner.y - c.y < 3
+            && inner.y - design.rect_of(sel).a.y < 3
         {
-            let local = Point::new(inner.x - c.x, inner.y - c.y);
+            let corner = design.rect_of(sel).a;
+            let local = Point::new(inner.x - corner.x, inner.y - corner.y);
             let name = c.name.clone();
             if let Some(pane) = self
                 .live
@@ -190,7 +191,7 @@ impl Surface {
                 let mut click = Event::mouse(EventType::MouseDown, local, MB_LEFT_BUTTON, false);
                 pane.handle_event(&mut click);
                 let page = pane.active();
-                design.show_page(i, page);
+                design.show_page(path, page);
             }
         }
 
@@ -304,7 +305,8 @@ impl Surface {
                 let forward = event.key_code == KB_PGDN;
                 let sel = design.sel;
                 if let Some(tabs) = design.tabs_of(sel)
-                    && let Kind::Tabs { pages, active } = &design.spec.controls[tabs].kind
+                    && let Some(Kind::Tabs { pages, active }) =
+                        design.control(Sel::At(tabs)).map(|c| &c.kind)
                     && !pages.is_empty()
                 {
                     let len = pages.len();
@@ -361,7 +363,7 @@ impl Surface {
             Sel::Dialog => {
                 Self::paint(terminal, Rect::new(w - 1, h - 1, w, h), handle);
             }
-            sel => {
+            sel @ Sel::At(_) => {
                 let mut r = design.rect_of(sel);
                 r.move_by(1, 1);
                 Self::paint(terminal, r, selected);

@@ -94,7 +94,7 @@
 //! | `slider` | `min = 0`, `max`, `value`, `step = 1`, `on_change` | number |
 //! | `progress_bar` | `max = 100`, `value`, `show_percent = true` | number |
 //! | `table` | `columns` (`title`, `width`, `align`), `rows`, `header = true`, `separators` | selected row or `null` |
-//! | `group_box` | `title` (a frame drawn around the controls after it) | — |
+//! | `group_box` | `title`, `controls` (the controls inside the frame, placed from its inner corner) | — |
 //! | `tabs` | `pages` (each `title` and `controls`), `active` | — |
 //! | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 //! | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |

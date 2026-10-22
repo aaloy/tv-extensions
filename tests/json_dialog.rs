@@ -433,3 +433,47 @@ fn a_tree_is_saved_as_plainly_as_it_was_written() {
         json!({ "key": "b", "label": "B", "children": ["C"], "expanded": true })
     );
 }
+
+#[test]
+fn a_group_box_holds_controls_placed_from_inside_its_frame() {
+    let mut dialog = JsonDialog::from_json(
+        r#"{ "title": "Group", "width": 40, "height": 16, "controls": [
+            { "type": "group_box", "x": 2, "y": 2, "w": 30, "h": 8, "title": "Who", "controls": [
+                { "type": "input", "name": "name", "x": 1, "y": 1, "w": 20, "h": 1 },
+                { "type": "group_box", "x": 1, "y": 3, "w": 20, "h": 4, "title": "More", "controls": [
+                    { "type": "input", "name": "email", "x": 2, "y": 1, "w": 10, "h": 1 }
+                ] }
+            ] }
+        ] }"#,
+    )
+    .unwrap();
+    // The data finds controls however deep they are.
+    assert_eq!(dialog.data(), json!({ "name": "", "email": "" }));
+    // Inside the frame: the box's corner, one in for the frame, the place.
+    let name = dialog.view_mut::<InputLine>("name").unwrap().bounds().a;
+    assert_eq!((name.x, name.y), (2 + 1 + 1, 2 + 1 + 1));
+    let email = dialog.view_mut::<InputLine>("email").unwrap().bounds().a;
+    assert_eq!((email.x, email.y), (2 + 1 + 1 + 1 + 2, 2 + 1 + 3 + 1 + 1));
+}
+
+#[test]
+fn tabs_may_sit_in_a_group_but_not_in_tabs() {
+    let ok = r#"{ "title": "T", "width": 40, "height": 16, "controls": [
+        { "type": "group_box", "x": 1, "y": 1, "w": 30, "h": 10, "controls": [
+            { "type": "tabs", "name": "t", "x": 1, "y": 1, "w": 20, "h": 6,
+              "pages": [{ "title": "One", "controls": [] }] }
+        ] }
+    ] }"#;
+    assert!(DialogSpec::from_json(ok).is_ok());
+    let bad = r#"{ "title": "T", "width": 40, "height": 16, "controls": [
+        { "type": "tabs", "name": "t", "x": 1, "y": 1, "w": 30, "h": 10, "pages": [
+            { "title": "One", "controls": [
+                { "type": "group_box", "x": 0, "y": 0, "w": 20, "h": 6, "controls": [
+                    { "type": "tabs", "name": "u", "x": 0, "y": 0, "w": 10, "h": 4,
+                      "pages": [{ "title": "Two", "controls": [] }] }
+                ] }
+            ] }
+        ] }
+    ] }"#;
+    assert!(DialogSpec::from_json(bad).unwrap_err().0.contains("tabs cannot hold other tabs"));
+}

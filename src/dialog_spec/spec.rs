@@ -263,21 +263,20 @@ impl DialogSpec {
         if let Some(why) = first_error {
             return Err(SpecError(why));
         }
-        for page in self.controls.iter().filter_map(|c| match &c.kind {
-            Kind::Tabs { pages, .. } => Some((c, pages)),
-            _ => None,
-        }) {
-            let (tabs, pages) = page;
-            if pages
-                .iter()
-                .flat_map(|p| &p.controls)
-                .any(|c| matches!(c.kind, Kind::Tabs { .. }))
-            {
-                return Err(SpecError(format!(
-                    "{}: tabs cannot hold other tabs",
-                    tabs.describe()
-                )));
+        let mut nested_tabs = None;
+        self.visit(&mut |c| {
+            if matches!(c.kind, Kind::Tabs { .. }) && nested_tabs.is_none() {
+                let mut inside = false;
+                for list in c.child_lists() {
+                    visit(list, &mut |d| inside |= matches!(d.kind, Kind::Tabs { .. }));
+                }
+                if inside {
+                    nested_tabs = Some(format!("{}: tabs cannot hold other tabs", c.describe()));
+                }
             }
+        });
+        if let Some(why) = nested_tabs {
+            return Err(SpecError(why));
         }
         let mut bad_link = None;
         self.visit(&mut |c| {
@@ -300,10 +299,8 @@ impl DialogSpec {
 fn visit<'a>(controls: &'a [Control], f: &mut impl FnMut(&'a Control)) {
     for control in controls {
         f(control);
-        if let Kind::Tabs { pages, .. } = &control.kind {
-            for page in pages {
-                visit(&page.controls, f);
-            }
+        for list in control.child_lists() {
+            visit(list, f);
         }
     }
 }
@@ -350,6 +347,43 @@ impl Control {
     #[must_use]
     pub fn type_name(&self) -> &'static str {
         self.kind.type_name()
+    }
+
+    /// The lists of controls inside this one: a group box has one, tabs
+    /// have one per page (the page's index is the list's).
+    #[must_use]
+    pub fn child_lists(&self) -> Vec<&Vec<Control>> {
+        match &self.kind {
+            Kind::GroupBox { controls, .. } => vec![controls],
+            Kind::Tabs { pages, .. } => pages.iter().map(|p| &p.controls).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The list of controls inside this one at `slot` (see
+    /// [`child_lists`](Self::child_lists)).
+    #[must_use]
+    pub fn child_list(&self, slot: usize) -> Option<&Vec<Control>> {
+        match &self.kind {
+            Kind::GroupBox { controls, .. } if slot == 0 => Some(controls),
+            Kind::Tabs { pages, .. } => pages.get(slot).map(|p| &p.controls),
+            _ => None,
+        }
+    }
+
+    /// As [`child_list`](Self::child_list), to change.
+    pub fn child_list_mut(&mut self, slot: usize) -> Option<&mut Vec<Control>> {
+        match &mut self.kind {
+            Kind::GroupBox { controls, .. } if slot == 0 => Some(controls),
+            Kind::Tabs { pages, .. } => pages.get_mut(slot).map(|p| &mut p.controls),
+            _ => None,
+        }
+    }
+
+    /// Whether other controls can be placed inside this one.
+    #[must_use]
+    pub fn is_container(&self) -> bool {
+        matches!(self.kind, Kind::GroupBox { .. } | Kind::Tabs { .. })
     }
 
     /// How messages name the control: `input "email"`, or `button "~O~K"`
@@ -642,12 +676,15 @@ pub enum Kind {
         #[serde(default, skip_serializing_if = "is_false")]
         separators: bool,
     },
-    /// A titled box drawn around other controls. It only draws: the
-    /// controls inside it are its siblings, listed after it.
+    /// A titled box that holds other controls. They are placed from the
+    /// corner inside its frame, and move with it.
     GroupBox {
         /// The title in its top edge.
         #[serde(default)]
         title: String,
+        /// The controls inside the box.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        controls: Vec<Control>,
     },
     /// Tabs over pages of controls; each page's controls are placed from
     /// the page's own corner.
@@ -781,7 +818,7 @@ impl Kind {
             | Self::StaticText { text, .. }
             | Self::Button { text, .. }
             | Self::CheckBox { text, .. } => Some(text),
-            Self::GroupBox { title } => Some(title),
+            Self::GroupBox { title, .. } => Some(title),
             _ => None,
         }
     }

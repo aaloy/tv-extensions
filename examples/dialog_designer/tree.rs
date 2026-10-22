@@ -4,11 +4,12 @@
 //! pages of its tabs with the controls on each. Moving in it selects in
 //! the design; selecting in the design moves in it.
 
-use crate::model::{Design, Sel};
+use crate::model::{Container, Design, Place, Sel};
 use std::cell::RefCell;
 use std::rc::Rc;
 use turbo_vision::core::command::CommandId;
-use turbo_vision::core::event::{Event, EventType, KB_ENTER};
+use turbo_vision::core::event::{Event, EventType, KB_ENTER, MB_LEFT_BUTTON};
+use turbo_vision::core::state::State;
 use turbo_vision::terminal::Terminal;
 use turbo_vision::views::list_viewer::ListViewer;
 use turbo_vision::views::outline::{Node, OutlineViewer};
@@ -20,8 +21,11 @@ use tv_extensions::dialog_spec::Kind;
 pub struct Entry {
     /// The selection it makes in the design.
     pub sel: Sel,
-    /// For the row of a tab page: the tabs' index and the page, to show.
-    pub page: Option<(usize, usize)>,
+    /// For the row of a tab page: the tabs' path and the page, to show.
+    pub page: Option<(Place, usize)>,
+    /// The list of controls the row stands for, if it is a container: where
+    /// a control dropped on it goes.
+    pub holds: Option<Container>,
     pub label: String,
 }
 
@@ -32,74 +36,66 @@ fn plain(text: &str) -> String {
     text.chars().filter(|&c| c != '~').collect()
 }
 
-/// The rows of `design`, parents before children.
-fn rows(design: &Design) -> Rows {
-    let node = |entry: Entry, children: Rows| {
-        let mut node = Node::with_children(entry, children);
-        node.expanded = true;
-        Rc::new(RefCell::new(node))
+fn node(entry: Entry, children: Rows) -> Rc<RefCell<Node<Entry>>> {
+    let mut node = Node::with_children(entry, children);
+    node.expanded = true;
+    Rc::new(RefCell::new(node))
+}
+
+/// The rows of the controls in `container`, each with what is inside it.
+fn rows_in(design: &Design, container: Container) -> Rows {
+    let Some(list) = design.list(container) else {
+        return Vec::new();
     };
-    let top = design
-        .spec
-        .controls
-        .iter()
+    list.iter()
         .enumerate()
-        .map(|(i, control)| {
-            let pages = match &control.kind {
+        .filter_map(|(i, control)| {
+            let path = container.at(i)?;
+            let children = match &control.kind {
                 Kind::Tabs { pages, .. } => pages
                     .iter()
                     .enumerate()
                     .map(|(p, page)| {
-                        let controls = page
-                            .controls
-                            .iter()
-                            .enumerate()
-                            .map(|(index, c)| {
-                                let sel = Sel::Page {
-                                    tabs: i,
-                                    page: p,
-                                    index,
-                                };
-                                node(
-                                    Entry {
-                                        sel,
-                                        page: None,
-                                        label: plain(&c.describe()),
-                                    },
-                                    Vec::new(),
-                                )
-                            })
-                            .collect();
-                        let title = plain(&page.title);
+                        let into = Container::In { owner: path, slot: p };
                         node(
                             Entry {
-                                sel: Sel::Top(i),
-                                page: Some((i, p)),
-                                label: format!("page \"{title}\""),
+                                sel: Sel::At(path),
+                                page: Some((path, p)),
+                                holds: Some(into),
+                                label: format!("page \"{}\"", plain(&page.title)),
                             },
-                            controls,
+                            rows_in(design, into),
                         )
                     })
                     .collect(),
+                Kind::GroupBox { .. } => rows_in(design, Container::In { owner: path, slot: 0 }),
                 _ => Vec::new(),
             };
-            node(
+            let holds = matches!(control.kind, Kind::GroupBox { .. })
+                .then_some(Container::In { owner: path, slot: 0 });
+            Some(node(
                 Entry {
-                    sel: Sel::Top(i),
+                    sel: Sel::At(path),
                     page: None,
+                    holds,
                     label: plain(&control.describe()),
                 },
-                pages,
-            )
+                children,
+            ))
         })
-        .collect();
+        .collect()
+}
+
+/// The rows of `design`, parents before children.
+fn rows(design: &Design) -> Rows {
     vec![node(
         Entry {
             sel: Sel::Dialog,
             page: None,
+            holds: Some(Container::Dialog),
             label: format!("Dialog \"{}\"", design.spec.title),
         },
-        top,
+        rows_in(design, Container::Dialog),
     )]
 }
 
@@ -120,16 +116,48 @@ pub struct ControlTree {
     shown: Vec<Entry>,
     /// The row the design and the tree last agreed on.
     synced: Option<Entry>,
+    /// Sent when a row is dropped on a container.
+    dropped_command: CommandId,
+    /// The row the mouse went down on, while it is down.
+    grab: Option<Entry>,
+    /// What was dropped, and on what, until the designer takes it.
+    dropped: Option<(Sel, Container)>,
 }
 
 impl ControlTree {
-    pub fn new(bounds: turbo_vision::core::geometry::Rect, properties: CommandId) -> Self {
+    pub fn new(
+        bounds: turbo_vision::core::geometry::Rect,
+        properties: CommandId,
+        dropped_command: CommandId,
+    ) -> Self {
         Self {
             inner: OutlineViewer::new(bounds, |entry: &Entry| entry.label.clone()),
             properties,
             shown: Vec::new(),
             synced: None,
+            dropped_command,
+            grab: None,
+            dropped: None,
         }
+    }
+
+    /// The control dropped on a container since the last call, and the
+    /// container it was dropped on.
+    pub fn take_dropped(&mut self) -> Option<(Sel, Container)> {
+        self.dropped.take()
+    }
+
+    /// The row on display line `line`, without moving the tree's row.
+    fn entry_at_line(&mut self, line: i16) -> Option<Entry> {
+        let row = self.inner.top_item() + usize::try_from(line).ok()?;
+        if row >= self.inner.item_count() {
+            return None;
+        }
+        let back = self.inner.focused_item();
+        self.inner.set_focused_item(Some(row));
+        let entry = self.inner.selected_node().map(|n| n.borrow().data.clone());
+        self.inner.set_focused_item(back);
+        entry
     }
 
     /// Every row, in display order.
@@ -206,9 +234,28 @@ impl View for ControlTree {
             *event = Event::command(self.properties);
             return;
         }
+        let down = event.what == EventType::MouseDown && event.mouse.buttons & MB_LEFT_BUTTON != 0;
+        let up = event.what == EventType::MouseUp;
+        let line = event.mouse.pos.y;
         self.inner.handle_event(event);
         if double {
             *event = Event::command(self.properties);
+        } else if down {
+            // A control can be dragged onto a container: remember what is
+            // under the mouse, and capture the button's release.
+            self.grab = self.inner.selected_node().map(|n| n.borrow().data.clone());
+            self.set_state_flag(State::DRAGGING, true);
+        } else if up && let Some(from) = self.grab.take() {
+            self.set_state_flag(State::DRAGGING, false);
+            if from.page.is_none()
+                && from.sel != Sel::Dialog
+                && let Some(onto) = self.entry_at_line(line)
+                && let Some(container) = onto.holds
+                && onto != from
+            {
+                self.dropped = Some((from.sel, container));
+                *event = Event::command(self.dropped_command);
+            }
         }
     }
 

@@ -1329,7 +1329,18 @@ impl<'a> Builder<'a> {
                 t.set_separators(*separators);
                 group.add(t)
             }
-            Kind::GroupBox { title } => group.add(GroupBox::new(bounds, title)),
+            Kind::GroupBox { title, controls } => {
+                let frame = group.add(GroupBox::new(bounds, title));
+                // The controls inside are placed from the corner within
+                // the frame, in the box's own coordinate space.
+                for child in controls {
+                    let mut child = child.clone();
+                    child.x += control.x + 1;
+                    child.y += control.y + 1;
+                    self.add(group, &child, origin);
+                }
+                frame
+            }
             Kind::Tabs { pages, active } => {
                 let mut pane = TabbedPane::new(bounds);
                 let area = pane.page_area();
