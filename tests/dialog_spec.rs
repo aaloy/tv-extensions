@@ -79,7 +79,10 @@ fn every_kind_is_read() {
         other => panic!("name is not an input: {other:?}"),
     }
     // Controls on a tab page are found by name too.
-    assert!(matches!(spec.find("city").unwrap().kind, Kind::Input { .. }));
+    assert!(matches!(
+        spec.find("city").unwrap().kind,
+        Kind::Input { .. }
+    ));
 }
 
 #[test]
@@ -94,10 +97,12 @@ fn saved_controls_start_with_their_type_name_and_place() {
     let json = everything().to_json();
     let first = json.find("\"type\": \"label\"").unwrap();
     let rest = &json[first..];
-    let order: Vec<usize> = ["\"type\"", "\"name\"", "\"x\"", "\"y\"", "\"w\"", "\"h\"", "\"text\""]
-        .iter()
-        .map(|key| rest.find(key).unwrap())
-        .collect();
+    let order: Vec<usize> = [
+        "\"type\"", "\"name\"", "\"x\"", "\"y\"", "\"w\"", "\"h\"", "\"text\"",
+    ]
+    .iter()
+    .map(|key| rest.find(key).unwrap())
+    .collect();
     assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?} in {rest}");
 }
 
