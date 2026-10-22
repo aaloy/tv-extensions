@@ -378,3 +378,20 @@ fn the_surface_stays_on_the_desktop() {
     let b = app.desktop.get(designer.surface).unwrap().bounds();
     assert_eq!((b.b.x, b.b.y), (desk.width(), desk.height()));
 }
+
+#[test]
+fn the_insert_menu_has_a_line_between_its_sections() {
+    let items = insert_items();
+    assert_eq!(items.len(), KINDS.len() + SECTION_ENDS.len());
+    // Down skips the lines: thirteen steps from the first item is the tree.
+    let mut app = app();
+    let mut designer = open_designer(&mut app, Design::default());
+    let tx = app.terminal.event_injector();
+    for _ in 0..13 {
+        tx.send(Event::keyboard(KB_DOWN)).unwrap();
+    }
+    tx.send(Event::keyboard(KB_ENTER)).unwrap();
+    key(&mut app, &mut designer, KB_INS);
+    let design = designer.design.borrow();
+    assert_eq!(design.selected().unwrap().type_name(), "tree");
+}

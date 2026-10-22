@@ -33,30 +33,40 @@ pub enum Sel {
 }
 
 /// Every control type the designer inserts: the JSON type and its menu
-/// text, in menu order.
+/// text, in menu order, grouped by what they are for (see
+/// [`SECTION_ENDS`]).
 pub const KINDS: [(&str, &str); 21] = [
+    // Text and decoration.
     ("label", "~L~abel"),
     ("static_text", "~S~tatic text"),
-    ("button", "~B~utton"),
+    ("line", "Li~n~e"),
+    // Typing and picking a value.
     ("input", "~I~nput line"),
+    ("auto_complete", "Auto-co~m~plete"),
     ("memo", "~M~emo"),
+    ("spinner", "S~p~inner"),
+    ("slider", "Sli~d~er"),
+    // Options.
     ("check_box", "~C~heck box"),
     ("check_boxes", "Check bo~x~es"),
     ("radio_buttons", "~R~adio buttons"),
+    // Choosing from lists.
     ("combo_box", "C~o~mbo box"),
     ("list_box", "Lis~t~ box"),
-    ("spinner", "S~p~inner"),
-    ("slider", "Sli~d~er"),
-    ("progress_bar", "Pro~g~ress bar"),
+    ("tree", "Tree vie~w~"),
     ("table", "T~a~ble"),
+    ("dual_list", "Dual ~l~ist"),
+    // Containers.
     ("group_box", "Gro~u~p box"),
     ("tabs", "Ta~b~s"),
-    ("auto_complete", "Auto-co~m~plete"),
-    ("dual_list", "Dual ~l~ist"),
-    ("tree", "Tree vie~w~"),
-    ("line", "Li~n~e"),
+    // Actions and feedback.
+    ("button", "~B~utton"),
+    ("progress_bar", "Pro~g~ress bar"),
     ("error_line", "~E~rror line"),
 ];
+
+/// Where each section of [`KINDS`] ends: a menu draws a line there.
+pub const SECTION_ENDS: [usize; 5] = [3, 8, 11, 16, 18];
 
 /// The design: a spec, a selection, the file it lives in, and undo.
 #[derive(Debug, Clone)]

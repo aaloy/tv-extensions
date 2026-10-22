@@ -19,7 +19,7 @@ mod props;
 mod surface;
 mod tree;
 
-use model::{Design, KINDS, Sel};
+use model::{Design, KINDS, SECTION_ENDS, Sel};
 use serde_json::Value;
 use std::cell::RefCell;
 use std::fmt::Write as _;
@@ -328,18 +328,7 @@ impl Designer {
             };
             Point::new(desk.x + corner.x + 1 + r.a.x, desk.y + corner.y + 1 + y)
         };
-        let menu = Menu::from_items(
-            KINDS
-                .iter()
-                .zip(0..)
-                .map(|((_, text), i)| {
-                    MenuItemBuilder::new()
-                        .text(*text)
-                        .command(CM_INSERT + i)
-                        .build()
-                })
-                .collect(),
-        );
+        let menu = Menu::from_items(insert_items());
         if let Some(command) = popup_menu(&mut app.terminal, at, menu) {
             self.insert(command);
         }
@@ -650,6 +639,19 @@ impl FirstInput for DialogSpec {
     }
 }
 
+/// The control types as menu items, a line between the sections.
+fn insert_items() -> Vec<MenuItem> {
+    let mut items = Vec::new();
+    for (i, (_, text)) in KINDS.iter().enumerate() {
+        if SECTION_ENDS.contains(&i) {
+            items.push(MenuItem::separator());
+        }
+        let command = CM_INSERT + CommandId::try_from(i).unwrap_or(0);
+        items.push(item(text, command, None));
+    }
+    items
+}
+
 fn item(text: &str, command: CommandId, key: Option<&str>) -> MenuItem {
     let b = MenuItemBuilder::new().text(text).command(command);
     match key {
@@ -694,11 +696,7 @@ fn menu_bar(width: i16) -> MenuBar {
             item("La~t~er in tab order", CM_LATER, Some("F8")),
         ]),
     ));
-    let mut insert: Vec<MenuItem> = KINDS
-        .iter()
-        .zip(0..)
-        .map(|((_, text), i)| item(text, CM_INSERT + i, None))
-        .collect();
+    let mut insert = insert_items();
     insert.insert(0, item("~C~hoose...", CM_INSERT_MENU, Some("Ins")));
     insert.insert(1, MenuItem::separator());
     bar.add_submenu(SubMenu::new("~I~nsert", Menu::from_items(insert)));
