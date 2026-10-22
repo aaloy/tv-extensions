@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::cell::RefCell;
 use std::rc::Rc;
 use turbo_vision::app::Application;
-use turbo_vision::core::event::{Event, KB_DOWN, KB_ENTER, KB_ESC, KB_TAB};
+use turbo_vision::core::event::{Event, KB_DOWN, KB_ESC, KB_TAB};
 use turbo_vision::core::event::{KB_ALT_L, KB_ALT_O, KB_ALT_S};
 use turbo_vision::test_util::test_terminal;
 use turbo_vision::views::View;
@@ -50,14 +50,14 @@ fn app() -> Application {
 }
 
 /// Queue `text` as typed characters, then the special keys.
-fn type_text(app: &Application, text: &str) {
+fn type_text(app: &mut Application, text: &str) {
     let tx = app.terminal.event_injector();
     for c in text.chars() {
         tx.send(Event::text(c)).unwrap();
     }
 }
 
-fn key(app: &Application, code: u16) {
+fn key(app: &mut Application, code: u16) {
     app.terminal
         .event_injector()
         .send(Event::keyboard(code))
@@ -123,10 +123,16 @@ fn setting_data_refuses_unknown_names_and_wrong_types() {
 #[test]
 fn controls_are_reached_by_name_and_type() {
     let mut dialog = JsonDialog::from_json(EVERYTHING).unwrap();
-    dialog.view_mut::<InputLine>("name").unwrap().set_text("typed");
+    dialog
+        .view_mut::<InputLine>("name")
+        .unwrap()
+        .set_text("typed");
     assert_eq!(dialog.value("name"), Some(json!("typed")));
     // On a tab page too.
-    dialog.view_mut::<InputLine>("city").unwrap().set_text("Rome");
+    dialog
+        .view_mut::<InputLine>("city")
+        .unwrap()
+        .set_text("Rome");
     assert_eq!(dialog.value("city"), Some(json!("Rome")));
     // The wrong type is simply not found.
     assert!(dialog.view_mut::<Button>("name").is_none());
@@ -137,8 +143,8 @@ fn controls_are_reached_by_name_and_type() {
 fn ok_returns_what_the_person_typed() {
     let mut app = app();
     let mut dialog = customer();
-    type_text(&app, "Ada");
-    key(&app, KB_ALT_O);
+    type_text(&mut app, "Ada");
+    key(&mut app, KB_ALT_O);
     let answer = dialog.run(&mut app).expect("not cancelled");
     assert_eq!(answer.action, "ok");
     assert_eq!(answer.data["name"], json!("Ada"));
@@ -149,7 +155,7 @@ fn ok_returns_what_the_person_typed() {
 fn escape_cancels() {
     let mut app = app();
     let mut dialog = customer();
-    key(&app, KB_ESC);
+    key(&mut app, KB_ESC);
     assert!(dialog.run(&mut app).is_none());
 }
 
@@ -158,9 +164,9 @@ fn a_required_field_keeps_the_dialog_open_and_says_why() {
     let mut app = app();
     let mut dialog = customer();
     // OK with no name: refused. Then type the name and OK again.
-    key(&app, KB_ALT_O);
-    type_text(&app, "Ada");
-    key(&app, KB_ALT_O);
+    key(&mut app, KB_ALT_O);
+    type_text(&mut app, "Ada");
+    key(&mut app, KB_ALT_O);
     let answer = dialog.run(&mut app).expect("closed by the second OK");
     assert_eq!(answer.data["name"], json!("Ada"));
 
@@ -185,15 +191,22 @@ fn rules_from_code_check_a_field_and_the_whole_dialog() {
             errors.add("email", "Wholesale customers need an email");
         }
     });
-    dialog.set_data(&json!({ "name": "Ada", "email": "nope" })).unwrap();
+    dialog
+        .set_data(&json!({ "name": "Ada", "email": "nope" }))
+        .unwrap();
     let errors = dialog.validate().unwrap_err();
     assert_eq!(errors.field("email"), Some("Email must contain @"));
 
     dialog.set_data(&json!({ "email": "", "kind": 1 })).unwrap();
     let errors = dialog.validate().unwrap_err();
-    assert_eq!(errors.field("email"), Some("Wholesale customers need an email"));
+    assert_eq!(
+        errors.field("email"),
+        Some("Wholesale customers need an email")
+    );
 
-    dialog.set_value("email", &json!("ada@example.org")).unwrap();
+    dialog
+        .set_value("email", &json!("ada@example.org"))
+        .unwrap();
     assert!(dialog.validate().is_ok());
 }
 
@@ -206,8 +219,8 @@ fn an_action_can_fill_fields_and_keep_the_dialog_open() {
         ctx.set_value("email", &json!("grace@navy.mil")).unwrap();
         Flow::Stay
     });
-    key(&app, KB_ALT_L);
-    key(&app, KB_ALT_O);
+    key(&mut app, KB_ALT_L);
+    key(&mut app, KB_ALT_O);
     let answer = dialog.run(&mut app).unwrap();
     assert_eq!(answer.action, "ok");
     assert_eq!(answer.data["name"], json!("Grace"));
@@ -219,9 +232,9 @@ fn an_unbound_action_closes_like_ok_with_its_own_name() {
     let mut app = app();
     let mut dialog = customer();
     // Save validates first: refused while the name is empty.
-    key(&app, KB_ALT_S);
-    type_text(&app, "Ada");
-    key(&app, KB_ALT_S);
+    key(&mut app, KB_ALT_S);
+    type_text(&mut app, "Ada");
+    key(&mut app, KB_ALT_S);
     let answer = dialog.run(&mut app).unwrap();
     assert_eq!(answer.action, "save");
     assert_eq!(answer.data["name"], json!("Ada"));
@@ -232,7 +245,7 @@ fn an_action_can_close_without_validating() {
     let mut app = app();
     let mut dialog = customer();
     dialog.on("lookup", |_| Flow::Close);
-    key(&app, KB_ALT_L);
+    key(&mut app, KB_ALT_L);
     let answer = dialog.run(&mut app).unwrap();
     assert_eq!(answer.action, "lookup");
     assert_eq!(answer.data["name"], json!(""));
@@ -249,9 +262,9 @@ fn an_action_can_submit() {
         Flow::Submit
     });
     // Refused (no name), then accepted.
-    key(&app, KB_ALT_L);
-    type_text(&app, "Ada");
-    key(&app, KB_ALT_L);
+    key(&mut app, KB_ALT_L);
+    type_text(&mut app, "Ada");
+    key(&mut app, KB_ALT_L);
     let answer = dialog.run(&mut app).unwrap();
     assert_eq!(answer.action, "lookup");
     assert_eq!(seen.borrow().len(), 2);
@@ -267,12 +280,13 @@ fn a_change_runs_its_action() {
         log.borrow_mut().push(ctx.value("kind").unwrap());
         Flow::Stay
     });
-    // Name, email, then the radio buttons: Down picks Wholesale.
-    type_text(&app, "Ada");
-    key(&app, KB_TAB);
-    key(&app, KB_TAB);
-    key(&app, KB_DOWN);
-    key(&app, KB_ALT_O);
+    // Name, email, then the radio buttons: Down and Space pick Wholesale.
+    type_text(&mut app, "Ada");
+    key(&mut app, KB_TAB);
+    key(&mut app, KB_TAB);
+    key(&mut app, KB_DOWN);
+    type_text(&mut app, " ");
+    key(&mut app, KB_ALT_O);
     let answer = dialog.run(&mut app).unwrap();
     assert_eq!(answer.data["kind"], json!(1));
     assert_eq!(*changes.borrow(), vec![json!(1)]);
