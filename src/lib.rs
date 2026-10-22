@@ -43,6 +43,9 @@ pub mod autocomplete;
 #[cfg(feature = "csv")]
 #[cfg_attr(docsrs, doc(cfg(feature = "csv")))]
 pub mod csv;
+#[cfg(feature = "dialog")]
+#[cfg_attr(docsrs, doc(cfg(feature = "dialog")))]
+pub mod dialog_spec;
 pub mod dual_list;
 pub mod forms;
 #[cfg(feature = "graphics")]
