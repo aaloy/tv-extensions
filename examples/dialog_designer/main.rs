@@ -17,6 +17,7 @@
 mod model;
 mod props;
 mod surface;
+mod tree;
 
 use model::{Design, KINDS, Sel};
 use serde_json::Value;
@@ -25,6 +26,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use surface::{Commands, Surface};
+use tree::ControlTree;
 use turbo_vision::app::{AppHandler, Application};
 use turbo_vision::core::command::{CM_OK, CM_QUIT, CM_USER, CM_YES, CommandId};
 use turbo_vision::core::event::{Event, EventType, KB_ALT_X};
@@ -77,6 +79,7 @@ Mouse
   Drag the yellow  resize it (or the dialog)
     corner
   Double click     properties
+  Inspector tree   click / arrows select a control, Enter edits it
   Right click      insert a control
 
 Keys
@@ -97,11 +100,19 @@ Keys
   Ctrl+G           save the code to use it
   F2 / F3          save / open";
 
+/// The inspector window: the tree of controls over the selection's JSON.
+#[derive(Clone, Copy)]
+struct Inspector {
+    window: Handle<Window>,
+    tree: Handle<ControlTree>,
+    text: Handle<TextViewer>,
+}
+
 /// The designer: the design, the views that show it, and its commands.
 struct Designer {
     design: Rc<RefCell<Design>>,
     surface: Handle<Surface>,
-    inspector: Option<(Handle<Window>, Handle<TextViewer>)>,
+    inspector: Option<Inspector>,
     /// The design revision the inspector shows.
     shown: u64,
 }
@@ -117,16 +128,45 @@ impl Designer {
         if let Some(surface) = self.surface_mut(app) {
             surface.sync_bounds();
         }
+        self.follow_tree(app);
         let revision = self.design.borrow().revision;
         if revision != self.shown {
             self.shown = revision;
             let text = inspector_text(&self.design.borrow());
-            if let Some((window, viewer)) = self.inspector
-                && let Some(viewer) = app.desktop.get_mut(window).and_then(|w| w.get_mut(viewer))
+            if let Some(inspector) = self.inspector
+                && let Some(viewer) = app
+                    .desktop
+                    .get_mut(inspector.window)
+                    .and_then(|w| w.get_mut(inspector.text))
             {
                 viewer.set_text(&text);
             }
         }
+    }
+
+    /// Select in the design what the person moved to in the tree, then
+    /// bring the tree up to date with the design.
+    fn follow_tree(&mut self, app: &mut Application) {
+        let Some(inspector) = self.inspector else {
+            return;
+        };
+        let Some(tree) = app
+            .desktop
+            .get_mut(inspector.window)
+            .and_then(|w| w.get_mut(inspector.tree))
+        else {
+            return;
+        };
+        let mut design = self.design.borrow_mut();
+        if let Some(entry) = tree.moved() {
+            if let Some((tabs, page)) = entry.page {
+                design.show_page(tabs, page);
+            } else if let Sel::Page { tabs, page, .. } = entry.sel {
+                design.show_page(tabs, page);
+            }
+            design.select(entry.sel);
+        }
+        tree.follow(&design);
     }
 
     /// Whether unsaved changes may be dropped: saved, or the person says so.
@@ -308,8 +348,8 @@ impl Designer {
     }
 
     fn toggle_inspector(&mut self, app: &mut Application) {
-        if let Some((window, _)) = self.inspector.take() {
-            app.desktop.remove_child_by_id(window.id());
+        if let Some(inspector) = self.inspector.take() {
+            app.desktop.remove_child_by_id(inspector.window.id());
         } else {
             self.inspector = Some(open_inspector(app));
             self.shown = u64::MAX;
@@ -354,6 +394,7 @@ impl AppHandler for Designer {
                 design.borrow_mut().redo();
             }
             CM_PROPERTIES => {
+                self.follow_tree(app);
                 props::edit_control(app, &design);
             }
             CM_DIALOG_PROPERTIES => {
@@ -445,16 +486,21 @@ fn inspector_text(design: &Design) -> String {
     format!("{file}{dirty}\n\n{body}")
 }
 
-fn open_inspector(app: &mut Application) -> (Handle<Window>, Handle<TextViewer>) {
+fn open_inspector(app: &mut Application) -> Inspector {
     let desk = app.desktop.get_bounds();
     let (w, h) = (INSPECTOR_WIDTH, desk.height());
     let mut window = Window::new(Rect::new(desk.width() - w, 0, desk.width(), h), "Inspector");
     window.set_grow_mode(Grow::LO_X | Grow::HI_X | Grow::HI_Y);
-    let mut viewer = TextViewer::new(Rect::new(0, 0, w - 2, h - 2)).with_scrollbars(true);
+    // The tree of controls takes the top half, the selection's JSON the rest.
+    let split = ((h - 2) / 2).max(4);
+    let mut tree = ControlTree::new(Rect::new(0, 0, w - 2, split), CM_PROPERTIES);
+    tree.set_grow_mode(Grow::HI_X);
+    let tree = window.add_typed(tree);
+    let mut viewer = TextViewer::new(Rect::new(0, split, w - 2, h - 2)).with_scrollbars(true);
     viewer.set_grow_mode(Grow::HI_X | Grow::HI_Y);
-    let viewer = window.add_typed(viewer);
+    let text = window.add_typed(viewer);
     let window = app.desktop.add_typed(window);
-    (window, viewer)
+    Inspector { window, tree, text }
 }
 
 /// A modal box showing `text`, with OK.

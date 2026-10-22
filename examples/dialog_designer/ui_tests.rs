@@ -262,3 +262,69 @@ fn print_for_docs() {
     app.draw();
     println!("{}", screen(&app));
 }
+
+/// The tree of controls in the inspector.
+fn tree<'a>(app: &'a mut Application, designer: &Designer) -> &'a mut ControlTree {
+    let inspector = designer.inspector.expect("the inspector is open");
+    app.desktop
+        .get_mut(inspector.window)
+        .and_then(|w| w.get_mut(inspector.tree))
+        .expect("the tree is in the inspector")
+}
+
+#[test]
+fn the_tree_lists_the_controls_and_follows_the_selection() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    designer.refresh(&mut app);
+    app.draw();
+    let text = screen(&app);
+    assert!(text.contains("input \"name\""), "{text}");
+    assert!(text.contains("button \"Cancel\""), "{text}");
+
+    designer.design.borrow_mut().select(Sel::Top(3));
+    designer.refresh(&mut app);
+    let row = tree(&mut app, &designer).current().unwrap();
+    assert_eq!(row.sel, Sel::Top(3));
+}
+
+#[test]
+fn moving_in_the_tree_selects_in_the_design() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    designer.refresh(&mut app);
+    designer.design.borrow_mut().select(Sel::Top(1));
+    designer.refresh(&mut app);
+    tree(&mut app, &designer).handle_event(&mut Event::keyboard(KB_DOWN));
+    designer.refresh(&mut app);
+    assert_eq!(designer.design.borrow().sel, Sel::Top(2));
+    // And the tree stays where the person put it.
+    assert_eq!(tree(&mut app, &designer).current().unwrap().sel, Sel::Top(2));
+}
+
+#[test]
+fn enter_in_the_tree_asks_for_the_properties() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    designer.refresh(&mut app);
+    let mut event = Event::keyboard(KB_ENTER);
+    tree(&mut app, &designer).handle_event(&mut event);
+    assert_eq!(event.what, EventType::Command);
+    assert_eq!(event.command, CM_PROPERTIES);
+}
+
+#[test]
+fn tab_pages_are_rows_with_their_controls() {
+    let spec = DialogSpec::from_json(include_str!("../dialog_specs/everything.json")).unwrap();
+    let mut app = app();
+    let mut designer = open_designer(&mut app, Design::new(spec, None));
+    designer.refresh(&mut app);
+    let found = tree(&mut app, &designer).entries().to_vec();
+    assert!(found.iter().any(|e| e.page == Some((16, 1))), "{found:?}");
+    assert!(
+        found
+            .iter()
+            .any(|e| matches!(e.sel, Sel::Page { page: 1, .. })),
+        "{found:?}"
+    );
+}
