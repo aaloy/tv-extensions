@@ -1334,9 +1334,7 @@ impl<'a> Builder<'a> {
                 list.set_chosen(chosen);
                 group.add(list)
             }
-            Kind::Line { vertical, double } => {
-                group.add(LineView::new(bounds, *vertical, *double))
-            }
+            Kind::Line { style } => group.add(LineView::new(bounds, *style)),
             Kind::ErrorLine {} => {
                 let mut line = ErrorLine::new();
                 line.set_bounds(bounds);

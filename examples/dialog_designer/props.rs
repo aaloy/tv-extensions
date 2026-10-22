@@ -12,7 +12,7 @@ use std::rc::Rc;
 use turbo_vision::app::Application;
 use turbo_vision::views::msgbox::message_box_error;
 use tv_extensions::dialog_spec::{
-    Align, ColumnSpec, Control, Item, Kind, MAX_CLUSTER_ITEMS, PageSpec, ValidatorSpec,
+    Align, ColumnSpec, Control, Item, Kind, LineStyle, MAX_CLUSTER_ITEMS, PageSpec, ValidatorSpec,
 };
 use tv_extensions::forms::json::{FormError, run};
 
@@ -417,11 +417,14 @@ fn sheet(c: &Control, others: &[String]) -> Value {
             ]);
             v
         }
-        Kind::Line { vertical, double } => vec![
-            flag("vertical", "~V~ertical", *vertical),
-            flag("double", "~D~ouble line", *double),
-            note("Drawn along its width, or its height if vertical."),
-        ],
+        Kind::Line { style } => {
+            let names: Vec<String> = LineStyle::ALL.iter().map(|s| s.name().to_string()).collect();
+            let at = LineStyle::ALL.iter().position(|s| s == style);
+            vec![
+                pick("style", "~S~tyle", &names, at, false),
+                note("One row tall: a row. One column wide: a column.\nLarger: a rectangle with corners."),
+            ]
+        }
         Kind::ErrorLine {} => vec![note(
             "Validation messages show here.\nWithout an error line, a message box shows them.",
         )],
@@ -812,17 +815,11 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
                 max: Some(a.usize("max", 0)).filter(|&m| m > 0),
             }
         }
-        Kind::Line { vertical, .. } => {
-            let vertical_now = a.bool("vertical");
-            if vertical_now != *vertical {
-                // Turning it round keeps its length.
-                std::mem::swap(&mut out.w, &mut out.h);
-            }
-            Kind::Line {
-                vertical: vertical_now,
-                double: a.bool("double"),
-            }
-        }
+        Kind::Line { style } => Kind::Line {
+            style: a
+                .index("style", LineStyle::ALL.len())
+                .map_or(*style, |i| LineStyle::ALL[i]),
+        },
         Kind::ErrorLine {} => Kind::ErrorLine {},
     };
     Ok(out)

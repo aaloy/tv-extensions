@@ -98,7 +98,7 @@
 //! | `tabs` | `pages` (each `title` and `controls`), `active` | — |
 //! | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 //! | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
-//! | `line` | `vertical`, `double` (a rule drawn with line characters) | — |
+//! | `line` | `style`: `single`, `double`, `heavy`, `round`, `block`; one row tall it is a row, one column wide a column, larger a rectangle | — |
 //! | `error_line` | — (where validation messages show) | — |
 //!
 //! A `validator` on an input checks keystrokes as they are typed:
@@ -189,6 +189,6 @@ mod spec;
 
 pub use runtime::{ActionContext, Answer, Errors, Flow, JsonDialog};
 pub use spec::{
-    Align, ColumnSpec, Control, DialogSpec, Item, Kind, MAX_CLUSTER_ITEMS, PageSpec, SpecError,
-    VERSION, ValidatorSpec,
+    Align, ColumnSpec, Control, DialogSpec, Item, Kind, LineStyle, MAX_CLUSTER_ITEMS, PageSpec,
+    SpecError, VERSION, ValidatorSpec,
 };

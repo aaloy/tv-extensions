@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use turbo_vision::core::geometry::{Point, Rect};
 use turbo_vision::views::tabbed_pane::TabbedPane;
 use tv_extensions::dialog_spec::{
-    Align, ColumnSpec, Control, DialogSpec, Item, Kind, PageSpec, SpecError,
+    Align, ColumnSpec, Control, DialogSpec, Item, Kind, LineStyle, PageSpec, SpecError,
 };
 
 /// The smallest dialog the designer makes, frame included.
@@ -658,8 +658,7 @@ impl Design {
                 String::new(),
                 (20, 1),
                 Kind::Line {
-                    vertical: false,
-                    double: false,
+                    style: LineStyle::Single,
                 },
             ),
             "error_line" => (String::new(), ((width - 4).max(10), 1), Kind::ErrorLine {}),

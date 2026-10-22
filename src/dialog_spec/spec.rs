@@ -678,15 +678,13 @@ pub enum Kind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<usize>,
     },
-    /// A horizontal or vertical rule drawn with line characters. It runs
-    /// the whole of its width (or height, if `vertical`).
+    /// A rule drawn with line characters: a row when it is one row tall, a
+    /// column when it is one column wide, and a rectangle with proper
+    /// corners when it is larger than that.
     Line {
-        /// A column instead of a row.
-        #[serde(default, skip_serializing_if = "is_false")]
-        vertical: bool,
-        /// Double line characters instead of single.
-        #[serde(default, skip_serializing_if = "is_false")]
-        double: bool,
+        /// The characters it is drawn with.
+        #[serde(default, skip_serializing_if = "LineStyle::is_single")]
+        style: LineStyle,
     },
     /// Where the dialog shows what is wrong when validation fails. Without
     /// one, the first error is shown in a message box.
@@ -805,6 +803,54 @@ pub struct ColumnSpec {
     /// `"left"` (the default) or `"right"`.
     #[serde(default, skip_serializing_if = "Align::is_left")]
     pub align: Align,
+}
+
+/// The characters a [`Kind::Line`] is drawn with.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LineStyle {
+    /// `─ │ ┌ ┐ └ ┘`
+    #[default]
+    Single,
+    /// `═ ║ ╔ ╗ ╚ ╝`
+    Double,
+    /// `━ ┃ ┏ ┓ ┗ ┛`
+    Heavy,
+    /// `─ │ ╭ ╮ ╰ ╯`
+    Round,
+    /// Solid blocks, `█`.
+    Block,
+}
+
+impl LineStyle {
+    /// Every style, in the order a designer lists them.
+    pub const ALL: [Self; 5] = [
+        Self::Single,
+        Self::Double,
+        Self::Heavy,
+        Self::Round,
+        Self::Block,
+    ];
+
+    /// The style as written in JSON.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Single => "single",
+            Self::Double => "double",
+            Self::Heavy => "heavy",
+            Self::Round => "round",
+            Self::Block => "block",
+        }
+    }
+
+    #[allow(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde's skip_serializing_if signature"
+    )]
+    fn is_single(&self) -> bool {
+        *self == Self::Single
+    }
 }
 
 /// How a table column aligns its cells.

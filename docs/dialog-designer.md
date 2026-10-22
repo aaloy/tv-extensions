@@ -170,7 +170,7 @@ from the corner inside the frame (or inside its tab page), an optional
 | `tabs` | `pages` (each a `title` and its `controls`), `active` | — |
 | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
-| `line` | `vertical`, `double` (both default false): a rule of line characters along its width, or height if vertical | — |
+| `line` | `style` (`single` by default, `double`, `heavy`, `round`, `block`): one row tall it is a horizontal rule, one column wide a vertical one, larger a rectangle with corners | — |
 | `error_line` | none: validation messages show here | — |
 
 An input's `validator` checks keystrokes as they are typed:

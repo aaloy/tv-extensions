@@ -365,12 +365,15 @@ fn the_example_specs_load_and_name_what_the_example_binds() {
 }
 
 #[test]
-fn a_line_draws_line_characters_along_its_width_or_height() {
+fn a_line_is_a_row_a_column_or_a_rectangle_with_corners() {
     let mut dialog = JsonDialog::from_json(
-        r#"{ "title": "Lines", "width": 30, "height": 10, "controls": [
+        r#"{ "title": "Lines", "width": 40, "height": 16, "controls": [
             { "type": "line", "x": 2, "y": 1, "w": 10, "h": 1 },
-            { "type": "line", "x": 2, "y": 3, "w": 10, "h": 1, "double": true },
-            { "type": "line", "x": 15, "y": 1, "w": 1, "h": 5, "vertical": true }
+            { "type": "line", "x": 2, "y": 3, "w": 10, "h": 1, "style": "heavy" },
+            { "type": "line", "x": 15, "y": 1, "w": 1, "h": 5, "style": "heavy" },
+            { "type": "line", "x": 20, "y": 1, "w": 6, "h": 4, "style": "round" },
+            { "type": "line", "x": 20, "y": 7, "w": 4, "h": 3, "style": "block" },
+            { "type": "line", "x": 2, "y": 7, "w": 8, "h": 4, "style": "double" }
         ] }"#,
     )
     .unwrap();
@@ -378,20 +381,16 @@ fn a_line_draws_line_characters_along_its_width_or_height() {
     assert_eq!(dialog.data(), json!({}));
     let mut app = app();
     dialog.dialog_mut().draw(&mut app.terminal);
-    let row = |y: usize| -> String {
-        app.terminal.buffer()[y]
-            .iter()
-            .map(|c| c.ch)
-            .collect::<String>()
-    };
-    let mut seen = (false, false, 0);
-    for y in 0..10 {
-        let text = row(y);
-        seen.0 |= text.contains("──────────");
-        seen.1 |= text.contains("══════════");
-        seen.2 += text.matches('│').count();
-    }
-    assert!(seen.0, "single horizontal line");
-    assert!(seen.1, "double horizontal line");
-    assert_eq!(seen.2, 5, "a vertical line five rows tall");
+    let rows: Vec<String> = (0..16)
+        .map(|y| app.terminal.buffer()[y].iter().map(|c| c.ch).collect())
+        .collect();
+    let all = rows.join("\n");
+    assert!(all.contains("──────────"), "single row\n{all}");
+    assert!(all.contains("━━━━━━━━━━"), "heavy row\n{all}");
+    assert_eq!(all.matches('┃').count(), 5, "a heavy column five rows tall");
+    assert!(all.contains("╭────╮"), "round top\n{all}");
+    assert!(all.contains("╰────╯"), "round bottom\n{all}");
+    assert!(all.contains("╔══════╗"), "double top\n{all}");
+    assert!(all.contains("╚══════╝"), "double bottom\n{all}");
+    assert_eq!(all.matches('█').count(), 4 + 4 + 2, "a block box is a ring of blocks");
 }

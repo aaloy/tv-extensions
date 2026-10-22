@@ -18,7 +18,7 @@
     {"type": "progress_bar", "name": "progress", "x": 2, "y": 10, "w": 30, "h": 1, "max": 100, "value": 40},
     {"type": "table", "name": "orders", "x": 50, "y": 5, "w": 22, "h": 5, "columns": [{"title": "Item", "width": 10}, {"title": "Qty", "width": 5, "align": "right"}], "rows": [["Pen", "2"]]},
     {"type": "line", "x": 2, "y": 11, "w": 70, "h": 1},
-    {"type": "line", "x": 38, "y": 13, "w": 1, "h": 7, "vertical": true, "double": true},
+    {"type": "line", "x": 38, "y": 13, "w": 1, "h": 7, "style": "double"},
     {"type": "group_box", "x": 1, "y": 12, "w": 72, "h": 9, "title": "More"},
     {"type": "tabs", "name": "pages", "x": 2, "y": 13, "w": 36, "h": 7, "pages": [
       {"title": "~O~ne", "controls": [
