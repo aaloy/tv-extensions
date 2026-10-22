@@ -115,6 +115,23 @@ edited one per line. Renaming a control carries along the labels linked to
 it; a sheet that would break a rule (a duplicate name, a missing action
 name) says why and opens again with what you typed.
 
+### Templates
+
+A template is a dialog kept to start new ones from. File > Save as
+template... asks for a name and saves the dialog in the templates folder;
+File > New from template... opens the template manager, a list of the
+templates with the dialog's title, its size and how many controls it has.
+Use starts a new, unsaved dialog from the one selected (a double click or
+Enter does too); Rename and Delete work on the file.
+
+The folder is `templates` in the directory the designer runs in, or the
+one named by the `DIALOG_TEMPLATES` environment variable. Templates are
+ordinary dialog JSON files, so you can also copy one in, or open one with
+F3 and edit it. The repository's `templates` folder has samples to start
+from: `login`, `contact_form`, `find_replace`, `settings` (tabs),
+`confirm`, `about`, `list_picker` (a dual list), `table_browser` (a table
+with Add, Edit and Delete) and `progress`.
+
 ### Testing
 
 F9 runs the dialog as an application would: type, tab, press its buttons.

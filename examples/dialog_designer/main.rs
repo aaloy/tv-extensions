@@ -17,6 +17,7 @@
 mod model;
 mod props;
 mod surface;
+mod templates;
 mod tree;
 
 use model::{Design, KINDS, SECTION_ENDS, Sel};
@@ -28,7 +29,7 @@ use std::rc::Rc;
 use surface::{Commands, Surface};
 use tree::ControlTree;
 use turbo_vision::app::{AppHandler, Application};
-use turbo_vision::core::command::{CM_OK, CM_QUIT, CM_USER, CM_YES, CommandId};
+use turbo_vision::core::command::{CM_NO, CM_OK, CM_QUIT, CM_USER, CM_YES, CommandId};
 use turbo_vision::core::event::{Event, EventType, KB_ALT_X};
 use turbo_vision::core::geometry::{Point, Rect};
 use turbo_vision::core::menu_data::{Menu, MenuItem, MenuItemBuilder};
@@ -37,6 +38,8 @@ use turbo_vision::core::status_data::StatusItemBuilder;
 use turbo_vision::views::button::Button;
 use turbo_vision::views::dialog::Dialog;
 use turbo_vision::views::file_dialog::FileDialog;
+use turbo_vision::views::listbox::ListBox;
+use turbo_vision::views::static_text::StaticText;
 use turbo_vision::views::menu_bar::{MenuBar, SubMenu};
 use turbo_vision::views::msgbox::{confirmation_box, input_box, message_box_error, message_box_ok};
 use turbo_vision::views::status_line::StatusLine;
@@ -67,6 +70,8 @@ const CM_INSPECTOR: CommandId = CM_USER + 17;
 const CM_INSERT_MENU: CommandId = CM_USER + 18;
 const CM_KEYS: CommandId = CM_USER + 19;
 const CM_ABOUT: CommandId = CM_USER + 20;
+const CM_NEW_TEMPLATE: CommandId = CM_USER + 21;
+const CM_SAVE_TEMPLATE: CommandId = CM_USER + 22;
 /// `CM_INSERT + i` inserts `KINDS[i]`.
 const CM_INSERT: CommandId = CM_USER + 50;
 
@@ -229,6 +234,53 @@ impl Designer {
         }
     }
 
+    /// Start a new dialog from a template chosen in the template manager.
+    fn new_from_template(&mut self, app: &mut Application) {
+        if !self.may_discard(app) {
+            return;
+        }
+        if let Some(spec) = manage_templates(app, &templates::folder()) {
+            *self.design.borrow_mut() = Design::new(spec, None);
+        }
+    }
+
+    /// Keep the dialog as a template, under a name asked for.
+    fn save_template(&mut self, app: &mut Application) {
+        self.save_template_in(app, &templates::folder());
+    }
+
+    fn save_template_in(&mut self, app: &mut Application, dir: &Path) {
+        let (spec, start) = {
+            let d = self.design.borrow();
+            let from_file = d
+                .path
+                .as_ref()
+                .and_then(|p| p.file_stem())
+                .map(|s| s.to_string_lossy().into_owned());
+            (
+                d.spec.clone(),
+                from_file.unwrap_or_else(|| templates::file_stem(&d.spec.title)),
+            )
+        };
+        let Some(name) = input_box(app, "Save as template", "Template ~n~ame", &start, 60) else {
+            return;
+        };
+        if templates::exists(dir, &name) {
+            let question = format!("A template called \"{}\" exists. Replace it?", name.trim());
+            if confirmation_box(app, &question) != CM_YES {
+                return;
+            }
+        }
+        match templates::save(dir, &name, &spec) {
+            Ok(path) => {
+                message_box_ok(app, &format!("Template saved in {}", path.display()));
+            }
+            Err(e) => {
+                message_box_error(app, &e);
+            }
+        }
+    }
+
     /// Write the Rust that uses the dialog to a file chosen in a file
     /// dialog, which starts in the folder of the dialog's JSON.
     fn save_code(&mut self, app: &mut Application) {
@@ -368,6 +420,8 @@ impl AppHandler for Designer {
                     *design.borrow_mut() = Design::default();
                 }
             }
+            CM_NEW_TEMPLATE => self.new_from_template(app),
+            CM_SAVE_TEMPLATE => self.save_template(app),
             CM_OPEN_SPEC => self.open(app),
             CM_SAVE_SPEC => {
                 self.save(app, false);
@@ -639,6 +693,84 @@ impl FirstInput for DialogSpec {
     }
 }
 
+/// The template manager: the templates in `dir` in a list, to use, rename or
+/// delete. The spec of the one to use, if the person picks one.
+fn manage_templates(app: &mut Application, dir: &Path) -> Option<DialogSpec> {
+    const ROWS: i16 = 11;
+    let mut at = 0;
+    loop {
+        let all = templates::list(dir);
+        let (sw, sh) = app.terminal.size();
+        let w: i16 = 66.min(sw);
+        let h: i16 = (ROWS + 6).min(sh);
+        let mut dialog = Dialog::new(centred(Rect::new(0, 0, sw, sh), w, h), "Templates");
+        let header = format!("{:<18} {:<22} {:<7} {}", "Name", "Dialog", "Size", "Controls");
+        dialog.add(StaticText::new(Rect::new(1, 0, w - 3, 1), &header));
+        let mut list = ListBox::new(Rect::new(1, 1, w - 3, ROWS), CM_OK);
+        list.set_items(all.iter().map(templates::Template::summary).collect());
+        if !all.is_empty() {
+            list.set_selection(at.min(all.len() - 1));
+        }
+        let list = dialog.add_typed(list);
+        let folder = if all.is_empty() {
+            format!("No templates in {}", dir.display())
+        } else {
+            format!("In {}", dir.display())
+        };
+        dialog.add(StaticText::new(Rect::new(1, ROWS + 1, w - 3, ROWS + 2), &folder));
+        let buttons = [
+            ("~U~se", CM_OK, 10, true),
+            ("~R~ename", CM_YES, 12, false),
+            ("~D~elete", CM_NO, 12, false),
+            ("Close", turbo_vision::core::command::CM_CANCEL, 10, false),
+        ];
+        let total: i16 = buttons.iter().map(|b| b.2 + 2).sum::<i16>() - 2;
+        let mut x = ((w - 2 - total) / 2).max(0);
+        for (text, command, width, default) in buttons {
+            dialog.add(Button::new(
+                Rect::new(x, ROWS + 2, x + width, ROWS + 4),
+                text,
+                command,
+                default,
+            ));
+            x += width + 2;
+        }
+        dialog.set_initial_focus();
+        let command = dialog.execute(app);
+        let picked = dialog
+            .get(list)
+            .and_then(ListBox::get_selection)
+            .and_then(|i| all.get(i).map(|t| (i, t.clone())));
+        let Some((index, template)) = picked else {
+            if command == CM_OK {
+                message_box_ok(app, "There is no template to use.");
+                continue;
+            }
+            return None;
+        };
+        at = index;
+        match command {
+            CM_OK => return Some(template.spec),
+            CM_YES => {
+                if let Some(name) = input_box(app, "Rename template", "~N~ame", &template.name, 60)
+                    && let Err(e) = templates::rename(dir, &template.name, &name)
+                {
+                    message_box_error(app, &e);
+                }
+            }
+            CM_NO => {
+                let question = format!("Delete the template \"{}\"?", template.name);
+                if confirmation_box(app, &question) == CM_YES
+                    && let Err(e) = templates::delete(dir, &template.name)
+                {
+                    message_box_error(app, &e);
+                }
+            }
+            _ => return None,
+        }
+    }
+}
+
 /// The control types as menu items, a line between the sections.
 fn insert_items() -> Vec<MenuItem> {
     let mut items = Vec::new();
@@ -678,6 +810,9 @@ fn menu_bar(width: i16) -> MenuBar {
             item("~O~pen...", CM_OPEN_SPEC, Some("F3")),
             item("~S~ave", CM_SAVE_SPEC, Some("F2")),
             item("Save ~a~s...", CM_SAVE_AS, None),
+            MenuItem::separator(),
+            item("New from ~t~emplate...", CM_NEW_TEMPLATE, None),
+            item("Save as te~m~plate...", CM_SAVE_TEMPLATE, None),
             MenuItem::separator(),
             item("E~x~it", CM_EXIT, Some("Alt+X")),
         ]),

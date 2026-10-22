@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "title": "People",
+  "width": 70,
+  "height": 20,
+  "controls": [
+    { "type": "label", "x": 2, "y": 1, "w": 8, "h": 1, "text": "~S~earch", "link": "search" },
+    { "type": "input", "name": "search", "x": 11, "y": 1, "w": 30, "h": 1, "max_len": 60 },
+    { "type": "table", "name": "rows", "x": 2, "y": 3, "w": 64, "h": 10, "columns": [
+      { "title": "Name", "width": 28 },
+      { "title": "Role", "width": 22 },
+      { "title": "Age", "width": 6, "align": "right" }
+    ], "rows": [["Ann Smith", "Engineer", "34"], ["Bob Jones", "Designer", "41"]] },
+    { "type": "button", "x": 2, "y": 14, "w": 10, "h": 2, "text": "~A~dd", "command": "add" },
+    { "type": "button", "x": 13, "y": 14, "w": 10, "h": 2, "text": "~E~dit", "command": "edit" },
+    { "type": "button", "x": 24, "y": 14, "w": 12, "h": 2, "text": "~D~elete", "command": "delete" },
+    { "type": "button", "x": 56, "y": 14, "w": 10, "h": 2, "text": "Close", "command": "cancel" }
+  ]
+}

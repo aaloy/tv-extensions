@@ -130,7 +130,7 @@ let fruit_field = AutoCompleteBuilder::new()
 
 ## Dialog designer and JSON dialogs (feature `dialog`)
 
-Lay a dialog out with the mouse in the dialog designer, in the spirit of TV Dialog Design, try it, and save it as JSON; then load it in the application and give it its rules and actions in code. Every core dialog control is there, plus `AutoComplete`, `DualList`, tab pages, group boxes and an error line. [docs/dialog-designer.md](docs/dialog-designer.md) has the designer's keys, the JSON format, and how to extend a dialog with validation and actions.
+Lay a dialog out with the mouse in the dialog designer, in the spirit of TV Dialog Design, try it, and save it as JSON; then load it in the application and give it its rules and actions in code. Every core dialog control is there, plus `AutoComplete`, `DualList`, tab pages, group boxes and an error line. Dialogs can be kept as templates (samples are in `templates/`). [docs/dialog-designer.md](docs/dialog-designer.md) has the designer's keys, the JSON format, and how to extend a dialog with validation and actions.
 
 ```sh
 cargo run --example dialog_designer --features native,dialog -- customer.json

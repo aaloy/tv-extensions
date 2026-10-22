@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "title": "About",
+  "width": 46,
+  "height": 11,
+  "controls": [
+    { "type": "static_text", "x": 2, "y": 1, "w": 40, "h": 3, "text": "My application\nVersion 1.0\n(C) 2026 Your name", "centered": true },
+    { "type": "line", "x": 2, "y": 5, "w": 40, "h": 1 },
+    { "type": "button", "x": 17, "y": 6, "w": 10, "h": 2, "text": "~O~K", "default": true }
+  ]
+}

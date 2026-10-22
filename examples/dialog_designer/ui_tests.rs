@@ -395,3 +395,48 @@ fn the_insert_menu_has_a_line_between_its_sections() {
     let design = designer.design.borrow();
     assert_eq!(design.selected().unwrap().type_name(), "tree");
 }
+
+fn queue(app: &mut Application, keys: &[u16]) {
+    let tx = app.terminal.event_injector();
+    for &k in keys {
+        tx.send(Event::keyboard(k)).unwrap();
+    }
+}
+
+fn sample_templates() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    templates::save(tmp.path(), "alpha", &DialogSpec::new("First", 40, 10)).unwrap();
+    templates::save(tmp.path(), "beta", &DialogSpec::new("Second", 50, 12)).unwrap();
+    tmp
+}
+
+#[test]
+fn the_manager_hands_back_the_template_that_is_picked() {
+    let mut app = app();
+    let tmp = sample_templates();
+    queue(&mut app, &[KB_DOWN, KB_ENTER]);
+    let spec = manage_templates(&mut app, tmp.path()).expect("a template was used");
+    assert_eq!(spec.title, "Second");
+}
+
+#[test]
+fn the_manager_closes_without_a_template_on_escape() {
+    let mut app = app();
+    let tmp = sample_templates();
+    queue(&mut app, &[turbo_vision::core::event::KB_ESC]);
+    assert!(manage_templates(&mut app, tmp.path()).is_none());
+}
+
+#[test]
+fn a_dialog_is_saved_as_a_template() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    let tmp = tempfile::tempdir().unwrap();
+    // The name box starts with the dialog's title; accept it.
+    queue(&mut app, &[KB_ENTER, KB_ENTER]);
+    designer.save_template_in(&mut app, tmp.path());
+    let saved = templates::list(tmp.path());
+    assert_eq!(saved.len(), 1, "{saved:?}");
+    assert_eq!(saved[0].spec.title, "Customer");
+    assert_eq!(saved[0].spec, designer.design.borrow().spec);
+}

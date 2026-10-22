@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "title": "Settings",
+  "width": 60,
+  "height": 20,
+  "controls": [
+    { "type": "tabs", "name": "pages", "x": 1, "y": 0, "w": 56, "h": 14, "pages": [
+      { "title": "~G~eneral", "controls": [
+        { "type": "label", "x": 1, "y": 1, "w": 12, "h": 1, "text": "~L~anguage", "link": "language" },
+        { "type": "combo_box", "name": "language", "x": 14, "y": 1, "w": 22, "h": 1, "items": ["English", "Español", "Català", "Français"], "selected": 0 },
+        { "type": "check_box", "name": "autosave", "x": 1, "y": 3, "w": 30, "h": 1, "text": "~A~uto-save", "checked": true },
+        { "type": "label", "x": 1, "y": 5, "w": 12, "h": 1, "text": "~I~nterval", "link": "interval" },
+        { "type": "spinner", "name": "interval", "x": 14, "y": 5, "w": 12, "h": 1, "min": 1, "max": 60, "value": 5, "suffix": " min" },
+        { "type": "check_box", "name": "updates", "x": 1, "y": 7, "w": 36, "h": 1, "text": "Check for ~u~pdates", "checked": true }
+      ] },
+      { "title": "A~p~pearance", "controls": [
+        { "type": "label", "x": 1, "y": 1, "w": 12, "h": 1, "text": "~T~heme", "link": "theme" },
+        { "type": "combo_box", "name": "theme", "x": 14, "y": 1, "w": 22, "h": 1, "items": ["Light", "Dark", "Blue"], "selected": 0 },
+        { "type": "label", "x": 1, "y": 3, "w": 12, "h": 1, "text": "~F~ont size", "link": "font_size" },
+        { "type": "spinner", "name": "font_size", "x": 14, "y": 3, "w": 12, "h": 1, "min": 8, "max": 32, "value": 12 },
+        { "type": "check_box", "name": "line_numbers", "x": 1, "y": 5, "w": 30, "h": 1, "text": "Show line ~n~umbers" }
+      ] }
+    ] },
+    { "type": "button", "x": 15, "y": 15, "w": 10, "h": 2, "text": "~O~K", "default": true },
+    { "type": "button", "x": 26, "y": 15, "w": 12, "h": 2, "text": "Cancel", "command": "cancel" },
+    { "type": "button", "x": 39, "y": 15, "w": 11, "h": 2, "text": "~A~pply", "command": "apply" }
+  ]
+}

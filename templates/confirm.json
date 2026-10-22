@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "title": "Confirm",
+  "width": 44,
+  "height": 9,
+  "controls": [
+    { "type": "static_text", "x": 2, "y": 1, "w": 38, "h": 2, "text": "Are you sure you want to continue?", "centered": true },
+    { "type": "button", "x": 9, "y": 4, "w": 10, "h": 2, "text": "~Y~es", "command": "yes", "default": true },
+    { "type": "button", "x": 21, "y": 4, "w": 10, "h": 2, "text": "~N~o", "command": "no" }
+  ]
+}

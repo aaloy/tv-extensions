@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "title": "Working",
+  "width": 50,
+  "height": 10,
+  "controls": [
+    { "type": "static_text", "name": "status", "x": 2, "y": 1, "w": 44, "h": 1, "text": "Please wait..." },
+    { "type": "progress_bar", "name": "progress", "x": 2, "y": 3, "w": 44, "h": 1 },
+    { "type": "button", "x": 19, "y": 5, "w": 12, "h": 2, "text": "Cancel", "command": "cancel", "default": true }
+  ]
+}
