@@ -314,6 +314,189 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
     all
 }
 
+/// The tutorial: lessons that build a small contact form step by step,
+/// each in the keys of this keyboard.
+#[allow(clippy::too_many_lines)] // prose
+pub fn tutorial(k: &Keys) -> Vec<Topic> {
+    let lessons = [
+        (
+            "The screen",
+            format!(
+                "This tutorial builds a small contact form. Read a lesson,\n\
+                 try it in the designer behind this window, then press Next.\n\
+                 \n\
+                 What you see:\n\
+                 \n\
+                 - the menu bar at the top, and the keys at the bottom;\n\
+                 - in the middle the dialog you are designing. It looks just\n\
+                   as it will when your program shows it;\n\
+                 - at the right the inspector: a tree of the controls, over\n\
+                   the JSON of the one selected.\n\
+                 \n\
+                 Start with File > New ({new}). Help > Keys lists every key.",
+                new = "Ctrl+N"
+            ),
+        ),
+        (
+            "The dialog itself",
+            "Select the dialog by clicking its frame (or press Esc until\n\
+             nothing else is selected). Press Enter: the dialog's property\n\
+             sheet opens.\n\
+             \n\
+             Set the title to \"Contact\", the width to 50 and the height to\n\
+             14, and press OK. You can also drag the yellow corner at the\n\
+             bottom right of the frame.\n\
+             \n\
+             While the dialog is selected, the arrows and dragging the frame\n\
+             move it about the desktop. That changes nothing in the file; it\n\
+             only makes room to work."
+                .to_string(),
+        ),
+        (
+            "A first control",
+            format!(
+                "Right click inside the dialog, or press {insert}. A menu\n\
+                 lists the controls in sections; choose Input line.\n\
+                 \n\
+                 The input appears and is selected. Drag it, or use the arrows,\n\
+                 to put it near the top left, leaving room on its left for a\n\
+                 caption. Drag its yellow corner to make it wider.\n\
+                 \n\
+                 Every new control goes below the selected one, so you can\n\
+                 insert several in a row and they stack up.",
+                insert = k.insert
+            ),
+        ),
+        (
+            "Properties and names",
+            "Press Enter on the input (or double click it). Its property\n\
+             sheet has three pages: General, Place and Validator.\n\
+             \n\
+             On Place, give it the name \"name\". The name is how your\n\
+             program finds the control: when the dialog is accepted, the\n\
+             answer holds {\"name\": \"...\"}. A control with no name is\n\
+             decoration and gives no value.\n\
+             \n\
+             On General, tick Required: the dialog will not close on OK while\n\
+             this line is empty. On Validator you could limit what may be\n\
+             typed; leave it alone for now."
+                .to_string(),
+        ),
+        (
+            "Captions that focus",
+            "Insert a Label and put it to the left of the input. Edit it:\n\
+             set its text to \"~N~ame\" - the tildes mark N as the hot key -\n\
+             and, in \"Links to\", choose the input called name.\n\
+             \n\
+             Now Alt+N focuses the input when the dialog runs. Do the same\n\
+             for an \"~E~mail\" input called email, below the first.\n\
+             \n\
+             Renaming an input later carries the link along, so it never\n\
+             points at nothing."
+                .to_string(),
+        ),
+        (
+            "Choices",
+            "Add a Radio buttons control below, named kind, with the items\n\
+             Personal and Work, one per line. Its value is the index of the\n\
+             chosen one, 0 for Personal.\n\
+             \n\
+             Add a Check box named subscribe with the text \"~S~ubscribe\".\n\
+             Its value is true or false.\n\
+             \n\
+             Other controls choose from lists: a Combo box, a List box, a\n\
+             Tree view, a Table. F1 on any control explains its settings."
+                .to_string(),
+        ),
+        (
+            "Buttons",
+            "Insert two Buttons at the bottom. Make the first \"~O~K\" with the\n\
+             command ok and tick Default button (Enter presses it); make\n\
+             the second \"Cancel\" with the command cancel.\n\
+             \n\
+             OK checks the dialog's rules and closes it; Cancel closes it\n\
+             with no answer. A button whose command is an action name, such\n\
+             as \"clear\", runs the code you bind to that name instead."
+                .to_string(),
+        ),
+        (
+            "Tab order",
+            format!(
+                "Tab walks the controls in the order they were made. See it:\n\
+                 press {order} and every control shows its number.\n\
+                 \n\
+                 To change it, select a control and press {earlier} or\n\
+                 {later} to move it one place. For a bigger change press\n\
+                 {set}: the controls are listed in order, and Move up and\n\
+                 Move down shift the one under the cursor. OK applies it,\n\
+                 and Undo ({undo}) takes it back.",
+                order = k.order,
+                earlier = k.earlier,
+                later = k.later,
+                set = k.set_order,
+                undo = "Ctrl+Z"
+            ),
+        ),
+        (
+            "Containers",
+            "Insert a Group box and size it to hold two controls. With the box\n\
+             selected, whatever you insert goes inside it, and moves with it.\n\
+             \n\
+             To put a control that already exists into the box, select it\n\
+             and use Edit > Move to container, or drag its row onto the\n\
+             box's row in the inspector.\n\
+             \n\
+             Tabs work the same way, with pages: click a page's tab to design\n\
+             it. Esc selects the container the selected control is in; a\n\
+             selected container shows only its frame highlighted."
+                .to_string(),
+        ),
+        (
+            "Trying it out",
+            format!(
+                "Press {test} (Dialog > Test). The dialog runs for real: type,\n\
+                 Tab, press Alt+N, tick the box, press OK. Leave Name empty to\n\
+                 see the Required rule refuse it. A box tells you what the\n\
+                 dialog answered.\n\
+                 \n\
+                 If something is wrong, close the test and change it: the\n\
+                 designer is untouched by testing.\n\
+                 \n\
+                 {json} shows the JSON you are building.",
+                test = k.test,
+                json = k.json
+            ),
+        ),
+        (
+            "Saving and using it",
+            format!(
+                "Save with {save}, as contact.json. Your program loads it:\n\
+                 \n\
+                 let mut d = JsonDialog::load(\"contact.json\")?;\n\
+                 if let Some(answer) = d.run(&mut app) {{\n\
+                     println!(\"{{}}\", answer.data);\n\
+                 }}\n\
+                 \n\
+                 Ctrl+G writes this, with every named control and action\n\
+                 bound, to a Rust file you can paste in.\n\
+                 \n\
+                 Save as template keeps a dialog you will build again; New\n\
+                 from template starts from one. Help > Contents explains the\n\
+                 rest.",
+                save = k.save
+            ),
+        ),
+    ];
+    lessons
+        .into_iter()
+        .enumerate()
+        .map(|(n, (title, text))| Topic {
+            title: format!("{}. {title}", n + 1),
+            text,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,6 +515,17 @@ mod tests {
         assert!(all.iter().all(|t| !t.title.is_empty() && !t.text.is_empty()));
         assert_eq!(all.last().unwrap().title, "Control: error line");
         assert!(all[1].text.contains("F9"));
+    }
+
+    #[test]
+    fn the_tutorial_has_lessons_in_each_keyboards_keys() {
+        let pc = tutorial(&crate::keys::PC);
+        let mac = tutorial(&crate::keys::MAC);
+        assert_eq!(pc.len(), 11);
+        assert_eq!(pc[0].title, "1. The screen");
+        let text = |l: &[Topic]| l.iter().map(|t| t.text.clone()).collect::<String>();
+        assert!(text(&pc).contains("F9") && !text(&mac).contains("F9"));
+        assert!(text(&mac).contains("Ctrl+E"));
     }
 
     #[test]

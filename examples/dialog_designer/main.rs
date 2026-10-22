@@ -83,6 +83,7 @@ const CM_MOVE_MENU: CommandId = CM_USER + 24;
 const CM_SET_ORDER: CommandId = CM_USER + 25;
 const CM_HELP_ON: CommandId = CM_USER + 26;
 const CM_HELP_CONTENTS: CommandId = CM_USER + 27;
+const CM_TUTORIAL: CommandId = CM_USER + 28;
 /// `CM_MOVE_TO + i` moves the selection to the i-th target of the move menu.
 const CM_MOVE_TO: CommandId = CM_USER + 100;
 /// `CM_INSERT + i` inserts `KINDS[i]`.
@@ -555,6 +556,7 @@ impl AppHandler for Designer {
             }
             CM_SET_ORDER => self.set_order(app),
             CM_HELP_CONTENTS => help_contents(app),
+            CM_TUTORIAL => tutorial(app),
             CM_HELP_ON => {
                 let text = {
                     let d = design.borrow();
@@ -953,6 +955,53 @@ fn edit_order(app: &mut Application, rows: &[String], selected: usize) -> Option
     }
 }
 
+/// Help > Tutorial: the lessons one after another, Back and Next between.
+fn tutorial(app: &mut Application) {
+    let lessons = help::tutorial(keys::current());
+    let mut at = 0;
+    loop {
+        let (sw, sh) = app.terminal.size();
+        let widest = lessons
+            .iter()
+            .flat_map(|l| l.text.lines())
+            .map(|l| l.chars().count())
+            .max()
+            .unwrap_or(40);
+        let tallest = lessons.iter().map(|l| l.text.lines().count()).max().unwrap_or(10);
+        let w = (i16::try_from(widest).unwrap_or(i16::MAX) + 6).clamp(46, sw);
+        let h = (i16::try_from(tallest).unwrap_or(i16::MAX) + 6).clamp(10, sh);
+        let title = format!("Tutorial {}/{}: {}", at + 1, lessons.len(), lessons[at].title);
+        let mut dialog = Dialog::new(centred(Rect::new(0, 0, sw, sh), w, h), &title);
+        let mut viewer = TextViewer::new(Rect::new(1, 0, w - 3, h - 5)).with_scrollbars(true);
+        viewer.set_text(&lessons[at].text);
+        dialog.add(viewer);
+        let last = at + 1 == lessons.len();
+        let buttons = [
+            ("~B~ack", CM_NO, 10, false),
+            (if last { "~D~one" } else { "~N~ext" }, CM_YES, 10, true),
+            ("Close", CM_CANCEL, 10, false),
+        ];
+        let total: i16 = buttons.iter().map(|b| b.2 + 2).sum::<i16>() - 2;
+        let mut x = ((w - 2 - total) / 2).max(0);
+        for (text, command, width, default) in buttons {
+            dialog.add(Button::new(
+                Rect::new(x, h - 4, x + width, h - 2),
+                text,
+                command,
+                default,
+            ));
+            x += width + 2;
+        }
+        dialog.set_initial_focus();
+        match dialog.execute(app) {
+            CM_YES if last => return,
+            CM_YES => at += 1,
+            CM_NO => at = at.saturating_sub(1),
+            _ => return,
+        }
+    }
+}
+
 /// Help > Contents: a list of topics, each shown in turn until Close.
 fn help_contents(app: &mut Application) {
     let topics = help::topics(keys::current());
@@ -1088,6 +1137,7 @@ fn menu_bar(width: i16) -> MenuBar {
     bar.add_submenu(SubMenu::new(
         "~H~elp",
         Menu::from_items(vec![
+            item("~T~utorial...", CM_TUTORIAL, None),
             item("~H~elp on selection", CM_HELP_ON, Some(k.help)),
             item("~C~ontents...", CM_HELP_CONTENTS, None),
             item("~K~eys", CM_KEYS, None),

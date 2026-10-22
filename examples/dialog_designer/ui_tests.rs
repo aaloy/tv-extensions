@@ -702,3 +702,13 @@ fn help_contents_shows_a_topic_and_comes_back_to_the_list() {
     queue(&mut app, &[KB_DOWN, KB_ENTER, KB_ENTER, KB_ESC]);
     command(&mut app, &mut designer, CM_HELP_CONTENTS);
 }
+
+#[test]
+fn the_tutorial_goes_forward_and_back() {
+    use turbo_vision::core::event::{KB_ALT_B, KB_ALT_N, KB_ESC};
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    // Next, Next, Back, then Close.
+    queue(&mut app, &[KB_ALT_N, KB_ALT_N, KB_ALT_B, KB_ESC]);
+    command(&mut app, &mut designer, CM_TUTORIAL);
+}

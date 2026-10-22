@@ -64,6 +64,14 @@ Enter or a double click to edit its properties, Left and Right to collapse
 and expand. Selecting on the design moves the tree too, which makes it the
 way to reach a control hidden under another or on a tab page.
 
+### Tutorial
+
+Help > Tutorial walks through building a small contact form in eleven
+lessons, Back and Next between them, in the keys of your keyboard: the
+screen, the dialog's size, a first control, properties and names, captions
+with hot keys, choices, buttons, tab order, containers, trying it out, and
+saving it for use in code. Try each step in the designer behind the window.
+
 ### Mouse and keys
 
 | Do | Mouse | Keys |
