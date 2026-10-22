@@ -1,8 +1,8 @@
 # Tutorial: from a JSON file to a working dialog
 
 In this tutorial you build an order form. You draw it in a JSON file, show it
-from Rust, and then give it behaviour: the total follows the item and the
-quantity (**events**), a Clear button resets the form (an **action**), and a
+from Rust, and then give it behaviour: the price follows the item and the
+total follows the price and the quantity (**events**), a Clear button resets the form (an **action**), and a
 gift with no note is refused (**rules**). At the end you test it without a
 terminal.
 
@@ -15,8 +15,9 @@ Run it first to see where you are going:
 cargo run --example dialog_order --features native,dialog
 ```
 
-Pick an item, step the quantity with the up and down arrows, tick Gift and
-press OK with no note. Press Clear. Press OK to see the data it returns.
+Pick an item and watch the price change, step the quantity with the up and
+down arrows and watch the total (price x quantity), tick Gift and press OK
+with no note, press Clear, and press OK to see the data it returns.
 
 You need only what the crate already depends on. For the reference to the
 JSON format (every control and key) see [dialog-json.md](dialog-json.md).
@@ -42,21 +43,23 @@ Create `order.json`:
   "version": 1,
   "title": "Order",
   "width": 56,
-  "height": 16,
+  "height": 18,
   "controls": [
     { "type": "label", "x": 2, "y": 1, "w": 8, "h": 1, "text": "~I~tem", "link": "item" },
     { "type": "combo_box", "name": "item", "x": 11, "y": 1, "w": 24, "h": 1, "items": ["Pen", "Ink", "Paper"], "selected": 0 },
-    { "type": "label", "x": 2, "y": 3, "w": 8, "h": 1, "text": "~Q~ty", "link": "qty" },
-    { "type": "spinner", "name": "qty", "x": 11, "y": 3, "w": 10, "h": 1, "min": 1, "max": 99, "value": 1 },
-    { "type": "label", "x": 2, "y": 5, "w": 8, "h": 1, "text": "Total" },
-    { "type": "input", "name": "total", "x": 11, "y": 5, "w": 12, "h": 1, "hint": "Worked out from the item and the quantity" },
-    { "type": "check_box", "name": "gift", "x": 11, "y": 7, "w": 20, "h": 1, "text": "~G~ift" },
-    { "type": "label", "x": 2, "y": 9, "w": 8, "h": 1, "text": "~N~ote", "link": "note" },
-    { "type": "input", "name": "note", "x": 11, "y": 9, "w": 40, "h": 1 },
-    { "type": "error_line", "x": 2, "y": 11, "w": 50, "h": 1 },
-    { "type": "button", "x": 4, "y": 12, "w": 12, "h": 2, "text": "~C~lear", "command": "clear" },
-    { "type": "button", "x": 20, "y": 12, "w": 10, "h": 2, "text": "~O~K", "command": "ok", "default": true },
-    { "type": "button", "x": 34, "y": 12, "w": 12, "h": 2, "text": "Cancel", "command": "cancel" }
+    { "type": "label", "x": 2, "y": 3, "w": 8, "h": 1, "text": "Price", "link": "price" },
+    { "type": "input", "name": "price", "x": 11, "y": 3, "w": 12, "h": 1, "hint": "The price of one, set when the item changes" },
+    { "type": "label", "x": 2, "y": 5, "w": 8, "h": 1, "text": "~Q~ty", "link": "qty" },
+    { "type": "spinner", "name": "qty", "x": 11, "y": 5, "w": 10, "h": 1, "min": 1, "max": 99, "value": 1 },
+    { "type": "label", "x": 2, "y": 7, "w": 8, "h": 1, "text": "Total", "link": "total" },
+    { "type": "input", "name": "total", "x": 11, "y": 7, "w": 12, "h": 1, "hint": "Price times quantity" },
+    { "type": "check_box", "name": "gift", "x": 11, "y": 9, "w": 20, "h": 1, "text": "~G~ift" },
+    { "type": "label", "x": 2, "y": 11, "w": 8, "h": 1, "text": "~N~ote", "link": "note" },
+    { "type": "input", "name": "note", "x": 11, "y": 11, "w": 40, "h": 1 },
+    { "type": "error_line", "x": 2, "y": 13, "w": 50, "h": 1 },
+    { "type": "button", "x": 4, "y": 14, "w": 12, "h": 2, "text": "~C~lear", "command": "clear" },
+    { "type": "button", "x": 20, "y": 14, "w": 10, "h": 2, "text": "~O~K", "command": "ok", "default": true },
+    { "type": "button", "x": 34, "y": 14, "w": 12, "h": 2, "text": "Cancel", "command": "cancel" }
   ]
 }
 ```
@@ -68,7 +71,7 @@ What matters here:
   *inside* the frame; `w` and `h` are its size in cells. Fields sit on every
   other row (`y` = 1, 3, 5, ...) with the label at `x: 2` and the field at
   `x: 11`.
-- **Names are the join.** `item`, `qty`, `total`, `gift` and `note` are the
+- **Names are the join.** `item`, `price`, `qty`, `total`, `gift` and `note` are the
   keys of the data the dialog returns, and the names your code uses. The
   labels have no name: nobody reaches them. A label's `link` names the control
   it captions, so Alt+I focuses the item.
@@ -90,11 +93,12 @@ cargo run --example dialog_check --features native,dialog -- order.json --render
 ```
 
 ```text
-ok: "Order" 56x16, 13 controls
+ok: "Order" 56x18, 15 controls
 
 data returned when accepted (the starting values):
 {
   "item": 0,
+  "price": "",
   "qty": 1,
   "total": "",
   "gift": false,
@@ -108,6 +112,8 @@ no warnings
 ╔═[■]════════════════════ Order ═══════════════════════╗
 ║                                                      ║
 ║  Item      Pen                   ▼                   ║
+║                                                      ║
+║  Price                                               ║
 ║                                                      ║
 ║  Qty             1▲▼                                 ║
 ║                                                      ║
@@ -164,11 +170,11 @@ name. It refuses names that are not controls and values of the wrong type.
 
 ```rust,ignore
 dialog
-    .set_data(&json!({ "qty": 1, "total": "2" }))
+    .set_data(&json!({ "price": "2", "total": "2" }))
     .expect("the names exist and the values fit");
 ```
 
-## 5. Events: the total follows the form
+## 5. Events: the price and the total follow the form
 
 An **event** is the person changing a control while the dialog is open.
 `on_change(name, handler)` runs the handler each time the control called
@@ -185,7 +191,7 @@ use tv_extensions::dialog_spec::{ActionContext, Flow, JsonDialog};
 /// What one of each item costs, in the order of the `item` combo box.
 const PRICES: [i64; 3] = [2, 5, 3];
 
-/// Work the total out from the item and the quantity.
+/// Show the item's price, and the price times the quantity as the total.
 fn recompute(ctx: &mut ActionContext<'_>) -> Flow {
     let item = ctx
         .value("item")
@@ -193,8 +199,9 @@ fn recompute(ctx: &mut ActionContext<'_>) -> Flow {
         .and_then(|i| usize::try_from(i).ok())
         .unwrap_or(0);
     let qty = ctx.value("qty").and_then(|v| v.as_i64()).unwrap_or(1);
-    let total = PRICES.get(item).copied().unwrap_or(0) * qty;
-    let _ = ctx.set_value("total", &json!(total.to_string()));
+    let price = PRICES.get(item).copied().unwrap_or(0);
+    let _ = ctx.set_value("price", &json!(price.to_string()));
+    let _ = ctx.set_value("total", &json!((price * qty).to_string()));
     Flow::Stay
 }
 
@@ -202,10 +209,22 @@ dialog.on_change("item", recompute);
 dialog.on_change("qty", recompute);
 ```
 
-One function serves two controls. A combo box's value is the index of the
+One function serves two controls, and works the sum in the open: it reads the
+item and the quantity, shows the item's **price**, and shows the **total**,
+which is the price times the quantity:
+
+| Item (index) | Price | Quantity | Total |
+|--------------|-------|----------|-------|
+| Pen (0) | 2 | 1 | 2 |
+| Pen (0) | 2 | 2 | 4 |
+| Ink (1) | 5 | 3 | 15 |
+| Paper (2) | 3 | 4 | 12 |
+
+Choosing a different item changes both the price and the total; changing the
+quantity changes the total. A combo box's value is the index of the
 chosen item, a spinner's is a number: the value of each control type is in
 the [JSON reference](dialog-json.md). A change the *handler* makes
-(`set_value("total", ...)`) is not counted as a change by the person, so a
+(`set_value("price", ...)`, `set_value("total", ...)`) is not counted as a change by the person, so a
 handler can set any control without starting a loop.
 
 ## 6. An action: the Clear button
@@ -216,7 +235,7 @@ A button whose `command` is not `ok`, `cancel`, `yes` or `no` is an
 ```rust,ignore
 dialog.on("clear", |ctx| {
     let _ = ctx.set_data(&json!({
-        "item": 0, "qty": 1, "total": "2", "gift": false, "note": ""
+        "item": 0, "price": "2", "qty": 1, "total": "2", "gift": false, "note": ""
     }));
     Flow::Stay
 });
@@ -285,7 +304,7 @@ fn order_dialog() -> JsonDialog {
         JsonDialog::load("examples/dialog_specs/order.json").expect("order.json is a valid dialog");
 
     dialog
-        .set_data(&json!({ "qty": 1, "total": "2" }))
+        .set_data(&json!({ "price": "2", "total": "2" }))
         .expect("the names exist and the values fit");
 
     dialog.on_change("item", recompute);
@@ -293,7 +312,7 @@ fn order_dialog() -> JsonDialog {
 
     dialog.on("clear", |ctx| {
         let _ = ctx.set_data(&json!({
-            "item": 0, "qty": 1, "total": "2", "gift": false, "note": ""
+            "item": 0, "price": "2", "qty": 1, "total": "2", "gift": false, "note": ""
         }));
         Flow::Stay
     });
@@ -330,21 +349,23 @@ use turbo_vision::test_util::test_terminal;   // needs turbo-vision's `test-util
 fn the_total_follows_the_quantity() {
     let mut app = Application::with_terminal(test_terminal(100, 40));
     let mut dialog = order_dialog();
-    // Tab to the quantity, step it up once, accept.
+    // Tab to the quantity (item, price, qty), step it up once, accept.
     let tx = app.terminal.event_injector();
-    for code in [KB_TAB, KB_UP, KB_ALT_O] {
+    for code in [KB_TAB, KB_TAB, KB_UP, KB_ALT_O] {
         tx.send(Event::keyboard(code)).unwrap();
     }
     let answer = dialog.run(&mut app).expect("accepted");
     assert_eq!(answer.data["qty"], json!(2));
-    assert_eq!(answer.data["total"], json!("4"));
+    assert_eq!(answer.data["price"], json!("2"));   // Pen
+    assert_eq!(answer.data["total"], json!("4"));   // 2 x 2
 }
 ```
 
 Run the example's tests with
-`cargo test --example dialog_order --features native,dialog`. The three
-behaviours have a test each: the total follows the quantity, Clear resets the
-form, a gift with no note is refused. For the last, the test ticks Gift and
+`cargo test --example dialog_order --features native,dialog`. The four
+behaviours have a test each: the total follows the quantity, the price follows
+the item (Ink, 5, times 3 is 15), Clear resets the form, and a gift with no
+note is refused. For the last, the test ticks Gift and
 presses OK; the rule refuses, so the dialog is still open when Esc cancels
 it.
 
