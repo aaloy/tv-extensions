@@ -24,7 +24,12 @@
       {"title": "~O~ne", "controls": [
         {"type": "input", "name": "city", "x": 1, "y": 0, "w": 20, "h": 1, "validator": {"type": "picture", "mask": "@@@@@@"}}
       ] },
-      {"title": "~T~wo", "controls": [] }
+      {"title": "~T~wo", "controls": [
+        {"type": "tree", "name": "outline", "x": 1, "y": 0, "w": 28, "h": 5, "nodes": [
+          {"label": "Fruit", "expanded": true, "children": ["Apple", {"key": "pear", "label": "Pear"}]},
+          "Vegetables"
+        ], "selected": "pear"}
+      ] }
     ] },
     {"type": "auto_complete", "name": "fruit", "x": 40, "y": 13, "w": 20, "h": 1, "items": ["Apple", "Banana"], "require_match": true},
     {"type": "dual_list", "name": "team", "x": 40, "y": 14, "w": 32, "h": 6, "items": ["ann", {"key": "bob", "label": "Bob B."}], "chosen": ["bob"]},

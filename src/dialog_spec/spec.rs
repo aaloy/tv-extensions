@@ -422,6 +422,24 @@ impl Control {
                 validator: Some(ValidatorSpec::Range { min, max }),
                 ..
             } => range(*min, *max),
+            Kind::Tree { nodes, selected } => {
+                let mut keys = HashSet::new();
+                let mut dup = None;
+                TreeNode::each(nodes, &mut |n| {
+                    if !keys.insert(n.key().to_string()) && dup.is_none() {
+                        dup = Some(n.key().to_string());
+                    }
+                });
+                if let Some(key) = dup {
+                    return Err(format!("has the node key \"{key}\" twice"));
+                }
+                match selected {
+                    Some(key) if !keys.contains(key.as_str()) => {
+                        Err(format!("selects \"{key}\", which is not a node"))
+                    }
+                    _ => Ok(()),
+                }
+            }
             Kind::Button { command, .. } if command.trim().is_empty() => {
                 Err("has no command".into())
             }
@@ -678,6 +696,17 @@ pub enum Kind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<usize>,
     },
+    /// A tree of expandable nodes, one of which is selected (the first,
+    /// unless `selected` says otherwise). Its value is the key of the
+    /// selected node, or null for a tree with no nodes. Right and Left
+    /// expand and collapse a node; Enter toggles it.
+    Tree {
+        /// The top-level nodes.
+        nodes: Vec<TreeNode>,
+        /// The key of the node selected at first.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selected: Option<String>,
+    },
     /// A rule drawn with line characters: a row when it is one row tall, a
     /// column when it is one column wide, and a rectangle with proper
     /// corners when it is larger than that.
@@ -723,6 +752,7 @@ impl Kind {
             Self::AutoComplete { .. } => "auto_complete",
             Self::DualList { .. } => "dual_list",
             Self::Line { .. } => "line",
+            Self::Tree { .. } => "tree",
             Self::ErrorLine {} => "error_line",
         }
     }
@@ -938,6 +968,124 @@ impl Item {
         match self {
             Self::Plain(label) | Self::Keyed { label, .. } => label,
         }
+    }
+}
+
+/// A node of a [`Kind::Tree`]: a string that stands for itself, or an
+/// object with a `label`, and optionally a `key` (the label by default),
+/// `children` and `expanded`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TreeNode {
+    /// The value in the data; the label when none is given.
+    pub key: Option<String>,
+    /// What the person sees.
+    pub label: String,
+    /// The nodes below it.
+    pub children: Vec<TreeNode>,
+    /// Showing its children at first.
+    pub expanded: bool,
+}
+
+impl TreeNode {
+    /// A leaf whose key is its label.
+    #[must_use]
+    pub fn new(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            ..Self::default()
+        }
+    }
+
+    /// The key: the value in the dialog's data.
+    #[must_use]
+    pub fn key(&self) -> &str {
+        self.key.as_deref().unwrap_or(&self.label)
+    }
+
+    /// Call `f` on every node of `nodes`, parents before children.
+    pub fn each<'a>(nodes: &'a [Self], f: &mut impl FnMut(&'a Self)) {
+        for node in nodes {
+            f(node);
+            Self::each(&node.children, f);
+        }
+    }
+
+    /// The keys from a top-level node down to the node `key`.
+    #[must_use]
+    pub fn path<'a>(nodes: &'a [Self], key: &str) -> Option<Vec<&'a str>> {
+        nodes.iter().find_map(|node| {
+            if node.key() == key {
+                Some(vec![node.key()])
+            } else {
+                let mut path = Self::path(&node.children, key)?;
+                path.insert(0, node.key());
+                Some(path)
+            }
+        })
+    }
+}
+
+impl Serialize for TreeNode {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let key = self.key.as_ref().filter(|k| **k != self.label);
+        if key.is_none() && self.children.is_empty() && !self.expanded {
+            return serializer.serialize_str(&self.label);
+        }
+        let mut map = Map::new();
+        if let Some(key) = key {
+            map.insert("key".into(), Value::from(key.clone()));
+        }
+        map.insert("label".into(), Value::from(self.label.clone()));
+        if !self.children.is_empty() {
+            map.insert(
+                "children".into(),
+                serde_json::to_value(&self.children).map_err(serde::ser::Error::custom)?,
+            );
+        }
+        if self.expanded {
+            map.insert("expanded".into(), Value::Bool(true));
+        }
+        map.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for TreeNode {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = Value::deserialize(deserializer)?;
+        let wrong = || {
+            D::Error::custom(format!(
+                "a tree node is a string or {{\"label\": ..., \"key\", \"children\", \"expanded\"}}, not {value}"
+            ))
+        };
+        if let Value::String(label) = &value {
+            return Ok(Self::new(label.clone()));
+        }
+        let map = value.as_object().ok_or_else(wrong)?;
+        if map
+            .keys()
+            .any(|k| !["key", "label", "children", "expanded"].contains(&k.as_str()))
+        {
+            return Err(wrong());
+        }
+        let label = map.get("label").and_then(Value::as_str).ok_or_else(wrong)?;
+        let key = match map.get("key") {
+            None => None,
+            Some(k) => Some(k.as_str().ok_or_else(wrong)?.to_string()),
+        };
+        let children = match map.get("children") {
+            None => Vec::new(),
+            Some(c) => serde_json::from_value(c.clone()).map_err(D::Error::custom)?,
+        };
+        let expanded = match map.get("expanded") {
+            None => false,
+            Some(e) => e.as_bool().ok_or_else(wrong)?,
+        };
+        Ok(Self {
+            key,
+            label: label.to_string(),
+            children,
+            expanded,
+        })
     }
 }
 

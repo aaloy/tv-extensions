@@ -5,6 +5,7 @@
 //! (`tv_extensions::forms::json`), filled from the spec and read back into
 //! it.
 
+use std::fmt::Write as _;
 use crate::model::Design;
 use serde_json::{Map, Value, json};
 use std::cell::RefCell;
@@ -12,7 +13,7 @@ use std::rc::Rc;
 use turbo_vision::app::Application;
 use turbo_vision::views::msgbox::message_box_error;
 use tv_extensions::dialog_spec::{
-    Align, ColumnSpec, Control, Item, Kind, LineStyle, MAX_CLUSTER_ITEMS, PageSpec, ValidatorSpec,
+    Align, ColumnSpec, Control, Item, Kind, LineStyle, TreeNode, MAX_CLUSTER_ITEMS, PageSpec, ValidatorSpec,
 };
 use tv_extensions::forms::json::{FormError, run};
 
@@ -127,6 +128,67 @@ fn pick(name: &str, label: &str, items: &[String], value: Option<usize>, none: b
     );
     let default = value.map_or(json!(-1), |i| json!(i));
     json!({ "name": name, "type": "choice", "label": label, "options": options, "default": default })
+}
+
+/// A tree as the lines of its sheet's memo: two spaces for each level, `+`
+/// before an expanded node, `key=label` for a node with its own key.
+fn tree_text(nodes: &[TreeNode], level: usize) -> String {
+    let mut out = String::new();
+    for node in nodes {
+        out.push_str(&"  ".repeat(level));
+        if node.expanded {
+            out.push_str("+ ");
+        }
+        match &node.key {
+            Some(key) if *key != node.label => {
+                let _ = write!(out, "{key}={}", node.label);
+            }
+            _ => out.push_str(&node.label),
+        }
+        out.push('\n');
+        out.push_str(&tree_text(&node.children, level + 1));
+    }
+    out
+}
+
+/// The nodes `lines` describe; the inverse of [`tree_text`].
+fn parse_tree(lines: &[String]) -> Result<Vec<TreeNode>, String> {
+    // The path of open nodes: each is a child of the one before it.
+    let mut roots: Vec<TreeNode> = Vec::new();
+    let mut depth = 0;
+    for line in lines {
+        let spaces = line.len() - line.trim_start().len();
+        let level = spaces / 2;
+        let mut text = line.trim();
+        let expanded = text.starts_with('+');
+        if expanded {
+            text = text[1..].trim_start();
+        }
+        let node = match text.split_once('=') {
+            Some((key, label)) => TreeNode {
+                key: Some(key.trim().to_string()),
+                ..TreeNode::new(label.trim())
+            },
+            None => TreeNode::new(text),
+        };
+        let node = TreeNode { expanded, ..node };
+        if node.label.is_empty() {
+            return Err("A tree node needs a label.".into());
+        }
+        if level > depth || (roots.is_empty() && level > 0) {
+            return Err(format!("\"{}\" is indented too far.", line.trim()));
+        }
+        depth = level + 1;
+        let mut siblings = &mut roots;
+        for _ in 0..level {
+            let Some(parent) = siblings.last_mut() else {
+                return Err(format!("\"{}\" has no parent.", line.trim()));
+            };
+            siblings = &mut parent.children;
+        }
+        siblings.push(node);
+    }
+    Ok(roots)
 }
 
 /// Tick boxes for the indices of `items`.
@@ -416,6 +478,18 @@ fn sheet(c: &Control, others: &[String]) -> Value {
                 ] }),
             ]);
             v
+        }
+        Kind::Tree { nodes, selected } => {
+            let mut keys = Vec::new();
+            TreeNode::each(nodes, &mut |n| keys.push(n.key().to_string()));
+            let at = selected
+                .as_deref()
+                .and_then(|s| keys.iter().position(|k| k == s));
+            vec![
+                memo("nodes", "~N~odes", &tree_text(nodes, 0), 8),
+                note("One per line, two spaces of indent for each level.\nkey=label gives a node a key; + before a node shows its children."),
+                pick("selected", "~S~elected first", &keys, at, true),
+            ]
         }
         Kind::Line { style } => {
             let names: Vec<String> = LineStyle::ALL.iter().map(|s| s.name().to_string()).collect();
@@ -815,6 +889,13 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
                 max: Some(a.usize("max", 0)).filter(|&m| m > 0),
             }
         }
+        Kind::Tree { .. } => {
+            let nodes = parse_tree(&a.lines("nodes"))?;
+            let mut keys = Vec::new();
+            TreeNode::each(&nodes, &mut |n| keys.push(n.key().to_string()));
+            let selected = a.index("selected", keys.len()).map(|i| keys[i].clone());
+            Kind::Tree { nodes, selected }
+        }
         Kind::Line { style } => Kind::Line {
             style: a
                 .index("style", LineStyle::ALL.len())
@@ -829,6 +910,29 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
 mod tests {
     use super::*;
     use crate::model::KINDS;
+
+    #[test]
+    fn a_tree_is_edited_as_indented_lines() {
+        let nodes = vec![
+            TreeNode {
+                expanded: true,
+                children: vec![
+                    TreeNode {
+                        key: Some("pear".into()),
+                        ..TreeNode::new("Pear")
+                    },
+                    TreeNode::new("Apple"),
+                ],
+                ..TreeNode::new("Fruit")
+            },
+            TreeNode::new("Other"),
+        ];
+        let text = tree_text(&nodes, 0);
+        assert_eq!(text, "+ Fruit\n  pear=Pear\n  Apple\nOther\n");
+        let lines: Vec<String> = text.lines().map(str::to_string).collect();
+        assert_eq!(parse_tree(&lines).unwrap(), nodes);
+        assert!(parse_tree(&["A".into(), "    B".into()]).is_err());
+    }
 
     /// Every kind's sheet is a valid form, and reading its own defaults
     /// back changes nothing.

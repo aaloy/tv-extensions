@@ -4,7 +4,7 @@
 //! JSON, validation shown in the dialog, and actions bound in code.
 
 use super::line::LineView;
-use super::spec::{Align, Control, DialogSpec, Kind, SpecError, ValidatorSpec};
+use super::spec::{Align, Control, DialogSpec, Kind, SpecError, TreeNode, ValidatorSpec};
 use crate::autocomplete::AutoCompleteBuilder;
 use crate::dual_list::{DualList, DualListBuilder};
 use crate::forms::data::{ErrorLine, next_combo_id};
@@ -18,7 +18,7 @@ use std::path::Path;
 use std::rc::Rc;
 use turbo_vision::app::{Application, ModalTick};
 use turbo_vision::core::command::{CM_CANCEL, CM_NO, CM_OK, CM_YES, CommandId};
-use turbo_vision::core::event::{Event, EventType};
+use turbo_vision::core::event::{Event, EventType, KB_RIGHT};
 use turbo_vision::core::geometry::{Point, Rect};
 use turbo_vision::core::state::Options;
 use turbo_vision::terminal::Terminal;
@@ -34,9 +34,11 @@ use turbo_vision::views::input_line::InputLine;
 use turbo_vision::views::label::Label;
 use turbo_vision::views::listbox::ListBox;
 use turbo_vision::views::lookup_validator::LookupValidator;
+use turbo_vision::views::list_viewer::ListViewer;
 use turbo_vision::views::memo::Memo;
 use turbo_vision::views::msgbox::message_box_ok;
 use turbo_vision::views::picture_validator::PictureValidator;
+use turbo_vision::views::outline::{Node, OutlineViewer};
 use turbo_vision::views::progress_bar::ProgressBar;
 use turbo_vision::views::slider::Slider;
 use turbo_vision::views::spinner::Spinner;
@@ -623,6 +625,52 @@ fn view<V: 'static>(dialog: &mut Dialog, id: ViewId) -> Option<&mut V> {
     find_view_mut(dialog, id)?.as_any_mut().downcast_mut()
 }
 
+/// What a tree node carries: its key in the data, and what is shown.
+struct TreeItem {
+    key: String,
+    label: String,
+}
+
+type Tree = OutlineViewer<TreeItem>;
+
+fn tree_nodes(nodes: &[TreeNode]) -> Vec<Rc<RefCell<Node<TreeItem>>>> {
+    nodes
+        .iter()
+        .map(|n| {
+            let item = TreeItem {
+                key: n.key().to_string(),
+                label: n.label.clone(),
+            };
+            let mut node = Node::with_children(item, tree_nodes(&n.children));
+            node.expanded = n.expanded && node.has_children();
+            Rc::new(RefCell::new(node))
+        })
+        .collect()
+}
+
+/// The key of the node `tree` has selected.
+fn tree_selected(tree: &Tree) -> Option<String> {
+    tree.selected_node().map(|n| n.borrow().data.key.clone())
+}
+
+/// Select the node at the end of `path` (keys, top-level first), expanding
+/// the nodes above it. False if a node on the path is not there.
+fn tree_select(tree: &mut Tree, path: &[&str]) -> bool {
+    for (depth, key) in path.iter().enumerate() {
+        let shown = (0..tree.item_count()).find(|&i| {
+            tree.set_focused_item(Some(i));
+            tree_selected(tree).as_deref() == Some(*key)
+        });
+        if shown.is_none() {
+            return false;
+        }
+        if depth + 1 < path.len() {
+            tree.handle_event(&mut Event::keyboard(KB_RIGHT));
+        }
+    }
+    true
+}
+
 fn index_value(index: Option<usize>) -> Value {
     index.map_or(Value::Null, Value::from)
 }
@@ -655,6 +703,8 @@ fn read(dialog: &mut Dialog, field: &Field) -> Value {
         Kind::DualList { .. } => {
             view::<DualList<String>>(dialog, id).map(|v| Value::from(v.chosen_keys()))
         }
+        Kind::Tree { .. } => view::<Tree>(dialog, id)
+            .map(|v| tree_selected(v).map_or(Value::Null, Value::from)),
         _ => None,
     };
     value.unwrap_or(Value::Null)
@@ -827,6 +877,18 @@ fn write(dialog: &mut Dialog, field: &Field, value: &Value) -> Result<(), &'stat
                 .ok_or(missing)?
                 .set_chosen(&keys);
         }
+        Kind::Tree { nodes, .. } => match value {
+            Value::Null => {}
+            v => {
+                let path = v
+                    .as_str()
+                    .and_then(|key| TreeNode::path(nodes, key))
+                    .ok_or("the key of a node, or null")?;
+                if !tree_select(view::<Tree>(dialog, id).ok_or(missing)?, &path) {
+                    return Err("the key of a node, or null");
+                }
+            }
+        },
         _ => return Err("no value"),
     }
     Ok(())
@@ -1333,6 +1395,14 @@ impl<'a> Builder<'a> {
                 let mut list: dual_list::DualList<String> = builder.build();
                 list.set_chosen(chosen);
                 group.add(list)
+            }
+            Kind::Tree { nodes, selected } => {
+                let mut tree = Tree::new(bounds, |item: &TreeItem| item.label.clone());
+                tree.set_roots(tree_nodes(nodes));
+                if let Some(path) = selected.as_deref().and_then(|k| TreeNode::path(nodes, k)) {
+                    tree_select(&mut tree, &path);
+                }
+                group.add(tree)
             }
             Kind::Line { style } => group.add(LineView::new(bounds, *style)),
             Kind::ErrorLine {} => {

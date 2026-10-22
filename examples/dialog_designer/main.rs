@@ -394,7 +394,7 @@ impl AppHandler for Designer {
                     "Dialog designer\n\nDesign Turbo Vision dialogs and save them as JSON for tv_extensions::dialog_spec.",
                 );
             }
-            c if (CM_INSERT..CM_INSERT + 20).contains(&c) => self.insert(c),
+            c if (CM_INSERT..CM_INSERT + 21).contains(&c) => self.insert(c),
             _ => return false,
         }
         self.refresh(app);

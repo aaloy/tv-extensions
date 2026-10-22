@@ -82,6 +82,7 @@ fn every_kind_builds_and_reports_its_starting_value() {
             "progress": 40,
             "orders": 0,
             "city": "",
+            "outline": "pear",
             "fruit": "",
             "team": ["bob"]
         })
@@ -104,6 +105,7 @@ fn data_goes_in_and_comes_back_out() {
         "progress": 100,
         "orders": 0,
         "city": "London",
+        "outline": "pear",
         "fruit": "Apple",
         "team": ["ann", "bob"]
     });
@@ -393,4 +395,41 @@ fn a_line_is_a_row_a_column_or_a_rectangle_with_corners() {
     assert!(all.contains("╔══════╗"), "double top\n{all}");
     assert!(all.contains("╚══════╝"), "double bottom\n{all}");
     assert_eq!(all.matches('█').count(), 4 + 4 + 2, "a block box is a ring of blocks");
+}
+
+#[test]
+fn a_tree_selects_a_node_by_key_even_below_a_collapsed_one() {
+    let mut dialog = JsonDialog::from_json(
+        r#"{ "title": "Tree", "width": 40, "height": 14, "controls": [
+            { "type": "tree", "name": "t", "x": 2, "y": 1, "w": 30, "h": 8, "nodes": [
+                { "label": "A", "children": [
+                    { "label": "B", "key": "b", "children": ["C"] }
+                ] },
+                "D"
+            ] }
+        ] }"#,
+    )
+    .unwrap();
+    // The first node is selected unless the spec says otherwise.
+    assert_eq!(dialog.data(), json!({ "t": "A" }));
+    dialog.set_value("t", &json!("C")).unwrap();
+    assert_eq!(dialog.value("t"), Some(json!("C")));
+    dialog.set_value("t", &json!("D")).unwrap();
+    assert_eq!(dialog.value("t"), Some(json!("D")));
+    assert!(dialog.set_value("t", &json!("nope")).is_err());
+    assert!(dialog.set_value("t", &json!(3)).is_err());
+}
+
+#[test]
+fn a_tree_is_saved_as_plainly_as_it_was_written() {
+    let json = r#"{ "type": "tree", "name": "t", "x": 0, "y": 0, "w": 20, "h": 5,
+        "nodes": ["A", { "label": "B", "key": "b", "children": ["C"], "expanded": true }],
+        "selected": "C" }"#;
+    let control: tv_extensions::dialog_spec::Control = serde_json::from_str(json).unwrap();
+    let saved = serde_json::to_value(&control).unwrap();
+    assert_eq!(saved["nodes"][0], json!("A"));
+    assert_eq!(
+        saved["nodes"][1],
+        json!({ "key": "b", "label": "B", "children": ["C"], "expanded": true })
+    );
 }

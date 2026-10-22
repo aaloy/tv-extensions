@@ -170,6 +170,7 @@ from the corner inside the frame (or inside its tab page), an optional
 | `tabs` | `pages` (each a `title` and its `controls`), `active` | — |
 | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
+| `tree` | `nodes` (strings, or `{"label", "key", "children", "expanded"}`; the key is the label by default), `selected` (a key) | the key of the selected node (the first at first), or null |
 | `line` | `style` (`single` by default, `double`, `heavy`, `round`, `block`): one row tall it is a horizontal rule, one column wide a vertical one, larger a rectangle with corners | — |
 | `error_line` | none: validation messages show here | — |
 

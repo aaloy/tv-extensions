@@ -98,6 +98,7 @@
 //! | `tabs` | `pages` (each `title` and `controls`), `active` | — |
 //! | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 //! | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
+//! | `tree` | `nodes` (strings, or `{"label", "key", "children", "expanded"}`), `selected` (a key) | the key of the selected node (the first at first), or null |
 //! | `line` | `style`: `single`, `double`, `heavy`, `round`, `block`; one row tall it is a row, one column wide a column, larger a rectangle | — |
 //! | `error_line` | — (where validation messages show) | — |
 //!
@@ -190,5 +191,5 @@ mod spec;
 pub use runtime::{ActionContext, Answer, Errors, Flow, JsonDialog};
 pub use spec::{
     Align, ColumnSpec, Control, DialogSpec, Item, Kind, LineStyle, MAX_CLUSTER_ITEMS, PageSpec,
-    SpecError, VERSION, ValidatorSpec,
+    SpecError, TreeNode, VERSION, ValidatorSpec,
 };

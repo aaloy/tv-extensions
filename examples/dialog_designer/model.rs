@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use turbo_vision::core::geometry::{Point, Rect};
 use turbo_vision::views::tabbed_pane::TabbedPane;
 use tv_extensions::dialog_spec::{
-    Align, ColumnSpec, Control, DialogSpec, Item, Kind, LineStyle, PageSpec, SpecError,
+    Align, ColumnSpec, Control, DialogSpec, Item, Kind, LineStyle, PageSpec, SpecError, TreeNode,
 };
 
 /// The smallest dialog the designer makes, frame included.
@@ -34,7 +34,7 @@ pub enum Sel {
 
 /// Every control type the designer inserts: the JSON type and its menu
 /// text, in menu order.
-pub const KINDS: [(&str, &str); 20] = [
+pub const KINDS: [(&str, &str); 21] = [
     ("label", "~L~abel"),
     ("static_text", "~S~tatic text"),
     ("button", "~B~utton"),
@@ -53,6 +53,7 @@ pub const KINDS: [(&str, &str); 20] = [
     ("tabs", "Ta~b~s"),
     ("auto_complete", "Auto-co~m~plete"),
     ("dual_list", "Dual ~l~ist"),
+    ("tree", "Tree vie~w~"),
     ("line", "Li~n~e"),
     ("error_line", "~E~rror line"),
 ];
@@ -652,6 +653,21 @@ impl Design {
                     titles: None,
                     min: 0,
                     max: None,
+                },
+            ),
+            "tree" => (
+                named("tree"),
+                (30, 8),
+                Kind::Tree {
+                    nodes: vec![
+                        TreeNode {
+                            expanded: true,
+                            children: vec![TreeNode::new("Leaf"), TreeNode::new("Another leaf")],
+                            ..TreeNode::new("Branch")
+                        },
+                        TreeNode::new("Other"),
+                    ],
+                    selected: None,
                 },
             ),
             "line" => (
