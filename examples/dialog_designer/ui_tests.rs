@@ -219,6 +219,7 @@ fn the_code_skeleton_binds_what_the_dialog_names() {
     );
     assert!(code.contains("dialog.on(\"lookup\""), "{code}");
     assert!(code.contains("dialog.on(\"kind_changed\""), "{code}");
+    assert!(code.contains("// dialog.on_change(\"name\""), "{code}");
     // The stub says which control it is for.
     assert!(code.contains("Runs when \"kind\" changes"), "{code}");
     assert!(code.contains("fn customer_dialog("), "{code}");

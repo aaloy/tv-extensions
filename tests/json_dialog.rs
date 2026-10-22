@@ -301,18 +301,19 @@ fn a_change_runs_its_action() {
 }
 
 /// The `dialog_on_change` example: changing the mode moves the slider and
-/// the meter, which the handler does with `set_value`.
+/// the meter, which the handler does with `set_value`. Those are the
+/// code's changes, not the person's, so the slider's own handler is not run.
 #[test]
 fn a_change_can_set_other_controls() {
     let mut app = app();
     let mut dialog = JsonDialog::load("examples/dialog_specs/volume.json").unwrap();
-    dialog.on("mode_changed", |ctx| {
+    dialog.on_change("mode", |ctx| {
         let level = if ctx.value("mode") == Some(json!(1)) { 80 } else { 20 };
         ctx.set_value("volume", &json!(level)).unwrap();
         ctx.set_value("meter", &json!(level)).unwrap();
         Flow::Stay
     });
-    dialog.on("volume_changed", |ctx| {
+    dialog.on_change("volume", |ctx| {
         let level = ctx.value("volume").unwrap();
         ctx.set_value("meter", &level).unwrap();
         Flow::Stay
@@ -326,6 +327,42 @@ fn a_change_can_set_other_controls() {
     assert_eq!(answer.data["mode"], json!(1));
     assert_eq!(answer.data["volume"], json!(80));
     assert_eq!(answer.data["meter"], json!(80));
+}
+
+#[test]
+fn any_control_can_be_watched_by_name() {
+    let mut app = app();
+    let mut dialog = customer();
+    let typed = Rc::new(RefCell::new(Vec::<Value>::new()));
+    let log = Rc::clone(&typed);
+    // An input has no on_change in the JSON: it is watched by its name.
+    dialog.on_change("name", move |ctx| {
+        log.borrow_mut().push(ctx.value("name").unwrap());
+        Flow::Stay
+    });
+    type_text(&mut app, "Ad");
+    key(&mut app, KB_ALT_O);
+    let answer = dialog.run(&mut app);
+    assert!(answer.is_some(), "the name was typed");
+    assert_eq!(*typed.borrow(), vec![json!("A"), json!("Ad")]);
+}
+
+#[test]
+fn a_handlers_own_changes_do_not_start_a_loop() {
+    let mut app = app();
+    let mut dialog = customer();
+    let runs = Rc::new(RefCell::new(0));
+    let count = Rc::clone(&runs);
+    dialog.on_change("name", move |ctx| {
+        *count.borrow_mut() += 1;
+        // Always a different value: a loop if it counted as a change.
+        let _ = ctx.set_value("name", &json!(format!("x{}", *count.borrow())));
+        Flow::Stay
+    });
+    type_text(&mut app, "A");
+    key(&mut app, KB_ALT_O);
+    let _ = dialog.run(&mut app);
+    assert_eq!(*runs.borrow(), 1);
 }
 
 #[test]

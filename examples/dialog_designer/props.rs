@@ -226,17 +226,6 @@ fn plain(text: &str) -> String {
     text.chars().filter(|&c| c != '~').collect()
 }
 
-/// What the "On change action" setting means, under it.
-const ON_CHANGE_NOTE: &str = "A name, such as volume_changed. Your program runs code under that\nname each time this control changes; Ctrl+G writes the empty handler.";
-
-fn on_change(value: Option<&String>) -> Value {
-    text(
-        "on_change",
-        "On ~c~hange action (a name your code binds)",
-        value.map_or("", String::as_str),
-    )
-}
-
 /// The property sheet for `c`: a page of its own settings and a page for
 /// its name and place (and one for an input's validator).
 #[allow(clippy::too_many_lines, reason = "one arm per control kind")]
@@ -331,20 +320,18 @@ fn sheet(c: &Control, others: &[String]) -> Value {
         Kind::CheckBoxes {
             items,
             checked,
-            on_change: oc,
+            ..
         } => {
             let mut v = vec![memo("items", "~I~tems (one per line)", &lines(items), 5)];
             if !items.is_empty() {
                 v.push(ticks("checked", "C~h~ecked", items, checked));
             }
-            v.push(on_change(oc.as_ref()));
-            v.push(note(ON_CHANGE_NOTE));
             v
         }
         Kind::RadioButtons {
             items,
             selected,
-            on_change: oc,
+            ..
         } => {
             let mut v = vec![memo("items", "~I~tems (one per line)", &lines(items), 5)];
             if !items.is_empty() {
@@ -356,21 +343,17 @@ fn sheet(c: &Control, others: &[String]) -> Value {
                     false,
                 ));
             }
-            v.push(on_change(oc.as_ref()));
-            v.push(note(ON_CHANGE_NOTE));
             v
         }
         Kind::ComboBox {
             items,
             selected,
             required,
-            on_change: oc,
+            ..
         } => vec![
             memo("items", "~I~tems (one per line)", &lines(items), 5),
             pick("selected", "~S~elected", items, *selected, true),
             flag("required", "~R~equired", *required),
-            on_change(oc.as_ref()),
-            note(ON_CHANGE_NOTE),
         ],
         Kind::ListBox {
             items,
@@ -388,26 +371,22 @@ fn sheet(c: &Control, others: &[String]) -> Value {
             step,
             suffix,
             wrap,
-            on_change: oc,
+            ..
         } => vec![
             json!({ "type": "row", "fields": [int("min", "M~i~n", *min), int("max", "M~a~x", *max)] }),
             json!({ "type": "row", "fields": [int("value", "~V~alue", *value), int("step", "~S~tep", *step)] }),
             text("suffix", "Su~f~fix", suffix),
             flag("wrap", "~W~rap around", *wrap),
-            on_change(oc.as_ref()),
-            note(ON_CHANGE_NOTE),
         ],
         Kind::Slider {
             min,
             max,
             value,
             step,
-            on_change: oc,
+            ..
         } => vec![
             json!({ "type": "row", "fields": [int("min", "M~i~n", *min), int("max", "M~a~x", *max)] }),
             json!({ "type": "row", "fields": [int("value", "~V~alue", *value), int("step", "~S~tep", *step)] }),
-            on_change(oc.as_ref()),
-            note(ON_CHANGE_NOTE),
         ],
         Kind::ProgressBar {
             max,
@@ -762,29 +741,29 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
             checked: a.bool("checked"),
             required: a.bool("required"),
         },
-        Kind::CheckBoxes { .. } => {
+        Kind::CheckBoxes { on_change: old, .. } => {
             let items = a.lines("items");
             Kind::CheckBoxes {
                 checked: a.indices("checked", items.len()),
                 items,
-                on_change: a.opt_str("on_change"),
+                on_change: old.clone(),
             }
         }
-        Kind::RadioButtons { .. } => {
+        Kind::RadioButtons { on_change: old, .. } => {
             let items = a.lines("items");
             Kind::RadioButtons {
                 selected: a.index("selected", items.len()).unwrap_or(0),
                 items,
-                on_change: a.opt_str("on_change"),
+                on_change: old.clone(),
             }
         }
-        Kind::ComboBox { .. } => {
+        Kind::ComboBox { on_change: old, .. } => {
             let items = a.lines("items");
             Kind::ComboBox {
                 selected: a.index("selected", items.len()),
                 items,
                 required: a.bool("required"),
-                on_change: a.opt_str("on_change"),
+                on_change: old.clone(),
             }
         }
         Kind::ListBox { .. } => {
@@ -795,21 +774,21 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
                 multi: a.bool("multi"),
             }
         }
-        Kind::Spinner { .. } => Kind::Spinner {
+        Kind::Spinner { on_change: old, .. } => Kind::Spinner {
             min: a.i64("min").unwrap_or(0),
             max: a.i64("max").unwrap_or(0),
             value: a.i64("value").unwrap_or(0),
             step: a.i64("step").unwrap_or(1).max(1),
             suffix: a.str("suffix"),
             wrap: a.bool("wrap"),
-            on_change: a.opt_str("on_change"),
+            on_change: old.clone(),
         },
-        Kind::Slider { .. } => Kind::Slider {
+        Kind::Slider { on_change: old, .. } => Kind::Slider {
             min: a.i64("min").unwrap_or(0),
             max: a.i64("max").unwrap_or(0),
             value: a.i64("value").unwrap_or(0),
             step: a.i64("step").unwrap_or(1).max(1),
-            on_change: a.opt_str("on_change"),
+            on_change: old.clone(),
         },
         Kind::ProgressBar { .. } => Kind::ProgressBar {
             max: a

@@ -7,10 +7,10 @@
 //! cargo run --example dialog_on_change --features native,dialog
 //! ```
 //!
-//! In `examples/dialog_specs/volume.json` the slider `volume` has
-//! `"on_change": "volume_changed"` and the radio buttons `mode` have
-//! `"on_change": "mode_changed"`. In the designer that is just a name typed
-//! into the control's "On change action"; the code is below.
+//! `examples/dialog_specs/volume.json` only names its controls (`mode`,
+//! `volume`, `meter`); `on_change(name, ...)` runs code when the control of
+//! that name changes, whatever its type. The same call works for an input,
+//! a list, a check box...
 
 use serde_json::json;
 use tv_extensions::dialog_spec::{Flow, JsonDialog};
@@ -27,7 +27,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
     };
 
     // The slider moved: the meter follows it.
-    dialog.on("volume_changed", |ctx| {
+    dialog.on_change("volume", |ctx| {
         if let Some(level) = ctx.value("volume") {
             let _ = ctx.set_value("meter", &level);
         }
@@ -35,7 +35,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
     });
 
     // The mode changed: set the slider and the meter to its usual level.
-    dialog.on("mode_changed", |ctx| {
+    dialog.on_change("mode", |ctx| {
         let level = if ctx.value("mode") == Some(json!(1)) {
             80
         } else {
@@ -45,9 +45,6 @@ fn main() -> turbo_vision::core::error::Result<()> {
         let _ = ctx.set_value("meter", &json!(level));
         Flow::Stay
     });
-
-    // Every action the JSON names is bound.
-    debug_assert!(dialog.unbound().is_empty(), "{:?}", dialog.unbound());
 
     let answer = dialog.run(&mut app);
     drop(app); // give the terminal back before printing

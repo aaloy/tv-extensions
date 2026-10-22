@@ -6,22 +6,27 @@
 use crate::keys::Keys;
 use crate::model::KINDS;
 
-/// What `on_change` is, for the controls that have it.
-macro_rules! on_change_help {
-    () => {
-        "\n\
-         \n\
-         on_change  the name of an action. It does nothing by itself:\n\
-                    your program attaches code to the name with\n\
-                    dialog.on(\"name\", |ctx| { ...; Flow::Stay }), and that\n\
-                    code runs each time the person changes this control.\n\
-                    See Help > Contents > Reacting to changes."
-    };
-}
+/// What a control with a value says about reacting to it.
+const CHANGES: &str = "\n\nReacting: with a name, your program can run code each time the\nperson changes it: dialog.on_change(\"name\", |ctx| { ...; Flow::Stay }).\nSee Help > Contents > Reacting to changes.";
+
+/// The controls that have a value, and so can be reacted to.
+const VALUED: [&str; 13] = [
+    "input", "auto_complete", "memo", "spinner", "slider", "check_box", "check_boxes",
+    "radio_buttons", "combo_box", "list_box", "tree", "table", "dual_list",
+];
 
 /// The help on a control type (the JSON `type`).
+pub fn control(type_name: &str) -> String {
+    let text = control_text(type_name);
+    if VALUED.contains(&type_name) {
+        format!("{text}{CHANGES}")
+    } else {
+        text.to_string()
+    }
+}
+
 #[allow(clippy::too_many_lines)] // one arm of prose per control type
-pub fn control(type_name: &str) -> &'static str {
+fn control_text(type_name: &str) -> &'static str {
     match type_name {
         "label" => {
             "A piece of text, usually the caption of the control next to it.\n\
@@ -69,19 +74,19 @@ pub fn control(type_name: &str) -> &'static str {
              required   it must not be left empty"
         }
         "spinner" => {
-            concat!("A number with arrows to step it. Its value is a number.\n\
+            "A number with arrows to step it. Its value is a number.\n\
              \n\
              min, max  the limits\n\
              step      what an arrow adds\n\
              suffix    text after the number, such as a unit\n\
-             wrap      go round from one limit to the other", on_change_help!())
+             wrap      go round from one limit to the other"
         }
         "slider" => {
-            concat!("A number chosen by sliding a marker.\n\
+            "A number chosen by sliding a marker.\n\
              \n\
              min, max  the limits\n\
              value     where it starts\n\
-             step      how far an arrow moves it", on_change_help!())
+             step      how far an arrow moves it"
         }
         "check_box" => {
             "One option that is on or off. Its value is true or false.\n\
@@ -91,24 +96,24 @@ pub fn control(type_name: &str) -> &'static str {
              required  it must be on to accept the dialog"
         }
         "check_boxes" => {
-            concat!("Several options, any of them on. Its value is the list of\n\
+            "Several options, any of them on. Its value is the list of\n\
              indices that are on.\n\
              \n\
              items    one caption per option\n\
-             checked  the indices that start on", on_change_help!())
+             checked  the indices that start on"
         }
         "radio_buttons" => {
-            concat!("Several options, exactly one on. Its value is its index.\n\
+            "Several options, exactly one on. Its value is its index.\n\
              \n\
              items     one caption per option\n\
-             selected  the index that starts on", on_change_help!())
+             selected  the index that starts on"
         }
         "combo_box" => {
-            concat!("A drop-down list of items. Its value is an index, or null.\n\
+            "A drop-down list of items. Its value is an index, or null.\n\
              \n\
              items     what it lists\n\
              selected  the item that starts chosen\n\
-             required  an item must be chosen", on_change_help!())
+             required  an item must be chosen"
         }
         "list_box" => {
             "A list to choose from. Its value is an index, or null.\n\
@@ -199,7 +204,7 @@ pub fn dialog() -> &'static str {
 pub fn for_selection(type_name: Option<&str>) -> String {
     let (title, text) = match type_name {
         Some(t) => (t.replace('_', " "), control(t)),
-        None => ("dialog".to_string(), dialog()),
+        None => ("dialog".to_string(), dialog().to_string()),
     };
     format!(
         "{title}\n\n{text}\n\n\
@@ -270,37 +275,34 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
         ),
         topic(
             "Reacting to changes",
-            "Some controls can tell your program when the person changes\n\
-             them, while the dialog is still open: check boxes, radio\n\
-             buttons, combo boxes, spinners and sliders. Use it to keep one\n\
-             control in step with another.\n\
+            "Your program can run code while the dialog is open, each time\n\
+             the person changes a control: to keep one control in step with\n\
+             another, to fill a list when a choice is made, to enable\n\
+             something. It works the same way for every control that has a\n\
+             value, whatever its type: inputs, check boxes, radio buttons,\n\
+             lists, trees, tables, sliders...\n\
              \n\
-             In the designer:\n\
-             1. Select the control and press Enter.\n\
-             2. On General, type a name in \"On change action\", for\n\
-                instance volume_changed. Any name will do; it is only saved\n\
-                in the JSON.\n\
-             3. Press Ctrl+G (Dialog > Code to use it) to save the Rust that\n\
-                loads the dialog. It has an empty handler for each name, with\n\
-                a comment saying which control it is for.\n\
+             In the designer, all that is needed is a name: select the\n\
+             control, press Enter and give it one on the Place page. Named\n\
+             controls are the ones whose values come back, and the ones\n\
+             your code can watch.\n\
              \n\
-             Dialog > Test runs the form but not your handlers, so changing\n\
-             the control does nothing there; they run in your program.\n\
+             In your program, attach code to the name:\n\
              \n\
-             In your program: attach code to that name.\n\
-             \n\
-             dialog.on(\"volume_changed\", |ctx| {\n\
-                 let level = ctx.value(\"volume\");      // the new value\n\
-                 if let Some(bar) = ctx.view_mut::<ProgressBar>(\"meter\") {\n\
-                     // change another control to follow it\n\
-                 }\n\
+             dialog.on_change(\"volume\", |ctx| {\n\
+                 let level = ctx.value(\"volume\");     // its new value\n\
+                 let _ = ctx.set_value(\"meter\", &level.unwrap());\n\
                  Flow::Stay                            // keep the dialog open\n\
              });\n\
              \n\
-             ctx.value(name) reads any named control; ctx.view_mut::<T>(name)\n\
-             changes one. A button's action works the same way, but it runs\n\
-             when the button is pressed. Dialog > Test lists the action names\n\
-             nothing is bound to yet.\n\
+             ctx.value(name) reads any named control; ctx.set_value(name, v)\n\
+             changes one, and a change the code makes is not counted as one\n\
+             the person made. Ctrl+G saves the Rust that loads your dialog,\n\
+             with an example to adapt.\n\
+             \n\
+             Dialog > Test runs the form but not your code, so nothing reacts\n\
+             there. A button works the other way: its command is an action\n\
+             name, and the code runs when it is pressed.\n\
              \n\
              A complete program: examples/dialog_on_change.rs.",
         ),
@@ -357,7 +359,7 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
     all.extend(KINDS.iter().map(|(name, _)| {
         topic(
             &format!("Control: {}", name.replace('_', " ")),
-            control(name),
+            &control(name),
         )
     }));
     all
@@ -456,11 +458,10 @@ pub fn tutorial(k: &Keys) -> Vec<Topic> {
              Other controls choose from lists: a Combo box, a List box, a\n\
              Tree view, a Table. F1 on any control explains its settings.\n\
              \n\
-             To react while the person chooses, type a name in the radio\n\
-             buttons' \"On change action\", such as kind_changed. Your program\n\
-             binds code to that name with dialog.on; see Help > Contents >\n\
-             Reacting to changes. Without it, the value is only read when\n\
-             the dialog is accepted."
+             To react while the person chooses, give the radio buttons a\n\
+             name, such as kind, and bind code to it in your program with\n\
+             dialog.on_change(\"kind\", ...). The same works for any control\n\
+             that has a value. See Help > Contents > Reacting to changes."
                 .to_string(),
         ),
         (
@@ -584,11 +585,12 @@ mod tests {
     }
 
     #[test]
-    fn the_controls_with_on_change_explain_it() {
-        for name in ["check_boxes", "radio_buttons", "combo_box", "spinner", "slider"] {
-            assert!(control(name).contains("on_change"), "{name}");
+    fn every_control_with_a_value_explains_how_to_react() {
+        for name in VALUED {
+            assert!(control(name).contains("on_change("), "{name}");
         }
-        assert!(!control("input").contains("on_change"));
+        assert!(!control("line").contains("on_change"));
+        assert!(!control("button").contains("on_change"));
     }
 
     #[test]

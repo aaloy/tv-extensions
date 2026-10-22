@@ -459,8 +459,8 @@ if let Some(answer) = dialog.run(&mut app) {
 ### Reacting to a change
 
 ```rust,ignore
-// "on_change": "kind_changed" on the radio buttons
-dialog.on("kind_changed", |ctx| {
+// The radio buttons are named "kind" in the designer; nothing else is set.
+dialog.on_change("kind", |ctx| {
     if ctx.value("kind") == Some(json!(1))
         && let Some(vip) = ctx.view_mut::<CheckBox>("vip")
     {
@@ -470,16 +470,26 @@ dialog.on("kind_changed", |ctx| {
 });
 ```
 
-`on_change` is available on check boxes, radio buttons, combo boxes,
-spinners and sliders. The handler runs as the person changes the control.
+`on_change(name, handler)` runs the handler each time the person changes the
+control called `name`, and it works the same for every control that has a
+value: an input as they type, a check box as they tick it, a list, a tree, a
+table, a slider. The designer needs nothing for it but the control's name.
+What the code itself sets (`ctx.set_value`, `set_data`) does not count as a
+change, so a handler can set any control, its own included, without looping.
+The handler's `ctx.action()` is the control's name, and its [`Flow`] works as
+for a button: `Stay`, `Submit`, or `Close` (as OK, without validating).
 
-In the designer, `on_change` is only a name: type it into the control's
-"On change action" setting. The code is yours, bound with `dialog.on` as
-above; Dialog > Test lists the names nothing is bound to yet. F1 on any of
-these controls and Help > Contents > Reacting to changes explain it.
-`examples/dialog_on_change.rs` is a complete program: a slider that drives
-a progress bar and radio buttons that set the slider, from
+Dialog > Test runs the form but not your code, so nothing reacts there. F1
+on any control and Help > Contents > Reacting to changes explain it, and
+Ctrl+G's generated code has an example to adapt.
+`examples/dialog_on_change.rs` is a complete program: a slider that drives a
+progress bar and radio buttons that set the slider, from
 `examples/dialog_specs/volume.json`.
+
+The older `"on_change": "action"` key on check boxes, radio buttons, combo
+boxes, spinners and sliders still works, bound with `dialog.on("action", ..)`
+like a button's action. The designer keeps it when it is in a file but no
+longer offers it: `on_change(name, ..)` does the same for all controls.
 
 ### Nothing left unbound
 

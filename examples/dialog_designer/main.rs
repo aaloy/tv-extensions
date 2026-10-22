@@ -780,6 +780,12 @@ fn skeleton(spec: &DialogSpec, path: Option<&Path>) -> String {
         );
     }
     out.push_str("    dialog.validate_data(|data, errors| {\n        // Rules over several fields: errors.add(\"name\", \"message\");\n        let _ = (data, errors);\n    });\n");
+    if let Some(first) = spec.find_first_field() {
+        let _ = write!(
+            out,
+            "    // React to any named control as the person changes it:\n    // dialog.on_change(\"{first}\", |ctx| {{\n    //     let now = ctx.value(\"{first}\");\n    //     // ctx.set_value(\"other\", &serde_json::json!(...)) changes another control\n    //     Flow::Stay\n    // }});\n"
+        );
+    }
     for a in &actions {
         let hint = match changes.iter().find(|(action, _)| action == a) {
             Some((_, control)) if !control.is_empty() => format!(
@@ -798,10 +804,21 @@ fn skeleton(spec: &DialogSpec, path: Option<&Path>) -> String {
 
 /// The first input's name, to show a field rule on.
 trait FirstInput {
+    fn find_first_field(&self) -> Option<String>;
     fn find_first_input(&self) -> Option<String>;
 }
 
 impl FirstInput for DialogSpec {
+    fn find_first_field(&self) -> Option<String> {
+        let mut found = None;
+        self.visit(&mut |c| {
+            if found.is_none() && c.kind.has_value() && !c.name.is_empty() {
+                found = Some(c.name.clone());
+            }
+        });
+        found
+    }
+
     fn find_first_input(&self) -> Option<String> {
         let mut found = None;
         self.visit(&mut |c| {

@@ -164,6 +164,8 @@ pub struct JsonDialog {
     /// Every action the spec names; action `i` sends `ACTION_BASE + i`.
     actions: Vec<String>,
     handlers: HashMap<String, Handler>,
+    /// Code to run when the control of that name changes.
+    watchers: Vec<(String, Handler)>,
     rules: Vec<(String, FieldRule)>,
     data_rules: Vec<DataRule>,
     /// Inputs with a custom validator: its name, the input, and whether
@@ -336,6 +338,36 @@ impl JsonDialog {
         self
     }
 
+    /// Run `handler` whenever the person changes the control named `name`,
+    /// whatever its type: an input as they type, a list as they choose, a
+    /// check box as they tick it. This is the way to react to any control,
+    /// and needs nothing in the JSON.
+    ///
+    /// The handler's [`ActionContext::action`] is the control's name. Values
+    /// the code itself sets (with [`ActionContext::set_value`] or
+    /// [`JsonDialog::set_data`]) do not count as changes, so a handler can
+    /// set controls, its own included, without starting a loop. What it
+    /// returns decides whether the dialog stays open: [`Flow::Close`] closes
+    /// it as OK does, without validating, and [`Flow::Submit`] validates
+    /// first.
+    ///
+    /// # Panics
+    ///
+    /// In a debug build, when no control with a value has that name.
+    pub fn on_change(
+        &mut self,
+        name: &str,
+        handler: impl FnMut(&mut ActionContext<'_>) -> Flow + 'static,
+    ) -> &mut Self {
+        debug_assert!(
+            self.fields.iter().any(|f| f.name == name),
+            "on_change: no control with a value is named {name:?}"
+        );
+        self.watchers.retain(|(n, _)| n != name);
+        self.watchers.push((name.to_string(), Box::new(handler)));
+        self
+    }
+
     /// What the spec names that no code has bound yet, such as
     /// `action "lookup"` or `validator "iban"`, sorted. Handy in a test,
     /// so a renamed button cannot go unnoticed.
@@ -431,6 +463,7 @@ impl JsonDialog {
             fields,
             actions,
             handlers,
+            watchers,
             rules,
             data_rules,
             changes,
@@ -461,7 +494,47 @@ impl JsonDialog {
             }
         };
 
+        // What each watched control showed last, so only a person's change
+        // counts.
+        let mut seen: HashMap<String, Value> = HashMap::new();
+        let snapshot = |dialog: &mut Dialog, seen: &mut HashMap<String, Value>, names: &[String]| {
+            for name in names {
+                if let Some(field) = fields.iter().find(|f| f.name == *name) {
+                    seen.insert(name.clone(), read(dialog, field));
+                }
+            }
+        };
+        let watched: Vec<String> = watchers.iter().map(|(n, _)| n.clone()).collect();
+        snapshot(dialog, &mut seen, &watched);
+
         let command = app.execute_modal(dialog, |app, dialog| {
+            for (name, handler) in watchers.iter_mut() {
+                let Some(field) = fields.iter().find(|f| f.name == *name) else {
+                    continue;
+                };
+                let now = read(dialog, field);
+                if seen.get(name) == Some(&now) {
+                    continue;
+                }
+                seen.insert(name.clone(), now);
+                let flow = handler(&mut ActionContext {
+                    app,
+                    action: name,
+                    dialog,
+                    fields,
+                });
+                // What the handler set is not a change.
+                snapshot(dialog, &mut seen, &watched);
+                match flow {
+                    Flow::Stay => {}
+                    Flow::Close => return ModalTick::End(CM_OK),
+                    Flow::Submit => {
+                        if submit(app, dialog, &mut live) {
+                            dialog.end_modal(CM_OK);
+                        }
+                    }
+                }
+            }
             let heard: Vec<CommandId> = changes.borrow_mut().drain(..).collect();
             for command in heard {
                 let Some(action) = action_name(actions, command) else {
@@ -1145,6 +1218,7 @@ impl<'a> Builder<'a> {
             ids: self.ids,
             actions: self.actions,
             handlers: HashMap::new(),
+            watchers: Vec::new(),
             rules: Vec::new(),
             data_rules: Vec::new(),
             custom: self.custom,
