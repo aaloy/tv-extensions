@@ -348,6 +348,98 @@ fn any_control_can_be_watched_by_name() {
 }
 
 #[test]
+#[should_panic(expected = "no control with a value is named")]
+fn watching_a_name_that_is_not_a_control_is_refused() {
+    customer().on_change("nobody", |_| Flow::Stay);
+}
+
+#[test]
+fn a_second_watcher_of_a_name_replaces_the_first() {
+    let mut app = app();
+    let mut dialog = customer();
+    let calls = Rc::new(RefCell::new(Vec::<&str>::new()));
+    let (first, second) = (Rc::clone(&calls), Rc::clone(&calls));
+    dialog.on_change("name", move |_| {
+        first.borrow_mut().push("first");
+        Flow::Stay
+    });
+    dialog.on_change("name", move |_| {
+        second.borrow_mut().push("second");
+        Flow::Stay
+    });
+    type_text(&mut app, "A");
+    key(&mut app, KB_ALT_O);
+    let _ = dialog.run(&mut app);
+    assert_eq!(*calls.borrow(), vec!["second"]);
+}
+
+#[test]
+fn a_watcher_can_close_without_validating() {
+    let mut app = app();
+    let mut dialog = customer();
+    dialog.on_change("email", |_| Flow::Close);
+    // The name is required and empty, yet typing in the email closes.
+    key(&mut app, KB_TAB);
+    type_text(&mut app, "x");
+    let answer = dialog.run(&mut app).expect("closed");
+    assert_eq!(answer.action, "ok");
+    assert_eq!(answer.data["name"], json!(""));
+    assert_eq!(answer.data["email"], json!("x"));
+}
+
+#[test]
+fn a_watcher_can_submit_and_validation_still_applies() {
+    let mut app = app();
+    let mut dialog = customer();
+    dialog.on_change("email", |_| Flow::Submit);
+    // The name is empty: the submit is refused and the dialog stays open
+    // until Esc.
+    key(&mut app, KB_TAB);
+    type_text(&mut app, "x");
+    key(&mut app, KB_ESC);
+    assert!(dialog.run(&mut app).is_none());
+
+    // With a name it is accepted at once, and no later handler runs.
+    let mut app = self::app();
+    let mut dialog = customer();
+    let after = Rc::new(RefCell::new(0));
+    let counted = Rc::clone(&after);
+    dialog.on_change("email", |_| Flow::Submit);
+    dialog.on_change("kind", move |_| {
+        *counted.borrow_mut() += 1;
+        Flow::Stay
+    });
+    type_text(&mut app, "Ada");
+    key(&mut app, KB_TAB);
+    type_text(&mut app, "x");
+    let answer = dialog.run(&mut app).expect("accepted");
+    assert_eq!(answer.data["name"], json!("Ada"));
+    assert_eq!(*after.borrow(), 0);
+}
+
+#[test]
+fn what_a_handler_sets_in_another_watched_control_is_not_a_change() {
+    let mut app = app();
+    let mut dialog = customer();
+    let heard = Rc::new(RefCell::new(Vec::<&str>::new()));
+    let (name_log, email_log) = (Rc::clone(&heard), Rc::clone(&heard));
+    dialog.on_change("name", move |ctx| {
+        name_log.borrow_mut().push("name");
+        let _ = ctx.set_value("email", &json!("set by code"));
+        Flow::Stay
+    });
+    dialog.on_change("email", move |_| {
+        email_log.borrow_mut().push("email");
+        Flow::Stay
+    });
+    type_text(&mut app, "A");
+    key(&mut app, KB_ALT_O);
+    let answer = dialog.run(&mut app).expect("accepted");
+    assert_eq!(answer.data["email"], json!("set by code"));
+    assert_eq!(*heard.borrow(), vec!["name"]);
+}
+
+#[test]
 fn a_handlers_own_changes_do_not_start_a_loop() {
     let mut app = app();
     let mut dialog = customer();

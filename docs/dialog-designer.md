@@ -244,7 +244,7 @@ draw it). What follows is the summary.
     { "type": "label", "x": 2, "y": 1, "w": 8, "h": 1, "text": "~N~ame", "link": "name" },
     { "type": "input", "name": "name", "x": 11, "y": 1, "w": 36, "h": 1, "max_len": 60, "required": true },
     { "type": "radio_buttons", "name": "kind", "x": 11, "y": 7, "w": 18, "h": 2,
-      "items": ["~R~etail", "~W~holesale"], "on_change": "kind_changed" },
+      "items": ["~R~etail", "~W~holesale"] },
     { "type": "error_line", "x": 2, "y": 10, "w": 46, "h": 1 },
     { "type": "button", "x": 2, "y": 11, "w": 12, "h": 2, "text": "~L~ookup", "command": "lookup" },
     { "type": "button", "x": 24, "y": 11, "w": 11, "h": 2, "text": "~O~K", "default": true },
@@ -268,12 +268,12 @@ from the corner inside the frame (or inside its tab page), an optional
 | `input` | `text`, `max_len = 255`, `required`, `validator`, `history` (an id) | string |
 | `memo` | `text`, `max_len`, `required`, `read_only` | string |
 | `check_box` | `text`, `checked`, `required` (must be checked) | `true`/`false` |
-| `check_boxes` | `items`, `checked` (indices), `on_change` | list of checked indices |
-| `radio_buttons` | `items`, `selected = 0`, `on_change` | index |
-| `combo_box` | `items`, `selected`, `required`, `on_change` | index or `null` |
+| `check_boxes` | `items`, `checked` (indices), `on_change` (legacy, see below) | list of checked indices |
+| `radio_buttons` | `items`, `selected = 0`, `on_change` (legacy, see below) | index |
+| `combo_box` | `items`, `selected`, `required`, `on_change` (legacy, see below) | index or `null` |
 | `list_box` | `items`, `selected`, `multi` | index or `null`; list of indices when `multi` |
-| `spinner` | `min = 0`, `max`, `value`, `step = 1`, `suffix`, `wrap`, `on_change` | number |
-| `slider` | `min = 0`, `max`, `value`, `step = 1`, `on_change` | number |
+| `spinner` | `min = 0`, `max`, `value`, `step = 1`, `suffix`, `wrap`, `on_change` (legacy, see below) | number |
+| `slider` | `min = 0`, `max`, `value`, `step = 1`, `on_change` (legacy, see below) | number |
 | `progress_bar` | `max = 100`, `value`, `show_percent = true` | number |
 | `table` | `columns` (`title`, `width`, `align`), `rows`, `header = true`, `separators` | selected row or `null` |
 | `group_box` | `title`, `controls` (the controls inside the frame, placed from its inner corner; group boxes and tabs can nest) | — |
@@ -421,7 +421,8 @@ dialog. Both are handy in tests and for code that fills a dialog itself.
 ## Actions
 
 A button whose `command` is not `ok`, `cancel`, `yes` or `no` names an
-action; so does a control's `on_change`. Bind code to an action with `on`:
+action. (A control's legacy `on_change` key names one too; new code reacts
+to a change with `on_change(name, ..)`, below.) Bind code to an action with `on`:
 
 ```rust,ignore
 use tv_extensions::dialog_spec::Flow;
@@ -490,7 +491,7 @@ Ctrl+G's generated code has an example to adapt.
 progress bar and radio buttons that set the slider, from
 `examples/dialog_specs/volume.json`.
 
-The older `"on_change": "action"` key on check boxes, radio buttons, combo
+The legacy `"on_change": "action"` key on check boxes, radio buttons, combo
 boxes, spinners and sliders still works, bound with `dialog.on("action", ..)`
 like a button's action. The designer keeps it when it is in a file but no
 longer offers it: `on_change(name, ..)` does the same for all controls.

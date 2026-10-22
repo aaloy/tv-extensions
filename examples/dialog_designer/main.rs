@@ -812,7 +812,11 @@ impl FirstInput for DialogSpec {
     fn find_first_field(&self) -> Option<String> {
         let mut found = None;
         self.visit(&mut |c| {
-            if found.is_none() && c.kind.has_value() && !c.name.is_empty() {
+            if found.is_none()
+                && c.kind.has_value()
+                && !matches!(c.kind, Kind::ProgressBar { .. })
+                && !c.name.is_empty()
+            {
                 found = Some(c.name.clone());
             }
         });

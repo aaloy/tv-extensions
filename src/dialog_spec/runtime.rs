@@ -347,19 +347,22 @@ impl JsonDialog {
     /// the code itself sets (with [`ActionContext::set_value`] or
     /// [`JsonDialog::set_data`]) do not count as changes, so a handler can
     /// set controls, its own included, without starting a loop. What it
-    /// returns decides whether the dialog stays open: [`Flow::Close`] closes
-    /// it as OK does, without validating, and [`Flow::Submit`] validates
-    /// first.
+    /// returns decides whether the dialog stays open. [`Flow::Submit`]
+    /// validates as OK does, and closes if everything passes. [`Flow::Close`]
+    /// closes at once **without validating**, and [`Answer::action`] is then
+    /// `"ok"`, so check the data yourself if the handler can close an
+    /// invalid form.
     ///
     /// # Panics
     ///
-    /// In a debug build, when no control with a value has that name.
+    /// When no control with a value has that name (a typo, or a label,
+    /// button or container): the code would silently never run.
     pub fn on_change(
         &mut self,
         name: &str,
         handler: impl FnMut(&mut ActionContext<'_>) -> Flow + 'static,
     ) -> &mut Self {
-        debug_assert!(
+        assert!(
             self.fields.iter().any(|f| f.name == name),
             "on_change: no control with a value is named {name:?}"
         );
@@ -494,37 +497,39 @@ impl JsonDialog {
             }
         };
 
-        // What each watched control showed last, so only a person's change
-        // counts.
-        let mut seen: HashMap<String, Value> = HashMap::new();
-        let snapshot = |dialog: &mut Dialog, seen: &mut HashMap<String, Value>, names: &[String]| {
-            for name in names {
-                if let Some(field) = fields.iter().find(|f| f.name == *name) {
-                    seen.insert(name.clone(), read(dialog, field));
-                }
-            }
-        };
-        let watched: Vec<String> = watchers.iter().map(|(n, _)| n.clone()).collect();
-        snapshot(dialog, &mut seen, &watched);
+        // Where each watched control's field is, and what it showed last, so
+        // only a person's change counts.
+        let watched: Vec<usize> = watchers
+            .iter()
+            .filter_map(|(n, _)| fields.iter().position(|f| f.name == *n))
+            .collect();
+        let mut seen: Vec<Value> = watched.iter().map(|&i| read(dialog, &fields[i])).collect();
 
         let command = app.execute_modal(dialog, |app, dialog| {
-            for (name, handler) in watchers.iter_mut() {
-                let Some(field) = fields.iter().find(|f| f.name == *name) else {
-                    continue;
-                };
-                let now = read(dialog, field);
-                if seen.get(name) == Some(&now) {
+            for (w, (name, handler)) in watchers.iter_mut().enumerate() {
+                if dialog.end_state() != 0 {
+                    break;
+                }
+                let now = read(dialog, &fields[watched[w]]);
+                if seen[w] == now {
                     continue;
                 }
-                seen.insert(name.clone(), now);
+                seen[w] = now;
+                let before: Vec<Value> = watched.iter().map(|&i| read(dialog, &fields[i])).collect();
                 let flow = handler(&mut ActionContext {
                     app,
                     action: name,
                     dialog,
                     fields,
                 });
-                // What the handler set is not a change.
-                snapshot(dialog, &mut seen, &watched);
+                // What the handler set is the code's change, not the
+                // person's; a change of theirs not yet heard stays pending.
+                for (j, &i) in watched.iter().enumerate() {
+                    let after = read(dialog, &fields[i]);
+                    if after != before[j] {
+                        seen[j] = after;
+                    }
+                }
                 match flow {
                     Flow::Stay => {}
                     Flow::Close => return ModalTick::End(CM_OK),
@@ -537,6 +542,9 @@ impl JsonDialog {
             }
             let heard: Vec<CommandId> = changes.borrow_mut().drain(..).collect();
             for command in heard {
+                if dialog.end_state() != 0 {
+                    break;
+                }
                 let Some(action) = action_name(actions, command) else {
                     continue;
                 };
