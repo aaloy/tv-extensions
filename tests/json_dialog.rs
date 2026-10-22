@@ -477,3 +477,41 @@ fn tabs_may_sit_in_a_group_but_not_in_tabs() {
     ] }"#;
     assert!(DialogSpec::from_json(bad).unwrap_err().0.contains("tabs cannot hold other tabs"));
 }
+
+#[test]
+fn a_label_and_a_line_can_be_coloured() {
+    use turbo_vision::core::palette::TvColor;
+    let mut dialog = JsonDialog::from_json(
+        r#"{ "title": "Colours", "width": 40, "height": 10, "controls": [
+            { "type": "label", "x": 2, "y": 1, "w": 10, "h": 1, "text": "~N~ame", "color": "red" },
+            { "type": "line", "x": 2, "y": 3, "w": 10, "h": 1, "color": "yellow" },
+            { "type": "label", "x": 2, "y": 5, "w": 10, "h": 1, "text": "~P~lain" }
+        ] }"#,
+    )
+    .unwrap();
+    let mut app = app();
+    dialog.dialog_mut().draw(&mut app.terminal);
+    let (w, h) = app.terminal.size();
+    // The first cell of each run of `text` on screen.
+    let find = |text: &str| -> (i16, i16) {
+        for y in 0..h {
+            let row: String = (0..w)
+                .map(|x| app.terminal.read_cell(x, y).map_or(' ', |c| c.ch))
+                .collect();
+            if let Some(x) = row.find(text) {
+                return (i16::try_from(x).unwrap(), y);
+            }
+        }
+        panic!("{text} is not on screen");
+    };
+    let fg = |at: (i16, i16)| app.terminal.read_cell(at.0, at.1).unwrap().attr.fg;
+    let (x, y) = find("ame");
+    assert_eq!(fg((x, y)), TvColor::Red, "the label's text");
+    let (px, py) = find("lain");
+    assert_eq!(fg(find("──────────")), TvColor::Yellow, "the line");
+    assert_ne!(fg((px, py)), TvColor::Red, "an uncoloured label is as it was");
+    // The colour is saved by name, and only when there is one.
+    let json = serde_json::to_string(dialog.spec()).unwrap();
+    assert!(json.contains("\"color\":\"red\"") && json.contains("\"color\":\"yellow\""));
+    assert_eq!(json.matches("color").count(), 2);
+}

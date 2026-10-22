@@ -497,6 +497,9 @@ pub enum Kind {
         /// The name of the control it captions.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         link: Option<String>,
+        /// The colour of the text; the dialog's own when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        color: Option<Color>,
     },
     /// Fixed text, wrapped to its width.
     StaticText {
@@ -751,6 +754,9 @@ pub enum Kind {
         /// The characters it is drawn with.
         #[serde(default, skip_serializing_if = "LineStyle::is_single")]
         style: LineStyle,
+        /// The colour it is drawn in; the dialog's own when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        color: Option<Color>,
     },
     /// Where the dialog shows what is wrong when validation fails. Without
     /// one, the first error is shown in a message box.
@@ -870,6 +876,74 @@ pub struct ColumnSpec {
     /// `"left"` (the default) or `"right"`.
     #[serde(default, skip_serializing_if = "Align::is_left")]
     pub align: Align,
+}
+
+/// A text colour: the sixteen of a classic Turbo Vision palette.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(missing_docs, reason = "the names are the colours")]
+pub enum Color {
+    Black,
+    Blue,
+    Green,
+    Cyan,
+    Red,
+    Magenta,
+    Brown,
+    LightGray,
+    DarkGray,
+    LightBlue,
+    LightGreen,
+    LightCyan,
+    LightRed,
+    LightMagenta,
+    Yellow,
+    White,
+}
+
+impl Color {
+    /// Every colour, in the order a designer lists them.
+    pub const ALL: [Self; 16] = [
+        Self::Black,
+        Self::Blue,
+        Self::Green,
+        Self::Cyan,
+        Self::Red,
+        Self::Magenta,
+        Self::Brown,
+        Self::LightGray,
+        Self::DarkGray,
+        Self::LightBlue,
+        Self::LightGreen,
+        Self::LightCyan,
+        Self::LightRed,
+        Self::LightMagenta,
+        Self::Yellow,
+        Self::White,
+    ];
+
+    /// The colour as written in JSON.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Black => "black",
+            Self::Blue => "blue",
+            Self::Green => "green",
+            Self::Cyan => "cyan",
+            Self::Red => "red",
+            Self::Magenta => "magenta",
+            Self::Brown => "brown",
+            Self::LightGray => "light_gray",
+            Self::DarkGray => "dark_gray",
+            Self::LightBlue => "light_blue",
+            Self::LightGreen => "light_green",
+            Self::LightCyan => "light_cyan",
+            Self::LightRed => "light_red",
+            Self::LightMagenta => "light_magenta",
+            Self::Yellow => "yellow",
+            Self::White => "white",
+        }
+    }
 }
 
 /// The characters a [`Kind::Line`] is drawn with.

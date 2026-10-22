@@ -80,7 +80,7 @@
 //!
 //! | `type` | Keys (`= default`) | Value in the data |
 //! |--------|-----------------------------|-------------------|
-//! | `label` | `text`, `link` (a control's name) | — |
+//! | `label` | `text`, `link` (a control's name), `color` (`red`, `light_blue`, `yellow`, … the sixteen text colours) | — |
 //! | `static_text` | `text`, `centered` | — |
 //! | `button` | `text`, `command` (`"ok"`; or `"cancel"`, `"yes"`, `"no"`, or an action name), `default` | — |
 //! | `input` | `text`, `max_len = 255`, `required`, `validator`, `history` (an id) | string |
@@ -99,7 +99,7 @@
 //! | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 //! | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
 //! | `tree` | `nodes` (strings, or `{"label", "key", "children", "expanded"}`), `selected` (a key) | the key of the selected node (the first at first), or null |
-//! | `line` | `style`: `single`, `double`, `heavy`, `round`, `block`; one row tall it is a row, one column wide a column, larger a rectangle | — |
+//! | `line` | `style`: `single`, `double`, `heavy`, `round`, `block`; one row tall it is a row, one column wide a column, larger a rectangle; `color` as for a label | — |
 //! | `error_line` | — (where validation messages show) | — |
 //!
 //! A `validator` on an input checks keystrokes as they are typed:
@@ -185,11 +185,12 @@
 //!   `Dialog`; add views of your own to it.
 
 mod line;
+mod tint;
 mod runtime;
 mod spec;
 
 pub use runtime::{ActionContext, Answer, Errors, Flow, JsonDialog};
 pub use spec::{
-    Align, ColumnSpec, Control, DialogSpec, Item, Kind, LineStyle, MAX_CLUSTER_ITEMS, PageSpec,
+    Align, Color, ColumnSpec, Control, DialogSpec, Item, Kind, LineStyle, MAX_CLUSTER_ITEMS, PageSpec,
     SpecError, TreeNode, VERSION, ValidatorSpec,
 };

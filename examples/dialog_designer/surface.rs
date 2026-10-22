@@ -20,7 +20,7 @@ use turbo_vision::core::state::State;
 use turbo_vision::terminal::Terminal;
 use turbo_vision::views::tabbed_pane::TabbedPane;
 use turbo_vision::views::view::{View, ViewCore, draw_child};
-use tv_extensions::dialog_spec::{DialogSpec, JsonDialog, Kind};
+use tv_extensions::dialog_spec::{Control, DialogSpec, JsonDialog, Kind};
 
 /// The commands the surface sends the application.
 pub struct Commands {
@@ -346,6 +346,15 @@ impl Surface {
         }
     }
 
+    /// Recolour only the edge cells of `r`: a container is marked by its
+    /// frame, so what is inside it stays as it is.
+    fn paint_border(terminal: &mut Terminal, r: Rect, attr: impl Fn(Attr) -> Attr) {
+        Self::paint(terminal, Rect::new(r.a.x, r.a.y, r.b.x, r.a.y + 1), &attr);
+        Self::paint(terminal, Rect::new(r.a.x, r.b.y - 1, r.b.x, r.b.y), &attr);
+        Self::paint(terminal, Rect::new(r.a.x, r.a.y, r.a.x + 1, r.b.y), &attr);
+        Self::paint(terminal, Rect::new(r.b.x - 1, r.a.y, r.b.x, r.b.y), &attr);
+    }
+
     fn draw_marks(&self, terminal: &mut Terminal) {
         let design = self.design.borrow();
         let selected = |a: Attr| Attr {
@@ -366,7 +375,11 @@ impl Surface {
             sel @ Sel::At(_) => {
                 let mut r = design.rect_of(sel);
                 r.move_by(1, 1);
-                Self::paint(terminal, r, selected);
+                if design.control(sel).is_some_and(Control::is_container) {
+                    Self::paint_border(terminal, r, selected);
+                } else {
+                    Self::paint(terminal, r, selected);
+                }
                 Self::paint(
                     terminal,
                     Rect::new(r.b.x - 1, r.b.y - 1, r.b.x, r.b.y),

@@ -20,7 +20,7 @@ mod surface;
 mod templates;
 mod tree;
 
-use model::{Design, KINDS, SECTION_ENDS, Sel};
+use model::{Design, KINDS, SECTION_ENDS, SECTION_NAMES, Sel, section};
 #[cfg(test)]
 use model::Place;
 use serde_json::Value;
@@ -75,6 +75,8 @@ const CM_ABOUT: CommandId = CM_USER + 20;
 const CM_NEW_TEMPLATE: CommandId = CM_USER + 21;
 const CM_SAVE_TEMPLATE: CommandId = CM_USER + 22;
 const CM_MOVE_DROPPED: CommandId = CM_USER + 23;
+/// `CM_INSERT_SECTION + i` opens the insert menu of section `i`.
+const CM_INSERT_SECTION: CommandId = CM_USER + 80;
 const CM_MOVE_MENU: CommandId = CM_USER + 24;
 /// `CM_MOVE_TO + i` moves the selection to the i-th target of the move menu.
 const CM_MOVE_TO: CommandId = CM_USER + 100;
@@ -411,11 +413,65 @@ impl Designer {
         }
     }
 
-    /// Open the insert menu under the selection.
+    /// Where a popup menu of `rows` rows opens: under the selection, moved
+    /// up as far as it takes to fit above the status line, so every item
+    /// can be reached with the mouse.
+    fn popup_origin(&self, app: &Application, rows: i16) -> Point {
+        let mut at = self.popup_point(app);
+        let (_, screen_h) = app.terminal.size();
+        let top = app.desktop.bounds().a.y;
+        at.y = at.y.min(screen_h - 1 - rows).max(top);
+        at
+    }
+
+    /// Open the insert menu under the selection: every control type with a
+    /// line between the sections, or, on a screen too short for that, the
+    /// sections first.
     fn insert_menu(&mut self, app: &mut Application) {
-        let at = self.popup_point(app);
-        let menu = Menu::from_items(insert_items());
-        if let Some(command) = popup_menu(&mut app.terminal, at, menu) {
+        let rows = i16::try_from(KINDS.len() + SECTION_ENDS.len() + 2).unwrap_or(i16::MAX);
+        let (_, screen_h) = app.terminal.size();
+        if rows + 2 <= screen_h {
+            let at = self.popup_origin(app, rows);
+            if let Some(command) =
+                popup_menu(&mut app.terminal, at, Menu::from_items(insert_items()))
+            {
+                self.insert(command);
+            }
+        } else {
+            self.insert_section_menu(app, None);
+        }
+    }
+
+    /// Pick the section of controls, then the control. With `section`
+    /// given, only the controls of that section.
+    fn insert_section_menu(&mut self, app: &mut Application, only: Option<usize>) {
+        let sections = |n: usize| -> Vec<MenuItem> {
+            section(n)
+                .map(|i| {
+                    let command = CM_INSERT + CommandId::try_from(i).unwrap_or(0);
+                    item(KINDS[i].1, command, None)
+                })
+                .collect()
+        };
+        let n = if let Some(n) = only {
+            n
+        } else {
+            let rows = i16::try_from(SECTION_NAMES.len() + 2).unwrap_or(i16::MAX);
+            let at = self.popup_origin(app, rows);
+            let names = SECTION_NAMES
+                .iter()
+                .zip(0..)
+                .map(|(name, i)| item(name, CM_INSERT_SECTION + i, None))
+                .collect();
+            match popup_menu(&mut app.terminal, at, Menu::from_items(names)) {
+                Some(c) => usize::from(c - CM_INSERT_SECTION),
+                None => return,
+            }
+        };
+        let items = sections(n);
+        let rows = i16::try_from(items.len() + 2).unwrap_or(i16::MAX);
+        let at = self.popup_origin(app, rows);
+        if let Some(command) = popup_menu(&mut app.terminal, at, Menu::from_items(items)) {
             self.insert(command);
         }
     }
@@ -526,6 +582,9 @@ impl AppHandler for Designer {
                 );
             }
             c if (CM_INSERT..CM_INSERT + 21).contains(&c) => self.insert(c),
+            c if (CM_INSERT_SECTION..CM_INSERT_SECTION + 6).contains(&c) => {
+                self.insert_section_menu(app, Some(usize::from(c - CM_INSERT_SECTION)));
+            }
             _ => return false,
         }
         self.refresh(app);
@@ -876,9 +935,18 @@ fn menu_bar(width: i16) -> MenuBar {
             item("~M~ove to container...", CM_MOVE_MENU, Some("F6")),
         ]),
     ));
-    let mut insert = insert_items();
-    insert.insert(0, item("~C~hoose...", CM_INSERT_MENU, Some("Ins")));
-    insert.insert(1, MenuItem::separator());
+    // Short, so every entry can be clicked on any screen: the full list is
+    // Ins, and each section opens its own small menu.
+    let mut insert = vec![
+        item("C~h~oose...", CM_INSERT_MENU, Some("Ins")),
+        MenuItem::separator(),
+    ];
+    insert.extend(
+        SECTION_NAMES
+            .iter()
+            .zip(0..)
+            .map(|(name, i)| item(&format!("{name}..."), CM_INSERT_SECTION + i, None)),
+    );
     bar.add_submenu(SubMenu::new("~I~nsert", Menu::from_items(insert)));
     bar.add_submenu(SubMenu::new(
         "~D~ialog",

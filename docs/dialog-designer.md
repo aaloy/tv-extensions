@@ -107,6 +107,14 @@ dialogs are built:
 Buttons come as OK first (the default button), then Cancel, then actions
 named `action1`, `action2`, …
 
+A selected container is marked by its frame only, so you can still see
+what is inside it.
+
+The Insert menu on the bar lists the sections of controls, and Ins opens
+every control type at once, a line between the sections. On a screen too
+short for all of them, Ins asks for the section first, so every entry can
+be reached with the mouse.
+
 ### Moving a control to another container
 
 Edit > Move to container... (F6) lists the places the selected control can
@@ -188,7 +196,7 @@ from the corner inside the frame (or inside its tab page), an optional
 
 | `type` | Keys (`= default`) | Value in the data |
 |--------|-----------------------------|-------------------|
-| `label` | `text`, `link` (a control's name) | — |
+| `label` | `text`, `link` (a control's name), `color` (a text colour: `black`, `blue`, `green`, `cyan`, `red`, `magenta`, `brown`, `light_gray`, `dark_gray`, `light_blue`, `light_green`, `light_cyan`, `light_red`, `light_magenta`, `yellow`, `white`) | — |
 | `static_text` | `text`, `centered` | — |
 | `button` | `text`, `command` (`"ok"`; or `"cancel"`, `"yes"`, `"no"`, or an action name), `default` | — |
 | `input` | `text`, `max_len = 255`, `required`, `validator`, `history` (an id) | string |
@@ -207,7 +215,7 @@ from the corner inside the frame (or inside its tab page), an optional
 | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
 | `tree` | `nodes` (strings, or `{"label", "key", "children", "expanded"}`; the key is the label by default), `selected` (a key) | the key of the selected node (the first at first), or null |
-| `line` | `style` (`single` by default, `double`, `heavy`, `round`, `block`): one row tall it is a horizontal rule, one column wide a vertical one, larger a rectangle with corners | — |
+| `line` | `style` (`single` by default, `double`, `heavy`, `round`, `block`): one row tall it is a horizontal rule, one column wide a vertical one, larger a rectangle with corners; `color` as for a label | — |
 | `error_line` | none: validation messages show here | — |
 
 An input's `validator` checks keystrokes as they are typed:

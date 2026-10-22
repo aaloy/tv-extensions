@@ -4,6 +4,7 @@
 //! and the screen checked.
 
 use super::*;
+use turbo_vision::core::palette::Attr;
 use turbo_vision::core::event::{KB_DOWN, KB_ENTER, KB_INS, KB_LEFT, KB_RIGHT, KB_UP, MB_LEFT_BUTTON};
 use turbo_vision::test_util::test_terminal;
 use turbo_vision::views::button::set_press_animation;
@@ -523,4 +524,67 @@ fn the_move_menu_lists_the_other_containers() {
     command(&mut app, &mut designer, CM_MOVE_MENU);
     assert_eq!(designer.design.borrow().spec.controls.len(), 1);
     assert_eq!(designer.design.borrow().sel.path().unwrap().depth(), 2);
+}
+
+#[test]
+fn the_insert_menu_fits_on_screen_so_its_last_item_can_be_clicked() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, Design::default());
+    designer.refresh(&mut app);
+    let rows = i16::try_from(KINDS.len() + SECTION_ENDS.len() + 2).unwrap();
+    let at = designer.popup_origin(&app, rows);
+    let (_, screen_h) = app.terminal.size();
+    assert!(at.y + rows < screen_h, "the menu ends below the screen");
+    // The last item, "Error line", by the mouse: pressed and released as a
+    // terminal sends them.
+    let last = Point::new(at.x + 3, at.y + rows - 2);
+    let tx = app.terminal.event_injector();
+    tx.send(Event::mouse(EventType::MouseDown, last, MB_LEFT_BUTTON, false)).unwrap();
+    tx.send(Event::mouse(EventType::MouseUp, last, 0, false)).unwrap();
+    tx.send(Event::keyboard(turbo_vision::core::event::KB_ESC)).unwrap();
+    key(&mut app, &mut designer, KB_INS);
+    let d = designer.design.borrow();
+    assert_eq!(d.selected().map(tv_extensions::dialog_spec::Control::type_name), Some("error_line"));
+}
+
+#[test]
+fn on_a_short_screen_the_insert_menu_asks_for_the_section_first() {
+    set_press_animation(std::time::Duration::ZERO);
+    let mut app = Application::with_terminal(test_terminal(110, 24));
+    let (width, height) = app.terminal.size();
+    app.set_menu_bar(menu_bar(width));
+    app.set_status_line(status_line(width, height));
+    let mut designer = open_designer(&mut app, Design::default());
+    designer.refresh(&mut app);
+    // Text and lines, then its third item: the line.
+    queue(&mut app, &[KB_ENTER, KB_DOWN, KB_DOWN, KB_ENTER]);
+    key(&mut app, &mut designer, KB_INS);
+    let d = designer.design.borrow();
+    assert_eq!(d.selected().map(tv_extensions::dialog_spec::Control::type_name), Some("line"));
+}
+
+fn attr_at(app: &Application, designer: &Designer, inner: Point) -> Attr {
+    let p = on_surface(app, designer, inner);
+    app.terminal.read_cell(p.x, p.y).unwrap().attr
+}
+
+#[test]
+fn a_selected_container_is_marked_by_its_frame_only() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, group_design());
+    designer.design.borrow_mut().select(Sel::top(0));
+    designer.refresh(&mut app);
+    app.draw();
+    let r = designer.design.borrow().rect_of(Sel::top(0));
+    let marked = attr_at(&app, &designer, r.a).bg;
+    // The frame is marked; a cell inside the box is not.
+    assert_eq!(attr_at(&app, &designer, Point::new(r.a.x + 5, r.a.y)).bg, marked);
+    assert_eq!(attr_at(&app, &designer, Point::new(r.a.x, r.a.y + 3)).bg, marked);
+    assert_ne!(attr_at(&app, &designer, Point::new(r.a.x + 15, r.a.y + 4)).bg, marked);
+    // A plain control is marked all over.
+    designer.design.borrow_mut().select(Sel::top(1));
+    designer.refresh(&mut app);
+    app.draw();
+    let r = designer.design.borrow().rect_of(Sel::top(1));
+    assert_eq!(attr_at(&app, &designer, Point::new(r.a.x + 3, r.a.y)).bg, marked);
 }

@@ -201,6 +201,23 @@ pub const KINDS: [(&str, &str); 21] = [
 /// Where each section of [`KINDS`] ends: a menu draws a line there.
 pub const SECTION_ENDS: [usize; 5] = [3, 8, 11, 16, 18];
 
+/// The sections' names, for menus that list them.
+pub const SECTION_NAMES: [&str; 6] = [
+    "~T~ext and lines",
+    "~E~ntry fields",
+    "~O~ptions",
+    "~L~ists",
+    "~C~ontainers",
+    "~A~ctions and feedback",
+];
+
+/// The range of [`KINDS`] section `n` covers.
+pub fn section(n: usize) -> std::ops::Range<usize> {
+    let start = if n == 0 { 0 } else { SECTION_ENDS[n - 1] };
+    let end = SECTION_ENDS.get(n).copied().unwrap_or(KINDS.len());
+    start..end
+}
+
 /// The design: a spec, a selection, the file it lives in, and undo.
 #[derive(Debug, Clone)]
 pub struct Design {
@@ -609,6 +626,7 @@ impl Design {
                 Kind::Label {
                     text: "~L~abel".into(),
                     link: None,
+                    color: None,
                 },
             ),
             "static_text" => (
@@ -823,6 +841,7 @@ impl Design {
                 (20, 1),
                 Kind::Line {
                     style: LineStyle::Single,
+                    color: None,
                 },
             ),
             "error_line" => (String::new(), ((width - 4).max(10), 1), Kind::ErrorLine {}),
@@ -1378,7 +1397,8 @@ mod tests {
             label.kind,
             Kind::Label {
                 text: "~L~abel".into(),
-                link: Some("input1".into())
+                link: Some("input1".into()),
+                color: None,
             }
         );
         assert!(d.spec.check().is_ok());
@@ -1483,7 +1503,8 @@ mod tests {
             pages[0].controls[0].kind,
             Kind::Label {
                 text: "~L~abel".into(),
-                link: Some("input2".into())
+                link: Some("input2".into()),
+                color: None,
             }
         );
     }
@@ -1712,7 +1733,8 @@ mod tests {
             controls[0].kind,
             Kind::Label {
                 text: "~L~abel".into(),
-                link: Some("input2".into())
+                link: Some("input2".into()),
+                color: None,
             }
         );
     }

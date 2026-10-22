@@ -13,7 +13,7 @@ use std::rc::Rc;
 use turbo_vision::app::Application;
 use turbo_vision::views::msgbox::message_box_error;
 use tv_extensions::dialog_spec::{
-    Align, ColumnSpec, Control, Item, Kind, LineStyle, TreeNode, MAX_CLUSTER_ITEMS, PageSpec, ValidatorSpec,
+    Align, Color, ColumnSpec, Control, Item, Kind, LineStyle, TreeNode, MAX_CLUSTER_ITEMS, PageSpec, ValidatorSpec,
 };
 use tv_extensions::forms::json::{FormError, run};
 
@@ -191,6 +191,22 @@ fn parse_tree(lines: &[String]) -> Result<Vec<TreeNode>, String> {
     Ok(roots)
 }
 
+/// The colour choice of a label or a line: the sixteen colours, or the
+/// dialog's own.
+fn color_pick(color: Option<Color>) -> Value {
+    let names: Vec<String> = Color::ALL
+        .iter()
+        .map(|c| c.name().replace('_', " "))
+        .collect();
+    let at = color.and_then(|c| Color::ALL.iter().position(|x| *x == c));
+    pick("color", "Colo~u~r", &names, at, true)
+}
+
+/// The colour a sheet's answers chose, if any.
+fn color_of(a: &Answers) -> Option<Color> {
+    a.index("color", Color::ALL.len()).map(|i| Color::ALL[i])
+}
+
 /// Tick boxes for the indices of `items`.
 fn ticks(name: &str, label: &str, items: &[String], ticked: &[usize]) -> Value {
     let options: Vec<Value> = items
@@ -224,13 +240,18 @@ fn on_change(value: Option<&String>) -> Value {
 fn sheet(c: &Control, others: &[String]) -> Value {
     let lines = |items: &[String]| items.join("\n");
     let mut general: Vec<Value> = match &c.kind {
-        Kind::Label { text: t, link } => {
+        Kind::Label {
+            text: t,
+            link,
+            color,
+        } => {
             let mut options = vec![json!({ "label": "(none)", "value": "" })];
             options.extend(others.iter().map(|n| json!(n)));
             vec![
                 text("text", "~T~ext", t),
                 json!({ "name": "link", "type": "choice", "label": "~L~inks to", "options": options,
                         "default": link.clone().unwrap_or_default() }),
+                color_pick(*color),
                 note("A ~ marks the hot key: Alt plus that letter\nfocuses the linked control."),
             ]
         }
@@ -491,11 +512,12 @@ fn sheet(c: &Control, others: &[String]) -> Value {
                 pick("selected", "~S~elected first", &keys, at, true),
             ]
         }
-        Kind::Line { style } => {
+        Kind::Line { style, color } => {
             let names: Vec<String> = LineStyle::ALL.iter().map(|s| s.name().to_string()).collect();
             let at = LineStyle::ALL.iter().position(|s| s == style);
             vec![
                 pick("style", "~S~tyle", &names, at, false),
+                color_pick(*color),
                 note("One row tall: a row. One column wide: a column.\nLarger: a rectangle with corners."),
             ]
         }
@@ -664,6 +686,7 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
         Kind::Label { .. } => Kind::Label {
             text: a.str("text"),
             link: a.opt_str("link"),
+            color: color_of(&a),
         },
         Kind::StaticText { .. } => Kind::StaticText {
             text: a.str("text"),
@@ -897,10 +920,11 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
             let selected = a.index("selected", keys.len()).map(|i| keys[i].clone());
             Kind::Tree { nodes, selected }
         }
-        Kind::Line { style } => Kind::Line {
+        Kind::Line { style, .. } => Kind::Line {
             style: a
                 .index("style", LineStyle::ALL.len())
                 .map_or(*style, |i| LineStyle::ALL[i]),
+            color: color_of(&a),
         },
         Kind::ErrorLine {} => Kind::ErrorLine {},
     };
@@ -950,6 +974,29 @@ mod tests {
             let answers = defaults(&sheet);
             let back = apply(&control, &answers).unwrap();
             assert_eq!(back, control, "{type_name}");
+        }
+    }
+
+    #[test]
+    fn a_label_and_a_line_take_a_colour_from_their_sheet() {
+        let mut design = Design::default();
+        for type_name in ["label", "line"] {
+            design.select(crate::model::Sel::Dialog);
+            design.insert(type_name);
+            let control = design.selected().unwrap().clone();
+            let sheet = sheet(&control, &design.names());
+            let mut answers = defaults(&sheet);
+            // Index 4 of the sixteen: red. -1 is "(none)": the default.
+            answers["color"] = json!(4);
+            let red = apply(&control, &answers).unwrap();
+            match red.kind {
+                Kind::Label { color, .. } | Kind::Line { color, .. } => {
+                    assert_eq!(color, Some(Color::Red), "{type_name}");
+                }
+                _ => unreachable!(),
+            }
+            answers["color"] = json!(-1);
+            assert_eq!(apply(&control, &answers).unwrap(), control, "{type_name}");
         }
     }
 

@@ -5,7 +5,7 @@
 use turbo_vision::core::draw::DrawBuffer;
 use turbo_vision::core::event::Event;
 use turbo_vision::core::geometry::Rect;
-use turbo_vision::core::palette::STATIC_TEXT_NORMAL;
+use turbo_vision::core::palette::{STATIC_TEXT_NORMAL, TvColor};
 use turbo_vision::terminal::Terminal;
 use super::spec::LineStyle;
 use turbo_vision::views::view::{View, ViewCore, write_line_to_terminal};
@@ -15,6 +15,7 @@ use turbo_vision::views::view::{View, ViewCore, write_line_to_terminal};
 pub(crate) struct LineView {
     core: ViewCore,
     style: LineStyle,
+    color: Option<TvColor>,
 }
 
 /// The characters of a style: horizontal, vertical, and the four corners
@@ -30,10 +31,11 @@ fn glyphs(style: LineStyle) -> (char, char, [char; 4]) {
 }
 
 impl LineView {
-    pub(crate) fn new(bounds: Rect, style: LineStyle) -> Self {
+    pub(crate) fn new(bounds: Rect, style: LineStyle, color: Option<TvColor>) -> Self {
         Self {
             core: ViewCore::new(bounds),
             style,
+            color,
         }
     }
 
@@ -72,7 +74,10 @@ impl View for LineView {
     fn draw(&mut self, terminal: &mut Terminal) {
         let width = usize::try_from(self.core.bounds.width_clamped()).unwrap_or(0);
         let height = usize::try_from(self.core.bounds.height_clamped()).unwrap_or(0);
-        let attr = self.map_color(STATIC_TEXT_NORMAL);
+        let mut attr = self.map_color(STATIC_TEXT_NORMAL);
+        if let Some(color) = self.color {
+            attr.fg = color;
+        }
         for y in 0..height {
             let Ok(line) = i16::try_from(y) else { break };
             let row = self.row(y, width, height);

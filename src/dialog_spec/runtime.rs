@@ -4,7 +4,8 @@
 //! JSON, validation shown in the dialog, and actions bound in code.
 
 use super::line::LineView;
-use super::spec::{Align, Control, DialogSpec, Kind, SpecError, TreeNode, ValidatorSpec};
+use super::tint::Tint;
+use super::spec::{Align, Color, Control, DialogSpec, Kind, SpecError, TreeNode, ValidatorSpec};
 use crate::autocomplete::AutoCompleteBuilder;
 use crate::dual_list::{DualList, DualListBuilder};
 use crate::forms::data::{ErrorLine, next_combo_id};
@@ -20,6 +21,7 @@ use turbo_vision::app::{Application, ModalTick};
 use turbo_vision::core::command::{CM_CANCEL, CM_NO, CM_OK, CM_YES, CommandId};
 use turbo_vision::core::event::{Event, EventType, KB_RIGHT};
 use turbo_vision::core::geometry::{Point, Rect};
+use turbo_vision::core::palette::TvColor;
 use turbo_vision::core::state::Options;
 use turbo_vision::terminal::Terminal;
 use turbo_vision::views::button::Button;
@@ -1005,6 +1007,27 @@ fn capitalised(name: &str) -> String {
     })
 }
 
+fn tv_color(color: Color) -> TvColor {
+    match color {
+        Color::Black => TvColor::Black,
+        Color::Blue => TvColor::Blue,
+        Color::Green => TvColor::Green,
+        Color::Cyan => TvColor::Cyan,
+        Color::Red => TvColor::Red,
+        Color::Magenta => TvColor::Magenta,
+        Color::Brown => TvColor::Brown,
+        Color::LightGray => TvColor::LightGray,
+        Color::DarkGray => TvColor::DarkGray,
+        Color::LightBlue => TvColor::LightBlue,
+        Color::LightGreen => TvColor::LightGreen,
+        Color::LightCyan => TvColor::LightCyan,
+        Color::LightRed => TvColor::LightRed,
+        Color::LightMagenta => TvColor::LightMagenta,
+        Color::Yellow => TvColor::Yellow,
+        Color::White => TvColor::White,
+    }
+}
+
 fn rect(c: &Control) -> Rect {
     Rect::new(c.x, c.y, c.x + c.w, c.y + c.h)
 }
@@ -1099,6 +1122,7 @@ impl<'a> Builder<'a> {
                 if let Kind::Label {
                     text,
                     link: Some(target),
+                    ..
                 } = &c.kind
                 {
                     map.entry(target.as_str()).or_insert_with(|| title_of(text));
@@ -1152,8 +1176,11 @@ impl<'a> Builder<'a> {
     fn add(&mut self, group: &mut impl GroupLike, control: &Control, origin: Point) {
         let bounds = rect(control);
         let id = match &control.kind {
-            Kind::Label { text, link } => {
+            Kind::Label { text, link, color } => {
                 let id = group.add(Label::new(bounds, text));
+                if let Some(color) = color {
+                    group.add(Tint::new(bounds, tv_color(*color)));
+                }
                 if let Some(target) = link {
                     self.links.push((id, target.clone()));
                 }
@@ -1415,7 +1442,11 @@ impl<'a> Builder<'a> {
                 }
                 group.add(tree)
             }
-            Kind::Line { style } => group.add(LineView::new(bounds, *style)),
+            Kind::Line { style, color } => group.add(LineView::new(
+                bounds,
+                *style,
+                color.map(tv_color),
+            )),
             Kind::ErrorLine {} => {
                 let mut line = ErrorLine::new();
                 line.set_bounds(bounds);
