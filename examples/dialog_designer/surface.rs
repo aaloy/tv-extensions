@@ -10,8 +10,9 @@ use std::rc::Rc;
 use turbo_vision::core::command::CommandId;
 use turbo_vision::core::draw::Cell;
 use turbo_vision::core::event::{
-    Event, EventType, KB_BACKSPACE, KB_CTRL_V, KB_CTRL_W, KB_DEL, KB_DOWN, KB_ENTER, KB_ESC, KB_LEFT, KB_PGDN, KB_PGUP, KB_RIGHT,
-    KB_SHIFT_TAB, KB_TAB, KB_UP, MB_LEFT_BUTTON, MB_RIGHT_BUTTON,
+    Event, EventType, KB_BACKSPACE, KB_CTRL_V, KB_CTRL_W, KB_DEL, KB_DOWN, KB_ENTER, KB_ESC,
+    KB_LEFT, KB_PGDN, KB_PGUP, KB_RIGHT, KB_SHIFT_TAB, KB_TAB, KB_UP, MB_LEFT_BUTTON,
+    MB_RIGHT_BUTTON,
 };
 use turbo_vision::core::geometry::{Point, Rect};
 use turbo_vision::core::keys::KeyModifiers;
@@ -97,8 +98,10 @@ impl Surface {
     /// dialog fits there.
     pub fn move_to(&mut self, to: Point) {
         let (w, h) = (self.core.bounds.width(), self.core.bounds.height());
-        let x = to.x.clamp(self.area.a.x, (self.area.b.x - w).max(self.area.a.x));
-        let y = to.y.clamp(self.area.a.y, (self.area.b.y - h).max(self.area.a.y));
+        let x =
+            to.x.clamp(self.area.a.x, (self.area.b.x - w).max(self.area.a.x));
+        let y =
+            to.y.clamp(self.area.a.y, (self.area.b.y - h).max(self.area.a.y));
         self.core.bounds = Rect::new(x, y, x + w, y + h);
     }
 

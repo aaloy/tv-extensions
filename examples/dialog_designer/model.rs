@@ -122,7 +122,10 @@ impl Place {
 pub enum Container {
     Dialog,
     /// List `slot` of the control at `owner`: a group box's, or a tab page.
-    In { owner: Place, slot: usize },
+    In {
+        owner: Place,
+        slot: usize,
+    },
 }
 
 impl Container {
@@ -295,8 +298,9 @@ impl Design {
     fn list_mut(&mut self, container: Container) -> Option<&mut Vec<Control>> {
         match container {
             Container::Dialog => Some(&mut self.spec.controls),
-            Container::In { owner, slot } => at_mut(&mut self.spec.controls, owner.steps())?
-                .child_list_mut(slot),
+            Container::In { owner, slot } => {
+                at_mut(&mut self.spec.controls, owner.steps())?.child_list_mut(slot)
+            }
         }
     }
 
@@ -1039,6 +1043,57 @@ impl Design {
         true
     }
 
+    /// The controls the selected one is tab-ordered among, described one
+    /// per line, and the selected one's place in them.
+    pub fn order_group(&self) -> Option<(Vec<String>, usize)> {
+        let Sel::At(path) = self.sel else {
+            return None;
+        };
+        let list = self.list(path.container())?;
+        let rows = list
+            .iter()
+            .map(|c| {
+                if c.name.is_empty() {
+                    c.type_name().to_string()
+                } else {
+                    format!("{} {}", c.type_name(), c.name)
+                }
+            })
+            .collect();
+        Some((rows, path.index()))
+    }
+
+    /// Put the selected control's siblings in `order`: `order[n]` is the
+    /// current index of the one that becomes the n-th. The selection stays
+    /// on the same control. False when `order` is not a reordering.
+    pub fn set_order(&mut self, order: &[usize]) -> bool {
+        let Sel::At(path) = self.sel else {
+            return false;
+        };
+        let Some(len) = self.siblings_mut(self.sel).map(|l| l.len()) else {
+            return false;
+        };
+        let mut seen = vec![false; len];
+        let valid = order.len() == len
+            && order
+                .iter()
+                .all(|&i| i < len && !std::mem::replace(&mut seen[i], true));
+        if !valid || order.iter().enumerate().all(|(n, &i)| n == i) {
+            return false;
+        }
+        self.snapshot();
+        let list = self.siblings_mut(self.sel).expect("checked");
+        let mut old: Vec<Option<Control>> = std::mem::take(list).into_iter().map(Some).collect();
+        *list = order
+            .iter()
+            .map(|&i| old[i].take().expect("a permutation"))
+            .collect();
+        let at = order.iter().position(|&i| i == path.index()).unwrap_or(0);
+        self.sel = Sel::At(path.with_index(at));
+        self.changed();
+        true
+    }
+
     /// Show page `page` of the tab pane at `tabs`; it is also the page the
     /// dialog opens on. Not an undoable edit.
     pub fn show_page(&mut self, tabs: Place, page: usize) -> bool {
@@ -1148,7 +1203,9 @@ impl Design {
         }
         let mut has_tabs = matches!(control.kind, Kind::Tabs { .. });
         for list in control.child_lists() {
-            visit_all(list, &mut |c| has_tabs |= matches!(c.kind, Kind::Tabs { .. }));
+            visit_all(list, &mut |c| {
+                has_tabs |= matches!(c.kind, Kind::Tabs { .. })
+            });
         }
         if has_tabs
             && let Container::In { owner, .. } = to
@@ -1507,6 +1564,24 @@ mod tests {
                 color: None,
             }
         );
+    }
+
+    #[test]
+    fn a_whole_tab_order_is_set_at_once() {
+        let mut d = Design::default();
+        for kind in ["label", "input", "button"] {
+            d.insert(kind);
+        }
+        d.select(Sel::At(Place::top(0)));
+        let first = d.selected().unwrap().type_name();
+        assert!(!d.set_order(&[0, 0, 1]), "not a permutation");
+        assert!(!d.set_order(&[0, 1, 2]), "nothing changes");
+        assert!(d.set_order(&[2, 0, 1]));
+        assert_eq!(d.sel, Sel::At(Place::top(1)));
+        assert_eq!(d.selected().unwrap().type_name(), first);
+        assert_eq!(d.spec.controls[0].type_name(), "button");
+        assert!(d.undo());
+        assert_eq!(d.spec.controls[0].type_name(), first);
     }
 
     #[test]

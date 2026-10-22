@@ -15,6 +15,8 @@ pub struct Keys {
     pub earlier: &'static str,
     pub later: &'static str,
     pub move_to: &'static str,
+    pub set_order: &'static str,
+    pub help: &'static str,
     pub test: &'static str,
     pub json: &'static str,
     pub order: &'static str,
@@ -31,6 +33,8 @@ pub const PC: Keys = Keys {
     earlier: "F7",
     later: "F8",
     move_to: "F6",
+    set_order: "F5",
+    help: "F1",
     test: "F9",
     json: "F4",
     order: "Ctrl+O",
@@ -47,6 +51,8 @@ pub const MAC: Keys = Keys {
     earlier: "Ctrl+U",
     later: "Ctrl+L",
     move_to: "Ctrl+P",
+    set_order: "Ctrl+R",
+    help: "Ctrl+F",
     test: "Ctrl+E",
     json: "Ctrl+K",
     order: "Ctrl+T",
@@ -103,6 +109,8 @@ Keys
   Ctrl+D           duplicate
   {tab_order:<16} earlier / later in tab order
   {move_to:<16} move to another container
+  {set_order:<16} set the tab order
+  {help:<16} help on the selection
   {pages:<16} previous / next tab page
   {order:<16} show tab order
   Ctrl+Z / Ctrl+Y  undo / redo
@@ -115,6 +123,8 @@ Keys
         delete = k.delete,
         tab_order = format!("{} / {}", k.earlier, k.later),
         move_to = k.move_to,
+        set_order = k.set_order,
+        help = k.help,
         pages = format!("{} / {}", k.page_back, k.page_forward),
         order = k.order,
         test = k.test,
@@ -144,8 +154,21 @@ mod tests {
     #[test]
     fn the_mac_table_has_no_pc_only_keys() {
         for k in [
-            MAC.open, MAC.save, MAC.exit, MAC.insert, MAC.delete, MAC.earlier, MAC.later,
-            MAC.move_to, MAC.test, MAC.json, MAC.order, MAC.page_back, MAC.page_forward,
+            MAC.open,
+            MAC.save,
+            MAC.exit,
+            MAC.insert,
+            MAC.delete,
+            MAC.earlier,
+            MAC.later,
+            MAC.move_to,
+            MAC.set_order,
+            MAC.help,
+            MAC.test,
+            MAC.json,
+            MAC.order,
+            MAC.page_back,
+            MAC.page_forward,
         ] {
             assert!(
                 !k.starts_with('F') && k != "Ins" && !k.contains("Pg") && !k.contains("Alt"),
@@ -157,10 +180,26 @@ mod tests {
     #[test]
     fn the_mac_keys_do_not_clash() {
         let mut all = vec![
-            MAC.open, MAC.save, MAC.exit, MAC.insert, MAC.earlier, MAC.later, MAC.move_to,
-            MAC.test, MAC.json, MAC.order, MAC.page_back, MAC.page_forward,
+            MAC.open,
+            MAC.save,
+            MAC.exit,
+            MAC.insert,
+            MAC.earlier,
+            MAC.later,
+            MAC.move_to,
+            MAC.set_order,
+            MAC.help,
+            MAC.test,
+            MAC.json,
+            MAC.order,
+            MAC.page_back,
+            MAC.page_forward,
             // the ones both keyboards share
-            "Ctrl+N", "Ctrl+Z", "Ctrl+Y", "Ctrl+D", "Ctrl+G",
+            "Ctrl+N",
+            "Ctrl+Z",
+            "Ctrl+Y",
+            "Ctrl+D",
+            "Ctrl+G",
         ];
         let n = all.len();
         all.sort_unstable();

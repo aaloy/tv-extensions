@@ -4,8 +4,8 @@
 //! and the screen checked.
 
 use super::*;
-use turbo_vision::core::palette::Attr;
 use turbo_vision::core::event::{KB_DOWN, KB_ENTER, KB_LEFT, KB_RIGHT, KB_UP, MB_LEFT_BUTTON};
+use turbo_vision::core::palette::Attr;
 use turbo_vision::test_util::test_terminal;
 use turbo_vision::views::button::set_press_animation;
 
@@ -300,7 +300,10 @@ fn moving_in_the_tree_selects_in_the_design() {
     designer.refresh(&mut app);
     assert_eq!(designer.design.borrow().sel, Sel::top(2));
     // And the tree stays where the person put it.
-    assert_eq!(tree(&mut app, &designer).current().unwrap().sel, Sel::top(2));
+    assert_eq!(
+        tree(&mut app, &designer).current().unwrap().sel,
+        Sel::top(2)
+    );
 }
 
 #[test]
@@ -321,11 +324,15 @@ fn tab_pages_are_rows_with_their_controls() {
     let mut designer = open_designer(&mut app, Design::new(spec, None));
     designer.refresh(&mut app);
     let found = tree(&mut app, &designer).entries().to_vec();
-    assert!(found.iter().any(|e| e.page == Some((Place::top(16), 1))), "{found:?}");
     assert!(
-        found
-            .iter()
-            .any(|e| e.sel.path().is_some_and(|p| p.depth() == 2 && p.slot() == 1)),
+        found.iter().any(|e| e.page == Some((Place::top(16), 1))),
+        "{found:?}"
+    );
+    assert!(
+        found.iter().any(|e| e
+            .sel
+            .path()
+            .is_some_and(|p| p.depth() == 2 && p.slot() == 1)),
         "{found:?}"
     );
 }
@@ -503,7 +510,12 @@ fn dropping_on_a_plain_control_changes_nothing() {
     let mut app = app();
     let mut designer = open_designer(&mut app, group_design());
     designer.refresh(&mut app);
-    let mut press = Event::mouse(EventType::MouseDown, Point::new(2, 3), MB_LEFT_BUTTON, false);
+    let mut press = Event::mouse(
+        EventType::MouseDown,
+        Point::new(2, 3),
+        MB_LEFT_BUTTON,
+        false,
+    );
     tree(&mut app, &designer).handle_event(&mut press);
     let mut release = Event::mouse(EventType::MouseUp, Point::new(2, 2), MB_LEFT_BUTTON, false);
     tree(&mut app, &designer).handle_event(&mut release);
@@ -539,12 +551,24 @@ fn the_insert_menu_fits_on_screen_so_its_last_item_can_be_clicked() {
     // terminal sends them.
     let last = Point::new(at.x + 3, at.y + rows - 2);
     let tx = app.terminal.event_injector();
-    tx.send(Event::mouse(EventType::MouseDown, last, MB_LEFT_BUTTON, false)).unwrap();
-    tx.send(Event::mouse(EventType::MouseUp, last, 0, false)).unwrap();
-    tx.send(Event::keyboard(turbo_vision::core::event::KB_ESC)).unwrap();
+    tx.send(Event::mouse(
+        EventType::MouseDown,
+        last,
+        MB_LEFT_BUTTON,
+        false,
+    ))
+    .unwrap();
+    tx.send(Event::mouse(EventType::MouseUp, last, 0, false))
+        .unwrap();
+    tx.send(Event::keyboard(turbo_vision::core::event::KB_ESC))
+        .unwrap();
     command(&mut app, &mut designer, CM_INSERT_MENU);
     let d = designer.design.borrow();
-    assert_eq!(d.selected().map(tv_extensions::dialog_spec::Control::type_name), Some("error_line"));
+    assert_eq!(
+        d.selected()
+            .map(tv_extensions::dialog_spec::Control::type_name),
+        Some("error_line")
+    );
 }
 
 #[test]
@@ -560,7 +584,11 @@ fn on_a_short_screen_the_insert_menu_asks_for_the_section_first() {
     queue(&mut app, &[KB_ENTER, KB_DOWN, KB_DOWN, KB_ENTER]);
     command(&mut app, &mut designer, CM_INSERT_MENU);
     let d = designer.design.borrow();
-    assert_eq!(d.selected().map(tv_extensions::dialog_spec::Control::type_name), Some("line"));
+    assert_eq!(
+        d.selected()
+            .map(tv_extensions::dialog_spec::Control::type_name),
+        Some("line")
+    );
 }
 
 fn attr_at(app: &Application, designer: &Designer, inner: Point) -> Attr {
@@ -578,15 +606,27 @@ fn a_selected_container_is_marked_by_its_frame_only() {
     let r = designer.design.borrow().rect_of(Sel::top(0));
     let marked = attr_at(&app, &designer, r.a).bg;
     // The frame is marked; a cell inside the box is not.
-    assert_eq!(attr_at(&app, &designer, Point::new(r.a.x + 5, r.a.y)).bg, marked);
-    assert_eq!(attr_at(&app, &designer, Point::new(r.a.x, r.a.y + 3)).bg, marked);
-    assert_ne!(attr_at(&app, &designer, Point::new(r.a.x + 15, r.a.y + 4)).bg, marked);
+    assert_eq!(
+        attr_at(&app, &designer, Point::new(r.a.x + 5, r.a.y)).bg,
+        marked
+    );
+    assert_eq!(
+        attr_at(&app, &designer, Point::new(r.a.x, r.a.y + 3)).bg,
+        marked
+    );
+    assert_ne!(
+        attr_at(&app, &designer, Point::new(r.a.x + 15, r.a.y + 4)).bg,
+        marked
+    );
     // A plain control is marked all over.
     designer.design.borrow_mut().select(Sel::top(1));
     designer.refresh(&mut app);
     app.draw();
     let r = designer.design.borrow().rect_of(Sel::top(1));
-    assert_eq!(attr_at(&app, &designer, Point::new(r.a.x + 3, r.a.y)).bg, marked);
+    assert_eq!(
+        attr_at(&app, &designer, Point::new(r.a.x + 3, r.a.y)).bg,
+        marked
+    );
 }
 
 #[test]
@@ -602,4 +642,50 @@ fn backspace_deletes_like_del() {
         let after = designer.design.borrow().spec.controls.len();
         assert_eq!(after, before - 1, "{code:#x}");
     }
+}
+
+#[test]
+fn the_tab_order_dialog_reorders_the_siblings() {
+    use turbo_vision::core::event::{KB_ALT_D, KB_ALT_U};
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    designer.design.borrow_mut().select(Sel::top(1));
+    let names = |d: &Designer| -> Vec<String> {
+        d.design
+            .borrow()
+            .spec
+            .controls
+            .iter()
+            .map(|c| c.name.clone())
+            .collect()
+    };
+    let before = names(&designer);
+    // Down twice, up once, then OK: the control ends one place later.
+    queue(&mut app, &[KB_ALT_D, KB_ALT_D, KB_ALT_U, KB_ENTER]);
+    command(&mut app, &mut designer, CM_SET_ORDER);
+    let after = names(&designer);
+    assert_eq!(after[2], before[1], "{before:?} -> {after:?}");
+    assert_eq!(after[1], before[2]);
+    assert_eq!(designer.design.borrow().sel, Sel::top(2));
+}
+
+#[test]
+fn cancelling_the_tab_order_changes_nothing() {
+    use turbo_vision::core::event::{KB_ALT_D, KB_ESC};
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    designer.design.borrow_mut().select(Sel::top(1));
+    let before = designer.design.borrow().spec.clone();
+    queue(&mut app, &[KB_ALT_D, KB_ESC]);
+    command(&mut app, &mut designer, CM_SET_ORDER);
+    assert_eq!(designer.design.borrow().spec, before);
+}
+
+#[test]
+fn help_shows_what_is_selected() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, customer());
+    designer.design.borrow_mut().select(Sel::top(1));
+    queue(&mut app, &[KB_ENTER]);
+    command(&mut app, &mut designer, CM_HELP_ON);
 }

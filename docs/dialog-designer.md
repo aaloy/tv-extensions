@@ -77,6 +77,7 @@ way to reach a control hidden under another or on a tab page.
 | Edit its properties | double click | Enter |
 | Delete / duplicate | | Del / Ctrl+D |
 | Earlier / later in tab order | | F7 / F8 |
+| Set the whole tab order | | F5 |
 | Show the tab order | | Ctrl+O |
 | Show another tab page | click its tab | Ctrl+PgUp / Ctrl+PgDn |
 | Undo / redo | | Ctrl+Z / Ctrl+Y |
@@ -84,6 +85,8 @@ way to reach a control hidden under another or on a tab page.
 | Show the JSON | | F4 |
 | Save code to use it... | | Ctrl+G |
 | Save / open / new | | F2 / F3 / Ctrl+N |
+| Exit | | Alt+X |
+| Help on the selection | | F1 |
 
 ### On a Mac
 
@@ -98,6 +101,8 @@ instead, and the menus, the status line and Help ▸ Keys show them:
 | Save / open | F2 / F3 | Ctrl+S / Ctrl+O |
 | Earlier / later in tab order | F7 / F8 | Ctrl+U / Ctrl+L |
 | Move to container | F6 | Ctrl+P |
+| Set the tab order | F5 | Ctrl+R |
+| Help on the selection | F1 | Ctrl+F |
 | Test the dialog | F9 | Ctrl+E |
 | Show the JSON | F4 | Ctrl+K |
 | Show the tab order | Ctrl+O | Ctrl+T |
@@ -147,6 +152,28 @@ control cannot go inside itself). In the inspector tree you can also drag
 a row onto a container's row, which is the dialog, a group box or a tab
 page. The control keeps its place within the new container, moved inside
 it if it would hang out, and stays selected.
+
+### Tab order
+
+Tab walks the controls of a container in the order they are in the list
+(and the order `data` and validation use). Ctrl+O (View > Tab order) numbers
+every control with its place in that order, so it can be seen.
+
+To change it, F7 / F8 (Edit > Earlier / Later in tab order) move the
+selected control one place among its neighbours. For a bigger change,
+Edit > Set tab order... (F5) opens the neighbours as a list, in order, with
+the selected control under the cursor: **Move up** (Alt+U) and **Move down**
+(Alt+D) shift the one under the cursor, OK applies the whole new order as
+one undoable edit, Cancel leaves it. "Neighbours" are the controls in the
+same container: the dialog's own, a group box's, or one tab page's. A new
+control goes after the selected one, so it starts in a sensible place.
+
+### Help
+
+F1 (Help > Help on selection) explains the selected control: what it is
+for, the JSON keys in its property sheet and what each does, and what value
+it gives your code. With the dialog selected it explains the dialog.
+Help > Keys lists every key for this keyboard.
 
 ### Properties
 

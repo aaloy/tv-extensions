@@ -14,6 +14,7 @@
 //! click) edits its properties, F9 runs the dialog for real. Help > Keys
 //! lists every key.
 
+mod help;
 mod keys;
 mod model;
 mod props;
@@ -21,9 +22,9 @@ mod surface;
 mod templates;
 mod tree;
 
-use model::{Design, KINDS, SECTION_ENDS, SECTION_NAMES, Sel, section};
 #[cfg(test)]
 use model::Place;
+use model::{Design, KINDS, SECTION_ENDS, SECTION_NAMES, Sel, section};
 use serde_json::Value;
 use std::cell::RefCell;
 use std::fmt::Write as _;
@@ -42,14 +43,14 @@ use turbo_vision::views::button::Button;
 use turbo_vision::views::dialog::Dialog;
 use turbo_vision::views::file_dialog::FileDialog;
 use turbo_vision::views::listbox::ListBox;
-use turbo_vision::views::static_text::StaticText;
 use turbo_vision::views::menu_bar::{MenuBar, SubMenu};
 use turbo_vision::views::msgbox::{confirmation_box, input_box, message_box_error, message_box_ok};
+use turbo_vision::views::static_text::StaticText;
 use turbo_vision::views::status_line::StatusLine;
 use turbo_vision::views::text_viewer::TextViewer;
 use turbo_vision::views::window::Window;
 use turbo_vision::views::{GroupLike, Handle, View};
-use tv_extensions::dialog_spec::{DialogSpec, JsonDialog, Kind};
+use tv_extensions::dialog_spec::{Control, DialogSpec, JsonDialog, Kind};
 use tv_extensions::popup_menu;
 
 const CM_NEW: CommandId = CM_USER;
@@ -79,13 +80,14 @@ const CM_MOVE_DROPPED: CommandId = CM_USER + 23;
 /// `CM_INSERT_SECTION + i` opens the insert menu of section `i`.
 const CM_INSERT_SECTION: CommandId = CM_USER + 80;
 const CM_MOVE_MENU: CommandId = CM_USER + 24;
+const CM_SET_ORDER: CommandId = CM_USER + 25;
+const CM_HELP_ON: CommandId = CM_USER + 26;
 /// `CM_MOVE_TO + i` moves the selection to the i-th target of the move menu.
 const CM_MOVE_TO: CommandId = CM_USER + 100;
 /// `CM_INSERT + i` inserts `KINDS[i]`.
 const CM_INSERT: CommandId = CM_USER + 50;
 
 const INSPECTOR_WIDTH: i16 = 32;
-
 
 /// The inspector window: the tree of controls over the selection's JSON.
 #[derive(Clone, Copy)]
@@ -398,6 +400,27 @@ impl Designer {
     /// Open the insert menu under the selection: every control type with a
     /// line between the sections, or, on a screen too short for that, the
     /// sections first.
+    fn set_order(&mut self, app: &mut Application) {
+        let group = self.design.borrow().order_group();
+        let Some((rows, at)) = group else {
+            message_box_ok(
+                app,
+                "Select a control first: its tab order is among its neighbours.",
+            );
+            return;
+        };
+        if rows.len() < 2 {
+            message_box_ok(
+                app,
+                "It is the only control here: there is no order to set.",
+            );
+            return;
+        }
+        if let Some(order) = edit_order(app, &rows, at) {
+            self.design.borrow_mut().set_order(&order);
+        }
+    }
+
     fn insert_menu(&mut self, app: &mut Application) {
         let rows = i16::try_from(KINDS.len() + SECTION_ENDS.len() + 2).unwrap_or(i16::MAX);
         let (_, screen_h) = app.terminal.size();
@@ -529,6 +552,14 @@ impl AppHandler for Designer {
             CM_LATER => {
                 design.borrow_mut().reorder(1);
             }
+            CM_SET_ORDER => self.set_order(app),
+            CM_HELP_ON => {
+                let text = {
+                    let d = design.borrow();
+                    help::for_selection(d.selected().map(Control::type_name))
+                };
+                show_text(app, "Help", &text);
+            }
             CM_TEST => {
                 let spec = design.borrow().spec.clone();
                 Self::test(app, &spec);
@@ -613,7 +644,11 @@ fn open_inspector(app: &mut Application) -> Inspector {
     window.set_grow_mode(Grow::LO_X | Grow::HI_X | Grow::HI_Y);
     // The tree of controls takes the top half, the selection's JSON the rest.
     let split = ((h - 2) / 2).max(4);
-    let mut tree = ControlTree::new(Rect::new(0, 0, w - 2, split), CM_PROPERTIES, CM_MOVE_DROPPED);
+    let mut tree = ControlTree::new(
+        Rect::new(0, 0, w - 2, split),
+        CM_PROPERTIES,
+        CM_MOVE_DROPPED,
+    );
     tree.set_grow_mode(Grow::HI_X);
     let tree = window.add_typed(tree);
     let mut viewer = TextViewer::new(Rect::new(0, split, w - 2, h - 2)).with_scrollbars(true);
@@ -777,7 +812,10 @@ fn manage_templates(app: &mut Application, dir: &Path) -> Option<DialogSpec> {
         let w: i16 = 66.min(sw);
         let h: i16 = (ROWS + 6).min(sh);
         let mut dialog = Dialog::new(centred(Rect::new(0, 0, sw, sh), w, h), "Templates");
-        let header = format!("{:<18} {:<22} {:<7} {}", "Name", "Dialog", "Size", "Controls");
+        let header = format!(
+            "{:<18} {:<22} {:<7} {}",
+            "Name", "Dialog", "Size", "Controls"
+        );
         dialog.add(StaticText::new(Rect::new(1, 0, w - 3, 1), &header));
         let mut list = ListBox::new(Rect::new(1, 1, w - 3, ROWS), CM_OK);
         list.set_items(all.iter().map(templates::Template::summary).collect());
@@ -790,7 +828,10 @@ fn manage_templates(app: &mut Application, dir: &Path) -> Option<DialogSpec> {
         } else {
             format!("In {}", dir.display())
         };
-        dialog.add(StaticText::new(Rect::new(1, ROWS + 1, w - 3, ROWS + 2), &folder));
+        dialog.add(StaticText::new(
+            Rect::new(1, ROWS + 1, w - 3, ROWS + 2),
+            &folder,
+        ));
         let buttons = [
             ("~U~se", CM_OK, 10, true),
             ("~R~ename", CM_YES, 12, false),
@@ -839,6 +880,72 @@ fn manage_templates(app: &mut Application, dir: &Path) -> Option<DialogSpec> {
                     message_box_error(app, &e);
                 }
             }
+            _ => return None,
+        }
+    }
+}
+
+/// A dialog to put `rows` in tab order: the controls in a list, Move up and
+/// Move down shift the one under the cursor. Returns the new order as the
+/// old indices, `None` when cancelled.
+fn edit_order(app: &mut Application, rows: &[String], selected: usize) -> Option<Vec<usize>> {
+    let mut order: Vec<usize> = (0..rows.len()).collect();
+    let mut at = selected.min(rows.len().saturating_sub(1));
+    loop {
+        let (sw, sh) = app.terminal.size();
+        let list_h = i16::try_from(rows.len()).unwrap_or(i16::MAX).clamp(4, 12);
+        let w: i16 = 50.min(sw);
+        let h: i16 = (list_h + 7).min(sh);
+        let mut dialog = Dialog::new(centred(Rect::new(0, 0, sw, sh), w, h), "Tab order");
+        dialog.add(StaticText::new(
+            Rect::new(1, 0, w - 3, 1),
+            "Tab goes through the controls in this order:",
+        ));
+        let mut list = ListBox::new(Rect::new(1, 1, w - 3, 1 + list_h), CM_OK);
+        list.set_items(
+            order
+                .iter()
+                .enumerate()
+                .map(|(n, &i)| format!("{:>2}  {}", n + 1, rows[i]))
+                .collect(),
+        );
+        list.set_selection(at);
+        let list = dialog.add_typed(list);
+        let buttons = [
+            ("Move ~u~p", CM_YES, 12, false),
+            ("Move ~d~own", CM_NO, 14, false),
+            ("~O~K", CM_OK, 8, true),
+            ("Cancel", turbo_vision::core::command::CM_CANCEL, 10, false),
+        ];
+        let total: i16 = buttons.iter().map(|b| b.2 + 2).sum::<i16>() - 2;
+        let mut x = ((w - 2 - total) / 2).max(0);
+        for (text, command, width, default) in buttons {
+            dialog.add(Button::new(
+                Rect::new(x, list_h + 2, x + width, list_h + 4),
+                text,
+                command,
+                default,
+            ));
+            x += width + 2;
+        }
+        dialog.set_initial_focus();
+        let command = dialog.execute(app);
+        let cursor = dialog
+            .get(list)
+            .and_then(ListBox::get_selection)
+            .unwrap_or(at);
+        at = cursor.min(order.len() - 1);
+        match command {
+            CM_YES if at > 0 => {
+                order.swap(at, at - 1);
+                at -= 1;
+            }
+            CM_NO if at + 1 < order.len() => {
+                order.swap(at, at + 1);
+                at += 1;
+            }
+            CM_YES | CM_NO => {}
+            CM_OK => return Some(order),
             _ => return None,
         }
     }
@@ -905,6 +1012,7 @@ fn menu_bar(width: i16) -> MenuBar {
             item("La~t~er in tab order", CM_LATER, Some(k.later)),
             MenuItem::separator(),
             item("~M~ove to container...", CM_MOVE_MENU, Some(k.move_to)),
+            item("~S~et tab order...", CM_SET_ORDER, Some(k.set_order)),
         ]),
     ));
     // Short, so every entry can be clicked on any screen: the full list is
@@ -940,6 +1048,7 @@ fn menu_bar(width: i16) -> MenuBar {
     bar.add_submenu(SubMenu::new(
         "~H~elp",
         Menu::from_items(vec![
+            item("~H~elp on selection", CM_HELP_ON, Some(k.help)),
             item("~K~eys", CM_KEYS, None),
             item("~A~bout", CM_ABOUT, None),
         ]),
