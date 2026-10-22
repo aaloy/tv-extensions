@@ -166,3 +166,72 @@ fn a_selection_must_be_one_of_the_items() {
     .unwrap_err();
     assert!(err.to_string().contains("\"r\""), "{err}");
 }
+
+/// The blocks of `docs/dialog-json.md` marked `json dialog` (a whole
+/// dialog) or `json control` (one control) are what an agent copies, so they
+/// must load.
+#[test]
+fn the_json_reference_examples_load() {
+    let doc = std::fs::read_to_string("docs/dialog-json.md").unwrap();
+    let (mut dialogs, mut controls) = (0, 0);
+    let mut rest = doc.as_str();
+    while let Some(at) = rest.find("```json ") {
+        rest = &rest[at + "```json ".len()..];
+        let kind = rest.lines().next().unwrap().trim();
+        let body_start = rest.find('\n').unwrap() + 1;
+        let body = &rest[body_start..rest[body_start..].find("```").unwrap() + body_start];
+        let json = match kind {
+            "dialog" => {
+                dialogs += 1;
+                body.to_string()
+            }
+            "control" => {
+                controls += 1;
+                // A label's link needs its control.
+                format!(
+                    r#"{{ "width": 80, "height": 30, "controls": [
+                        {{ "type": "input", "name": "name", "x": 0, "y": 0, "w": 5, "h": 1 }},
+                        {body} ] }}"#
+                )
+            }
+            other => panic!("unknown block kind {other:?}"),
+        };
+        let spec = DialogSpec::from_json(&json).unwrap_or_else(|e| panic!("{e}\n{json}"));
+        // Saved and read back, it is the same spec.
+        assert_eq!(DialogSpec::from_json(&spec.to_json()).unwrap(), spec);
+        rest = &rest[body_start..];
+    }
+    assert!(dialogs >= 3, "{dialogs} dialogs");
+    assert!(controls >= 21, "{controls} controls");
+}
+
+/// Every control type has a block in the reference.
+#[test]
+fn the_json_reference_shows_every_control_type() {
+    let doc = std::fs::read_to_string("docs/dialog-json.md").unwrap();
+    for name in [
+        "label",
+        "static_text",
+        "line",
+        "input",
+        "auto_complete",
+        "memo",
+        "spinner",
+        "slider",
+        "check_box",
+        "check_boxes",
+        "radio_buttons",
+        "combo_box",
+        "list_box",
+        "tree",
+        "table",
+        "dual_list",
+        "group_box",
+        "tabs",
+        "button",
+        "progress_bar",
+        "error_line",
+    ] {
+        assert!(doc.contains(&format!("{{ \"type\": \"{name}\"")), "{name}");
+    }
+}

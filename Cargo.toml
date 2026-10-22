@@ -162,6 +162,10 @@ name = "dialog_from_json"
 required-features = ["native", "dialog"]
 
 [[example]]
+name = "dialog_check"
+required-features = ["native", "dialog"]
+
+[[example]]
 name = "dialog_on_change"
 required-features = ["native", "dialog"]
 

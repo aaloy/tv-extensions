@@ -230,6 +230,10 @@ with a sample field rule: add it to the application and fill in the bodies.
 
 ## The JSON
 
+[dialog-json.md](dialog-json.md) is the complete reference to this format, written for
+writing a file by hand or by an agent (with `dialog_check` to validate and
+draw it). What follows is the summary.
+
 ```json
 {
   "version": 1,
