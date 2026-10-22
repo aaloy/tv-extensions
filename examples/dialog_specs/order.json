@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "title": "Order",
+  "width": 56,
+  "height": 16,
+  "controls": [
+    { "type": "label", "x": 2, "y": 1, "w": 8, "h": 1, "text": "~I~tem", "link": "item" },
+    { "type": "combo_box", "name": "item", "x": 11, "y": 1, "w": 24, "h": 1, "items": ["Pen", "Ink", "Paper"], "selected": 0 },
+    { "type": "label", "x": 2, "y": 3, "w": 8, "h": 1, "text": "~Q~ty", "link": "qty" },
+    { "type": "spinner", "name": "qty", "x": 11, "y": 3, "w": 10, "h": 1, "min": 1, "max": 99, "value": 1 },
+    { "type": "label", "x": 2, "y": 5, "w": 8, "h": 1, "text": "Total" },
+    { "type": "input", "name": "total", "x": 11, "y": 5, "w": 12, "h": 1, "hint": "Worked out from the item and the quantity" },
+    { "type": "check_box", "name": "gift", "x": 11, "y": 7, "w": 20, "h": 1, "text": "~G~ift" },
+    { "type": "label", "x": 2, "y": 9, "w": 8, "h": 1, "text": "~N~ote", "link": "note" },
+    { "type": "input", "name": "note", "x": 11, "y": 9, "w": 40, "h": 1 },
+    { "type": "error_line", "x": 2, "y": 11, "w": 50, "h": 1 },
+    { "type": "button", "x": 4, "y": 12, "w": 12, "h": 2, "text": "~C~lear", "command": "clear" },
+    { "type": "button", "x": 20, "y": 12, "w": 10, "h": 2, "text": "~O~K", "command": "ok", "default": true },
+    { "type": "button", "x": 34, "y": 12, "w": 12, "h": 2, "text": "Cancel", "command": "cancel" }
+  ]
+}

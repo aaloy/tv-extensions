@@ -235,3 +235,38 @@ fn the_json_reference_shows_every_control_type() {
         assert!(doc.contains(&format!("{{ \"type\": \"{name}\"")), "{name}");
     }
 }
+
+/// The block of a doc fenced with `fence` (such as "```json dialog").
+fn block<'a>(doc: &'a str, fence: &str) -> &'a str {
+    let at = doc
+        .find(fence)
+        .unwrap_or_else(|| panic!("no {fence} block"));
+    let rest = &doc[at + fence.len()..];
+    let start = rest.find('\n').unwrap() + 1;
+    &rest[start..rest[start..].find("```").unwrap() + start]
+}
+
+/// The tutorial's JSON is the JSON the example loads, and its finished
+/// program is the example's code.
+#[test]
+fn the_tutorial_shows_what_the_example_runs() {
+    let doc = std::fs::read_to_string("docs/dialog-tutorial.md").unwrap();
+    let shown = DialogSpec::from_json(block(&doc, "```json dialog")).unwrap();
+    let file = DialogSpec::load("examples/dialog_specs/order.json").unwrap();
+    assert_eq!(shown, file);
+
+    let source = std::fs::read_to_string("examples/dialog_order.rs").unwrap();
+    let in_source: Vec<&str> = source.lines().map(str::trim).collect();
+    for line in block(&doc, "```rust,final").lines().map(str::trim) {
+        if !line.is_empty() {
+            assert!(in_source.contains(&line), "not in dialog_order.rs: {line}");
+        }
+    }
+    // The pieces shown on the way are there too.
+    for line in [
+        "fn recompute(ctx: &mut ActionContext<'_>) -> Flow {",
+        "const PRICES: [i64; 3] = [2, 5, 3];",
+    ] {
+        assert!(doc.contains(line) && source.contains(line), "{line}");
+    }
+}
