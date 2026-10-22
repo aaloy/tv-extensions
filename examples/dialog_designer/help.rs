@@ -292,7 +292,9 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              ctx.value(name) reads any named control; ctx.view_mut::<T>(name)\n\
              changes one. A button's action works the same way, but it runs\n\
              when the button is pressed. Dialog > Test lists the action names\n\
-             nothing is bound to yet.",
+             nothing is bound to yet.\n\
+             \n\
+             A complete program: examples/dialog_on_change.rs.",
         ),
         topic(
             "Tab order",

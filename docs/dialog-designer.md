@@ -477,6 +477,9 @@ In the designer, `on_change` is only a name: type it into the control's
 "On change action" setting. The code is yours, bound with `dialog.on` as
 above; Dialog > Test lists the names nothing is bound to yet. F1 on any of
 these controls and Help > Contents > Reacting to changes explain it.
+`examples/dialog_on_change.rs` is a complete program: a slider that drives
+a progress bar and radio buttons that set the slider, from
+`examples/dialog_specs/volume.json`.
 
 ### Nothing left unbound
 

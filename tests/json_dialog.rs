@@ -300,6 +300,34 @@ fn a_change_runs_its_action() {
     assert_eq!(*changes.borrow(), vec![json!(1)]);
 }
 
+/// The `dialog_on_change` example: changing the mode moves the slider and
+/// the meter, which the handler does with `set_value`.
+#[test]
+fn a_change_can_set_other_controls() {
+    let mut app = app();
+    let mut dialog = JsonDialog::load("examples/dialog_specs/volume.json").unwrap();
+    dialog.on("mode_changed", |ctx| {
+        let level = if ctx.value("mode") == Some(json!(1)) { 80 } else { 20 };
+        ctx.set_value("volume", &json!(level)).unwrap();
+        ctx.set_value("meter", &json!(level)).unwrap();
+        Flow::Stay
+    });
+    dialog.on("volume_changed", |ctx| {
+        let level = ctx.value("volume").unwrap();
+        ctx.set_value("meter", &level).unwrap();
+        Flow::Stay
+    });
+    assert!(dialog.unbound().is_empty());
+    // The first control is the mode: Down and Space pick Loud.
+    key(&mut app, KB_DOWN);
+    type_text(&mut app, " ");
+    key(&mut app, KB_ALT_O);
+    let answer = dialog.run(&mut app).unwrap();
+    assert_eq!(answer.data["mode"], json!(1));
+    assert_eq!(answer.data["volume"], json!(80));
+    assert_eq!(answer.data["meter"], json!(80));
+}
+
 #[test]
 fn a_custom_validator_is_bound_by_name() {
     let spec = r#"{ "width": 40, "height": 8, "controls": [
