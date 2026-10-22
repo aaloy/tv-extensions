@@ -154,6 +154,8 @@ pub struct JsonDialog {
     spec: DialogSpec,
     dialog: Dialog,
     fields: Vec<Field>,
+    /// Every named control's view, with a value or not.
+    ids: HashMap<String, ViewId>,
     /// Every action the spec names; action `i` sends `ACTION_BASE + i`.
     actions: Vec<String>,
     handlers: HashMap<String, Handler>,
@@ -232,8 +234,8 @@ impl JsonDialog {
     }
 
     /// The control named `name` as its turbo-vision type, such as
-    /// `view_mut::<InputLine>("email")`; `None` when there is no such
-    /// control or it is not a `V`.
+    /// `view_mut::<InputLine>("email")` or `view_mut::<Button>("save")`;
+    /// `None` when there is no such control or it is not a `V`.
     pub fn view_mut<V: View + 'static>(&mut self, name: &str) -> Option<&mut V> {
         let id = self.id_of(name)?;
         find_view_mut(&mut self.dialog, id)?
@@ -548,7 +550,7 @@ impl JsonDialog {
     }
 
     fn id_of(&self, name: &str) -> Option<ViewId> {
-        self.fields.iter().find(|f| f.name == name).map(|f| f.id)
+        self.ids.get(name).copied()
     }
 }
 
@@ -1053,6 +1055,7 @@ impl<'a> Builder<'a> {
             spec: spec.clone(),
             dialog,
             fields: self.fields,
+            ids: self.ids,
             actions: self.actions,
             handlers: HashMap::new(),
             rules: Vec::new(),

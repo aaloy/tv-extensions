@@ -134,6 +134,12 @@ fn controls_are_reached_by_name_and_type() {
         .unwrap()
         .set_text("Rome");
     assert_eq!(dialog.value("city"), Some(json!("Rome")));
+    // Controls with no value too, once named.
+    assert!(
+        dialog
+            .view_mut::<turbo_vision::views::tabbed_pane::TabbedPane>("pages")
+            .is_some()
+    );
     // The wrong type is simply not found.
     assert!(dialog.view_mut::<Button>("name").is_none());
     assert!(dialog.view_mut::<InputLine>("nobody").is_none());
@@ -338,4 +344,22 @@ fn a_spec_can_be_used_directly() {
     let spec = DialogSpec::from_json(CUSTOMER).unwrap();
     let mut dialog = JsonDialog::new(&spec).unwrap();
     assert_eq!(dialog.value("name"), Some(json!("")));
+}
+
+#[test]
+fn the_example_specs_load_and_name_what_the_example_binds() {
+    let mut customer =
+        JsonDialog::from_json(include_str!("../examples/dialog_specs/customer.json")).unwrap();
+    // examples/dialog_from_json.rs binds exactly these.
+    assert_eq!(
+        customer.unbound(),
+        vec![
+            "action \"kind_changed\"".to_string(),
+            "action \"lookup\"".to_string()
+        ]
+    );
+    assert_eq!(
+        customer.data(),
+        json!({ "name": "", "email": "", "country": 0, "kind": 0, "vip": false })
+    );
 }

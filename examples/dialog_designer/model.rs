@@ -69,6 +69,8 @@ pub struct Design {
     pub revision: u64,
     undo: Vec<(DialogSpec, Sel)>,
     redo: Vec<(DialogSpec, Sel)>,
+    /// A mouse drag is under way: it is one edit, remembered when it began.
+    in_drag: bool,
 }
 
 impl Default for Design {
@@ -88,6 +90,7 @@ impl Design {
             revision: 0,
             undo: Vec::new(),
             redo: Vec::new(),
+            in_drag: false,
         }
     }
 
@@ -241,18 +244,7 @@ impl Design {
     /// `prefix` with the lowest number that makes it a name not in use.
     pub fn unique_name(&self, prefix: &str) -> String {
         let names = self.names();
-        (1..)
-            .map(|n| format!("{prefix}{n}"))
-            .find(|name| !names.contains(name))
-            .expect("some number is free")
-    }
-
-    pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
-    }
-
-    pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
+        first_free(prefix, |n| names.iter().any(|x| x == n))
     }
 
     // ---- selecting ----------------------------------------------------------
@@ -290,11 +282,31 @@ impl Design {
 
     /// Remember the design before an edit, for undo.
     pub fn snapshot(&mut self) {
+        if self.in_drag {
+            return;
+        }
         self.undo.push((self.spec.clone(), self.sel));
         if self.undo.len() > UNDO_DEPTH {
             self.undo.remove(0);
         }
         self.redo.clear();
+    }
+
+    /// Start a mouse drag: the moves and resizes until
+    /// [`end_drag`](Self::end_drag) undo as one.
+    pub fn begin_drag(&mut self) {
+        self.snapshot();
+        self.in_drag = true;
+    }
+
+    /// End a mouse drag. A drag that changed nothing leaves no undo step.
+    pub fn end_drag(&mut self) {
+        self.in_drag = false;
+        if let Some((spec, _)) = self.undo.last()
+            && *spec == self.spec
+        {
+            self.undo.pop();
+        }
     }
 
     fn changed(&mut self) {
@@ -399,10 +411,11 @@ impl Design {
         fit(&mut control, cw, ch);
 
         self.snapshot();
-        if link_label && let Some(label) = self.control_mut(self.sel) {
-            if let Kind::Label { link, .. } = &mut label.kind {
-                *link = Some(control.name.clone());
-            }
+        if link_label
+            && let Some(label) = self.control_mut(self.sel)
+            && let Kind::Label { link, .. } = &mut label.kind
+        {
+            *link = Some(control.name.clone());
         }
         let list = self.siblings_mut(into).expect("the container exists");
         let at = at.min(list.len());
@@ -436,6 +449,7 @@ impl Design {
 
     /// A new control of `type_name` with its usual size and settings, for a
     /// container `width` wide.
+    #[allow(clippy::too_many_lines, reason = "one arm per control kind")]
     pub fn default_control(&self, type_name: &str, width: i16) -> Control {
         let named = |prefix: &str| self.unique_name(prefix);
         let strings = |items: &[&str]| items.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
@@ -659,10 +673,7 @@ impl Design {
         } else if !commands.iter().any(|c| c == "cancel") {
             ("Cancel".into(), "cancel".into(), false)
         } else {
-            let action = (1..)
-                .map(|n| format!("action{n}"))
-                .find(|a| !commands.contains(a))
-                .expect("some number is free");
+            let action = first_free("action", |a| commands.iter().any(|c| c == a));
             ("~A~ction".into(), action, false)
         }
     }
@@ -739,10 +750,7 @@ impl Design {
                 return String::new();
             }
             let stem = name.trim_end_matches(|c: char| c.is_ascii_digit());
-            let new = (1..)
-                .map(|n| format!("{stem}{n}"))
-                .find(|n| !taken.contains(n))
-                .expect("some number is free");
+            let new = first_free(stem, |n| taken.iter().any(|t| t == n));
             taken.push(new.clone());
             new
         };
@@ -775,38 +783,33 @@ impl Design {
         let Some(c) = self.selected() else {
             return false;
         };
-        let (x, y, w, h) = (c.x + dx, c.y + dy, c.w, c.h);
-        self.set_place(self.sel, x, y, w, h)
+        let place = (c.x + dx, c.y + dy, c.w, c.h);
+        self.set_place(self.sel, place)
     }
 
     /// Grow or shrink the selection by `(dw, dh)`: a control within its
     /// container, or the dialog.
     pub fn resize_by(&mut self, dw: i16, dh: i16) -> bool {
-        match self.selected() {
-            Some(c) => {
-                let (x, y, w, h) = (c.x, c.y, c.w + dw, c.h + dh);
-                self.set_place(self.sel, x, y, w, h)
-            }
-            None => {
-                let (w, h) = (self.spec.width + dw, self.spec.height + dh);
-                self.set_dialog_size(w, h)
-            }
+        if let Some(c) = self.selected() {
+            let place = (c.x, c.y, c.w + dw, c.h + dh);
+            self.set_place(self.sel, place)
+        } else {
+            let (w, h) = (self.spec.width + dw, self.spec.height + dh);
+            self.set_dialog_size(w, h)
         }
     }
 
-    /// Put `sel` at `(x, y)` with size `(w, h)`, kept inside its container
-    /// and at least one cell. Records undo only for a real change.
-    pub fn set_place(&mut self, sel: Sel, x: i16, y: i16, w: i16, h: i16) -> bool {
-        let (cw, ch) = self.container_size(sel);
-        let Some(c) = self.control(sel) else {
+    /// Put `sel` at `place`, `(x, y, w, h)`, kept inside its container and
+    /// at least one cell. Records undo only for a real change.
+    pub fn set_place(&mut self, sel: Sel, place: (i16, i16, i16, i16)) -> bool {
+        let (width, height) = self.container_size(sel);
+        let Some(current) = self.control(sel) else {
             return false;
         };
-        let mut moved = c.clone();
-        moved.w = w.clamp(1, cw.max(1));
-        moved.h = h.clamp(1, ch.max(1));
-        moved.x = x.clamp(0, (cw - moved.w).max(0));
-        moved.y = y.clamp(0, (ch - moved.h).max(0));
-        if (moved.x, moved.y, moved.w, moved.h) == (c.x, c.y, c.w, c.h) {
+        let mut moved = current.clone();
+        (moved.x, moved.y, moved.w, moved.h) = place;
+        fit(&mut moved, width, height);
+        if moved == *current {
             return false;
         }
         self.snapshot();
@@ -885,7 +888,7 @@ impl Design {
     /// # Errors
     ///
     /// The rule broken.
-    pub fn replace_selected(&mut self, control: Control) -> Result<(), SpecError> {
+    pub fn replace_selected(&mut self, control: &Control) -> Result<(), SpecError> {
         let sel = self.sel;
         let Some(old) = self.control(sel).cloned() else {
             return Err(SpecError("nothing is selected".into()));
@@ -927,6 +930,18 @@ impl Design {
         self.path = Some(path);
         self.dirty = false;
         self.revision += 1;
+    }
+}
+
+/// `stem` followed by the lowest number from 1 that `taken` does not hold.
+fn first_free(stem: &str, taken: impl Fn(&str) -> bool) -> String {
+    let mut n = 1u32;
+    loop {
+        let candidate = format!("{stem}{n}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+        n += 1;
     }
 }
 
@@ -1202,13 +1217,33 @@ mod tests {
     }
 
     #[test]
+    fn a_drag_is_one_undo_step() {
+        let mut d = design();
+        d.insert("input");
+        d.begin_drag();
+        d.move_by(1, 0);
+        d.move_by(1, 0);
+        d.resize_by(3, 0);
+        d.end_drag();
+        assert!(d.undo());
+        assert_eq!(d.selected().unwrap().x, 2);
+        assert_eq!(d.selected().unwrap().w, 20);
+        // A click with no move leaves nothing to undo.
+        d.redo();
+        d.begin_drag();
+        d.end_drag();
+        assert!(d.undo());
+        assert_eq!(d.selected().unwrap().x, 2);
+    }
+
+    #[test]
     fn renaming_carries_label_links_and_bad_edits_are_refused() {
         let mut d = design();
         d.insert("label");
         d.insert("input");
         let mut c = d.selected().unwrap().clone();
         c.name = "email".into();
-        d.replace_selected(c).unwrap();
+        d.replace_selected(&c).unwrap();
         assert!(matches!(
             &d.control(Sel::Top(0)).unwrap().kind,
             Kind::Label { link: Some(l), .. } if l == "email"
@@ -1218,7 +1253,7 @@ mod tests {
         let mut c = d.selected().unwrap().clone();
         c.name = "email".into();
         let before = d.spec.clone();
-        assert!(d.replace_selected(c).is_err());
+        assert!(d.replace_selected(&c).is_err());
         assert_eq!(d.spec, before);
     }
 }

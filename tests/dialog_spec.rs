@@ -15,7 +15,7 @@ fn everything() -> DialogSpec {
 fn every_kind_is_read() {
     let spec = everything();
     assert_eq!(spec.title, "Everything");
-    assert_eq!((spec.width, spec.height), (70, 22));
+    assert_eq!((spec.width, spec.height), (76, 26));
     assert_eq!(spec.controls.len(), 20);
 
     let name = spec.find("name").unwrap();
