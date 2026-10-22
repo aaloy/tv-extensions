@@ -6,6 +6,19 @@
 use crate::keys::Keys;
 use crate::model::KINDS;
 
+/// What `on_change` is, for the controls that have it.
+macro_rules! on_change_help {
+    () => {
+        "\n\
+         \n\
+         on_change  the name of an action. It does nothing by itself:\n\
+                    your program attaches code to the name with\n\
+                    dialog.on(\"name\", |ctx| { ...; Flow::Stay }), and that\n\
+                    code runs each time the person changes this control.\n\
+                    See Help > Contents > Reacting to changes."
+    };
+}
+
 /// The help on a control type (the JSON `type`).
 #[allow(clippy::too_many_lines)] // one arm of prose per control type
 pub fn control(type_name: &str) -> &'static str {
@@ -56,19 +69,19 @@ pub fn control(type_name: &str) -> &'static str {
              required   it must not be left empty"
         }
         "spinner" => {
-            "A number with arrows to step it. Its value is a number.\n\
+            concat!("A number with arrows to step it. Its value is a number.\n\
              \n\
              min, max  the limits\n\
              step      what an arrow adds\n\
              suffix    text after the number, such as a unit\n\
-             wrap      go round from one limit to the other"
+             wrap      go round from one limit to the other", on_change_help!())
         }
         "slider" => {
-            "A number chosen by sliding a marker.\n\
+            concat!("A number chosen by sliding a marker.\n\
              \n\
              min, max  the limits\n\
              value     where it starts\n\
-             step      how far an arrow moves it"
+             step      how far an arrow moves it", on_change_help!())
         }
         "check_box" => {
             "One option that is on or off. Its value is true or false.\n\
@@ -78,24 +91,24 @@ pub fn control(type_name: &str) -> &'static str {
              required  it must be on to accept the dialog"
         }
         "check_boxes" => {
-            "Several options, any of them on. Its value is the list of\n\
+            concat!("Several options, any of them on. Its value is the list of\n\
              indices that are on.\n\
              \n\
              items    one caption per option\n\
-             checked  the indices that start on"
+             checked  the indices that start on", on_change_help!())
         }
         "radio_buttons" => {
-            "Several options, exactly one on. Its value is its index.\n\
+            concat!("Several options, exactly one on. Its value is its index.\n\
              \n\
              items     one caption per option\n\
-             selected  the index that starts on"
+             selected  the index that starts on", on_change_help!())
         }
         "combo_box" => {
-            "A drop-down list of items. Its value is an index, or null.\n\
+            concat!("A drop-down list of items. Its value is an index, or null.\n\
              \n\
              items     what it lists\n\
              selected  the item that starts chosen\n\
-             required  an item must be chosen"
+             required  an item must be chosen", on_change_help!())
         }
         "list_box" => {
             "A list to choose from. Its value is an index, or null.\n\
@@ -256,6 +269,32 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              what you are about to move.",
         ),
         topic(
+            "Reacting to changes",
+            "Some controls can tell your program when the person changes\n\
+             them, while the dialog is still open: check boxes, radio\n\
+             buttons, combo boxes, spinners and sliders. Use it to keep one\n\
+             control in step with another.\n\
+             \n\
+             In the designer: open the control's properties and type a name\n\
+             in \"On change action\", for instance volume_changed. Nothing\n\
+             else happens here; the name is only saved in the JSON.\n\
+             \n\
+             In your program: attach code to that name.\n\
+             \n\
+             dialog.on(\"volume_changed\", |ctx| {\n\
+                 let level = ctx.value(\"volume\");      // the new value\n\
+                 if let Some(bar) = ctx.view_mut::<ProgressBar>(\"meter\") {\n\
+                     // change another control to follow it\n\
+                 }\n\
+                 Flow::Stay                            // keep the dialog open\n\
+             });\n\
+             \n\
+             ctx.value(name) reads any named control; ctx.view_mut::<T>(name)\n\
+             changes one. A button's action works the same way, but it runs\n\
+             when the button is pressed. Dialog > Test lists the action names\n\
+             nothing is bound to yet.",
+        ),
+        topic(
             "Tab order",
             "Tab goes through the controls of a container in the order of\n\
              its list, and the data and the validation use the same order.\n\
@@ -405,7 +444,13 @@ pub fn tutorial(k: &Keys) -> Vec<Topic> {
              Its value is true or false.\n\
              \n\
              Other controls choose from lists: a Combo box, a List box, a\n\
-             Tree view, a Table. F1 on any control explains its settings."
+             Tree view, a Table. F1 on any control explains its settings.\n\
+             \n\
+             To react while the person chooses, type a name in the radio\n\
+             buttons' \"On change action\", such as kind_changed. Your program\n\
+             binds code to that name with dialog.on; see Help > Contents >\n\
+             Reacting to changes. Without it, the value is only read when\n\
+             the dialog is accepted."
                 .to_string(),
         ),
         (
@@ -511,7 +556,7 @@ mod tests {
     #[test]
     fn the_contents_lists_the_topics_then_every_control() {
         let all = topics(&crate::keys::PC);
-        assert_eq!(all.len(), 8 + KINDS.len());
+        assert_eq!(all.len(), 9 + KINDS.len());
         assert!(all.iter().all(|t| !t.title.is_empty() && !t.text.is_empty()));
         assert_eq!(all.last().unwrap().title, "Control: error line");
         assert!(all[1].text.contains("F9"));
@@ -526,6 +571,14 @@ mod tests {
         let text = |l: &[Topic]| l.iter().map(|t| t.text.clone()).collect::<String>();
         assert!(text(&pc).contains("F9") && !text(&mac).contains("F9"));
         assert!(text(&mac).contains("Ctrl+E"));
+    }
+
+    #[test]
+    fn the_controls_with_on_change_explain_it() {
+        for name in ["check_boxes", "radio_buttons", "combo_box", "spinner", "slider"] {
+            assert!(control(name).contains("on_change"), "{name}");
+        }
+        assert!(!control("input").contains("on_change"));
     }
 
     #[test]

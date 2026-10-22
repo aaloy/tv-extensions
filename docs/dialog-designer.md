@@ -473,6 +473,11 @@ dialog.on("kind_changed", |ctx| {
 `on_change` is available on check boxes, radio buttons, combo boxes,
 spinners and sliders. The handler runs as the person changes the control.
 
+In the designer, `on_change` is only a name: type it into the control's
+"On change action" setting. The code is yours, bound with `dialog.on` as
+above; Dialog > Test lists the names nothing is bound to yet. F1 on any of
+these controls and Help > Contents > Reacting to changes explain it.
+
 ### Nothing left unbound
 
 ```rust,ignore

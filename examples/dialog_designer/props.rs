@@ -229,7 +229,7 @@ fn plain(text: &str) -> String {
 fn on_change(value: Option<&String>) -> Value {
     text(
         "on_change",
-        "On ~c~hange action",
+        "On ~c~hange action (a name your code binds)",
         value.map_or("", String::as_str),
     )
 }
