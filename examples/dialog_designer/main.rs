@@ -78,6 +78,7 @@ Mouse
   Drag             move it
   Drag the yellow  resize it (or the dialog)
     corner
+  Drag the frame   move the dialog about the desktop
   Double click     properties
   Inspector tree   click / arrows select a control, Enter edits it
   Right click      insert a control
@@ -85,7 +86,7 @@ Mouse
 Keys
   Tab / Shift+Tab  next / previous control
   Esc              select the container
-  Arrows           move one cell
+  Arrows           move one cell (the dialog: move it)
   Shift/Ctrl+Arrow resize one cell
   Enter            properties
   Ins              insert a control
@@ -125,7 +126,10 @@ impl Designer {
     /// After a change from outside the surface: follow the dialog's size
     /// and refresh the inspector.
     fn refresh(&mut self, app: &mut Application) {
+        let desk = app.desktop.get_bounds();
+        let area = Rect::new(0, 0, desk.width(), desk.height());
         if let Some(surface) = self.surface_mut(app) {
+            surface.area = area;
             surface.sync_bounds();
         }
         self.follow_tree(app);

@@ -38,6 +38,9 @@ enum Drag {
     Resize { sel: Sel },
     /// Resizing the dialog by its frame's bottom-right corner.
     Dialog,
+    /// Moving the whole surface on the desktop, held at `grab` (in the
+    /// surface's own space) from its corner.
+    Canvas { grab: Point },
 }
 
 /// The surface: a view on the desktop exactly as big as the dialog.
@@ -52,6 +55,8 @@ pub struct Surface {
     broken: Option<String>,
     built: Option<DialogSpec>,
     drag: Option<Drag>,
+    /// The desktop area the surface may be moved within.
+    pub area: Rect,
     /// Number each control with its place in tab order.
     pub show_order: bool,
 }
@@ -73,6 +78,7 @@ impl Surface {
             broken: None,
             built: None,
             drag: None,
+            area: Rect::new(0, 0, i16::MAX, i16::MAX),
             show_order: false,
         }
     }
@@ -85,6 +91,21 @@ impl Surface {
         };
         let a = self.core.bounds.a;
         self.core.bounds = Rect::new(a.x, a.y, a.x + w, a.y + h);
+    }
+
+    /// Put the surface's corner at `to`, kept on the desktop while the
+    /// dialog fits there.
+    pub fn move_to(&mut self, to: Point) {
+        let (w, h) = (self.core.bounds.width(), self.core.bounds.height());
+        let x = to.x.clamp(self.area.a.x, (self.area.b.x - w).max(self.area.a.x));
+        let y = to.y.clamp(self.area.a.y, (self.area.b.y - h).max(self.area.a.y));
+        self.core.bounds = Rect::new(x, y, x + w, y + h);
+    }
+
+    /// Move the surface by `(dx, dy)`.
+    pub fn move_by(&mut self, dx: i16, dy: i16) {
+        let a = self.core.bounds.a;
+        self.move_to(Point::new(a.x + dx, a.y + dy));
     }
 
     /// Build the live dialog again if the spec changed since.
@@ -144,7 +165,10 @@ impl Surface {
         let inner = Point::new(pos.x - 1, pos.y - 1);
         let (iw, ih) = design.spec.inner_size();
         if inner.x < 0 || inner.y < 0 || inner.x >= iw || inner.y >= ih {
+            // The frame selects the dialog, and drags the whole surface.
             design.select(Sel::Dialog);
+            self.drag = Some(Drag::Canvas { grab: pos });
+            self.set_state_flag(State::DRAGGING, true);
             event.clear();
             return;
         }
@@ -199,9 +223,16 @@ impl Surface {
             return;
         };
         let pos = event.mouse.pos;
+        if let Drag::Canvas { grab } = drag {
+            // `pos` is relative to the corner, which moves with the drag.
+            self.move_by(pos.x - grab.x, pos.y - grab.y);
+            event.clear();
+            return;
+        }
         let inner = Point::new(pos.x - 1, pos.y - 1);
         let mut design = self.design.borrow_mut();
         match drag {
+            Drag::Canvas { .. } => {}
             Drag::Dialog => {
                 design.set_dialog_size(pos.x + 1, pos.y + 1);
             }
@@ -226,8 +257,10 @@ impl Surface {
     }
 
     fn mouse_up(&mut self, event: &mut Event) {
-        if self.drag.take().is_some() {
-            self.design.borrow_mut().end_drag();
+        if let Some(drag) = self.drag.take() {
+            if !matches!(drag, Drag::Canvas { .. }) {
+                self.design.borrow_mut().end_drag();
+            }
             self.set_state_flag(State::DRAGGING, false);
             event.clear();
         }
@@ -236,6 +269,21 @@ impl Surface {
     fn key(&mut self, event: &mut Event) {
         let mods = event.key_modifiers;
         let sizing = mods.intersects(KeyModifiers::SHIFT | KeyModifiers::CONTROL);
+        // With the dialog selected, the arrows move the whole surface.
+        if !sizing && self.design.borrow().sel == Sel::Dialog {
+            let (dx, dy) = match event.key_code {
+                KB_LEFT => (-1, 0),
+                KB_RIGHT => (1, 0),
+                KB_UP => (0, -1),
+                KB_DOWN => (0, 1),
+                _ => (0, 0),
+            };
+            if (dx, dy) != (0, 0) {
+                self.move_by(dx, dy);
+                event.clear();
+                return;
+            }
+        }
         let mut design = self.design.borrow_mut();
         let step = |dx: i16, dy: i16, design: &mut Design| {
             if sizing {

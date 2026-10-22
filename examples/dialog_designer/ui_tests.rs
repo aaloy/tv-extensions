@@ -4,7 +4,7 @@
 //! and the screen checked.
 
 use super::*;
-use turbo_vision::core::event::{KB_DOWN, KB_ENTER, KB_INS, KB_RIGHT, MB_LEFT_BUTTON};
+use turbo_vision::core::event::{KB_DOWN, KB_ENTER, KB_INS, KB_LEFT, KB_RIGHT, KB_UP, MB_LEFT_BUTTON};
 use turbo_vision::test_util::test_terminal;
 use turbo_vision::views::button::set_press_animation;
 
@@ -327,4 +327,54 @@ fn tab_pages_are_rows_with_their_controls() {
             .any(|e| matches!(e.sel, Sel::Page { page: 1, .. })),
         "{found:?}"
     );
+}
+
+fn surface_corner(app: &Application, designer: &Designer) -> Point {
+    app.desktop.get(designer.surface).unwrap().bounds().a
+}
+
+#[test]
+fn dragging_the_frame_moves_the_whole_surface() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, Design::default());
+    designer.refresh(&mut app);
+    let start = surface_corner(&app, &designer);
+    let grab = on_surface(&app, &designer, Point::new(10, -1));
+    mouse(&mut app, &mut designer, EventType::MouseDown, grab);
+    // Several moves: the corner moves under the mouse, and must not drift.
+    for (dx, dy) in [(3, 1), (5, 2), (8, 3)] {
+        let to = Point::new(grab.x + dx, grab.y + dy);
+        mouse(&mut app, &mut designer, EventType::MouseMove, to);
+    }
+    mouse(
+        &mut app,
+        &mut designer,
+        EventType::MouseUp,
+        Point::new(grab.x + 8, grab.y + 3),
+    );
+    let now = surface_corner(&app, &designer);
+    assert_eq!((now.x - start.x, now.y - start.y), (8, 3));
+    // Moving the surface is not an edit.
+    assert!(!designer.design.borrow().dirty);
+    assert_eq!(designer.design.borrow().sel, Sel::Dialog);
+}
+
+#[test]
+fn the_surface_stays_on_the_desktop() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, Design::default());
+    designer.refresh(&mut app);
+    let desk = app.desktop.get_bounds();
+    for _ in 0..300 {
+        key(&mut app, &mut designer, KB_LEFT);
+        key(&mut app, &mut designer, KB_UP);
+    }
+    let a = surface_corner(&app, &designer);
+    assert_eq!((a.x, a.y), (0, 0));
+    for _ in 0..300 {
+        key(&mut app, &mut designer, KB_RIGHT);
+        key(&mut app, &mut designer, KB_DOWN);
+    }
+    let b = app.desktop.get(designer.surface).unwrap().bounds();
+    assert_eq!((b.b.x, b.b.y), (desk.width(), desk.height()));
 }

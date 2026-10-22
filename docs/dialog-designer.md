@@ -54,7 +54,9 @@ The file is opened if it exists and created on the first save if not.
 The dialog on the desktop is drawn by its real controls, built from the
 spec exactly as an application builds it, so what you see is what runs. The
 selected control (here the email input) is highlighted in cyan, and its
-bottom-right corner, in yellow, is its resize handle. The inspector on the
+bottom-right corner, in yellow, is its resize handle. Drag the dialog's frame (or press the arrows with the dialog selected) to
+move it about the desktop; this is only where you work, not part of the
+dialog. The inspector on the
 right has the dialog as a tree above the selection's JSON (View >
 Inspector hides it). The tree lists every control, and the pages of tabs
 with the controls on each: click or arrow to a row to select that control,
