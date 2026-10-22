@@ -153,6 +153,15 @@ name = "form_json"
 required-features = ["native", "json"]
 
 [[example]]
+name = "dialog_designer"
+required-features = ["native", "dialog"]
+test = true
+
+[[example]]
+name = "dialog_from_json"
+required-features = ["native", "dialog"]
+
+[[example]]
 name = "form_json_agent"
 required-features = ["native", "json"]
 
