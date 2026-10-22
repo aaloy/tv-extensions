@@ -59,6 +59,7 @@ impl AnsiBackground {
     /// * `bounds` - The bounding rectangle for the view
     /// * `image` - The parsed ANSI image to display
     /// * `default_attr` - Color attributes for areas outside the image
+    #[must_use]
     pub fn new(bounds: Rect, image: AnsiImage, default_attr: Attr) -> Self {
         Self {
             core: ViewCore {
@@ -98,6 +99,7 @@ impl AnsiBackground {
     /// * `bounds` - The bounding rectangle for the view
     /// * `content` - String containing ANSI escape sequences
     /// * `default_attr` - Color attributes for areas outside the image
+    #[must_use]
     pub fn from_string(bounds: Rect, content: &str, default_attr: Attr) -> Self {
         let image = AnsiImage::parse(content);
         Self::new(bounds, image, default_attr)
@@ -126,6 +128,7 @@ impl AnsiBackground {
     }
 
     /// Gets the ANSI image.
+    #[must_use]
     pub fn image(&self) -> &AnsiImage {
         &self.image
     }
@@ -136,6 +139,9 @@ impl AnsiBackground {
     }
 
     /// Loads a new image from a file.
+    ///
+    /// # Errors
+    /// When the file cannot be read.
     pub fn load_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         self.image = AnsiImage::load(path)?;
         Ok(())
@@ -228,6 +234,7 @@ pub struct AnsiBackgroundBuilder {
 
 impl AnsiBackgroundBuilder {
     /// Creates a new builder.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             bounds: None,
@@ -301,6 +308,7 @@ impl AnsiBackgroundBuilder {
     ///
     /// # Panics
     /// Panics if bounds, image, or `default_attr` are not set.
+    #[must_use]
     pub fn build(self) -> AnsiBackground {
         let mut bg = AnsiBackground::new(
             self.bounds.expect("bounds must be set"),
@@ -313,6 +321,7 @@ impl AnsiBackgroundBuilder {
     }
 
     /// Builds and boxes the `AnsiBackground`.
+    #[must_use]
     pub fn build_boxed(self) -> Box<AnsiBackground> {
         Box::new(self.build())
     }

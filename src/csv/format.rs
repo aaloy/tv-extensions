@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn empty_input_and_trailing_empty_field() {
-        assert!(parse("").rows.is_empty());
+        assert_eq!(parse("").rows, rows(&[]));
         assert_eq!(parse("a,\n").rows, rows(&[&["a", ""]]));
     }
 
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn a_blank_line_is_an_empty_record() {
-        assert!(parse("").rows.is_empty());
+        assert_eq!(parse("").rows, rows(&[]));
         assert_eq!(parse("a\n").rows, rows(&[&["a"]]));
         assert_eq!(parse("a\n\n").rows, rows(&[&["a"], &[""]]));
         assert_eq!(

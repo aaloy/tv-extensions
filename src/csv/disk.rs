@@ -38,6 +38,8 @@ impl Disk for MemDisk {
         self.0.insert(path.to_string(), text.to_string());
         Ok(())
     }
+    // In-memory keys are written by this crate, always lowercase ".csv".
+    #[allow(clippy::case_sensitive_file_extension_comparisons)]
     fn list(&self) -> Result<Vec<String>, String> {
         Ok(self
             .0

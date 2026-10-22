@@ -1,6 +1,6 @@
 // (C) 2026 - Enzo Lombardi
 
-//! The editor: one window holding a Table over a CsvDoc, a menu bar, a status
+//! The editor: one window holding a Table over a `CsvDoc`, a menu bar, a status
 //! line, and non-modal dialogs for editing, naming and confirming.
 //!
 //! A host pushes one key per call and asks for a screen per step, so this is
@@ -677,6 +677,9 @@ impl AppHandler for State {
             }
             return;
         }
+        // Several chords reach the same command (a Mac keyboard has no Insert),
+        // so the duplicated arms are intentional and kept apart for readability.
+        #[allow(clippy::match_same_arms)]
         let command = match event.key_code {
             KB_INS if is_ctrl(event) => CMD_COL_INS,
             KB_DEL if is_ctrl(event) => CMD_COL_DEL,
@@ -715,6 +718,9 @@ impl AppHandler for State {
         if self.overlay.is_some() != dialog_command {
             return is_ours(command);
         }
+        // The `*_ if self.bridged` arms all answer with the same "stays here"
+        // message; merging them with the plain arms below would lose the guard.
+        #[allow(clippy::match_same_arms)]
         match command {
             CMD_EDIT_CELL => self.edit_cell(app),
             CMD_RENAME_COL => self.rename_col(app),
@@ -1449,6 +1455,9 @@ mod tests {
         assert!(text.contains("names cannot contain '/'"), "{text}");
         assert!(text.contains("sub/x.csv"), "the typed name stays: {text}");
         assert!(s.doc().is_modified());
-        assert!(s.into_disk().list().unwrap().is_empty());
+        assert_eq!(
+            s.into_disk().list().unwrap(),
+            [] as [std::string::String; 0]
+        );
     }
 }

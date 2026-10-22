@@ -67,14 +67,14 @@ pub fn parse_line(line: &str) -> Vec<Event> {
 
     if let Some(button) = button {
         let coords: Vec<&str> = tokens.collect();
-        if let [xs, ys] = coords[..] {
-            if let (Ok(x), Ok(y)) = (xs.parse::<i16>(), ys.parse::<i16>()) {
-                let pos = Point::new(x, y);
-                return vec![
-                    Event::mouse(EventType::MouseDown, pos, button, false),
-                    Event::mouse(EventType::MouseUp, pos, 0, false),
-                ];
-            }
+        if let [xs, ys] = coords[..]
+            && let (Ok(x), Ok(y)) = (xs.parse::<i16>(), ys.parse::<i16>())
+        {
+            let pos = Point::new(x, y);
+            return vec![
+                Event::mouse(EventType::MouseDown, pos, button, false),
+                Event::mouse(EventType::MouseUp, pos, 0, false),
+            ];
         }
         return Vec::new(); // malformed mouse line
     }

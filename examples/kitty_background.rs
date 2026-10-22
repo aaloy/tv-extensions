@@ -2,10 +2,10 @@
 //! Demonstrates using a Kitty image as the desktop background.
 //!
 //! Usage:
-//!   cargo run --example kitty_background --features graphics,native
+//!   `cargo run --example kitty_background --features graphics,native`
 //!
 //! Requirements:
-//! - Terminal with Kitty graphics protocol support (Kitty, WezTerm, Ghostty)
+//! - Terminal with Kitty graphics protocol support (Kitty, `WezTerm`, Ghostty)
 //!
 //! Controls:
 //! - Alt-X or Esc: Exit
@@ -76,7 +76,7 @@ fn create_gray_pattern(x: u32, y: u32) -> u8 {
     // Create a subtle woven/textile pattern
     let pattern1 = ((x / 2) % 2) ^ ((y / 2) % 2); // 2x2 checkerboard
     let pattern2 = ((x / 4) % 2) ^ ((y / 4) % 2); // 4x4 checkerboard
-    let pattern3 = ((x + y) % 4 == 0) as u32; // Diagonal dots
+    let pattern3 = u32::from((x + y).is_multiple_of(4)); // Diagonal dots
 
     // Combine patterns for a subtle texture
     let variation = (pattern1 * 3 + pattern2 * 2 + pattern3 * 2) as u8;
@@ -86,6 +86,8 @@ fn create_gray_pattern(x: u32, y: u32) -> u8 {
 }
 
 /// Write a PNG chunk with CRC
+// chunk_type is the PNG spec's fixed 4-byte field; by reference mirrors the format.
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn write_png_chunk(output: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
     output.extend_from_slice(&(data.len() as u32).to_be_bytes());
     output.extend_from_slice(chunk_type);
@@ -107,7 +109,7 @@ fn crc32(data: &[u8]) -> u32 {
             let mut k = 0;
             while k < 8 {
                 if c & 1 != 0 {
-                    c = 0xEDB88320 ^ (c >> 1);
+                    c = 0xEDB8_8320 ^ (c >> 1);
                 } else {
                     c >>= 1;
                 }
@@ -119,11 +121,11 @@ fn crc32(data: &[u8]) -> u32 {
         table
     };
 
-    let mut crc = 0xFFFFFFFFu32;
+    let mut crc = 0xFFFF_FFFFu32;
     for byte in data {
-        crc = CRC_TABLE[((crc ^ (*byte as u32)) & 0xFF) as usize] ^ (crc >> 8);
+        crc = CRC_TABLE[((crc ^ u32::from(*byte)) & 0xFF) as usize] ^ (crc >> 8);
     }
-    crc ^ 0xFFFFFFFF
+    crc ^ 0xFFFF_FFFF
 }
 
 /// Simple zlib/deflate compression (store-only)
@@ -137,7 +139,7 @@ fn deflate_compress(data: &[u8]) -> Vec<u8> {
 
     for (i, chunk) in chunks.enumerate() {
         let is_last = i == chunk_count - 1;
-        output.push(if is_last { 0x01 } else { 0x00 });
+        output.push(u8::from(is_last));
         let len = chunk.len() as u16;
         output.push((len & 0xFF) as u8);
         output.push((len >> 8) as u8);
@@ -156,7 +158,7 @@ fn adler32(data: &[u8]) -> u32 {
     let mut a: u32 = 1;
     let mut b: u32 = 0;
     for byte in data {
-        a = (a + *byte as u32) % 65521;
+        a = (a + u32::from(*byte)) % 65521;
         b = (b + a) % 65521;
     }
     (b << 16) | a

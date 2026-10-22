@@ -2,7 +2,7 @@
 
 //! Terminal Widget - scrolling output viewer for program output, logs, and build results.
 //!
-//! Matches Borland: TTerminal (from Turbo Vision Professional)
+//! Matches Borland: `TTerminal` (from Turbo Vision Professional)
 //!
 //! This is different from the Terminal backend - this is a UI widget for displaying
 //! scrolling text output like:
@@ -16,10 +16,12 @@
 //! - Large scrollback buffer (configurable)
 //! - Efficient append operations
 //! - Optional ANSI color code support
-//! - Read-only (unlike EditorWindow)
+//! - Read-only (unlike `EditorWindow`)
 
 use turbo_vision::core::draw::DrawBuffer;
-use turbo_vision::core::event::{Event, EventType, KB_DOWN, KB_END, KB_HOME, KB_PGDN, KB_PGUP, KB_UP};
+use turbo_vision::core::event::{
+    Event, EventType, KB_DOWN, KB_END, KB_HOME, KB_PGDN, KB_PGUP, KB_UP,
+};
 use turbo_vision::core::geometry::Rect;
 use turbo_vision::core::palette::Attr;
 use turbo_vision::core::state::State;
@@ -75,6 +77,7 @@ pub struct OutputLine {
 
 impl OutputLine {
     /// Create a new output line with default color
+    #[must_use]
     pub fn new(text: String) -> Self {
         Self {
             text,
@@ -84,6 +87,7 @@ impl OutputLine {
     }
 
     /// Create a new output line with specific color
+    #[must_use]
     pub fn with_attr(text: String, attr: Attr) -> Self {
         Self {
             text,
@@ -93,6 +97,7 @@ impl OutputLine {
     }
 
     /// A line made of coloured runs, drawn left to right.
+    #[must_use]
     pub fn with_spans(spans: Vec<Span>) -> Self {
         let text = spans.iter().map(|s| s.text.as_str()).collect();
         Self {
@@ -126,7 +131,7 @@ fn truncate_to_width(text: &str, width: usize) -> (String, usize) {
 }
 
 /// Terminal Widget - scrolling output viewer
-/// Matches Borland: TTerminal
+/// Matches Borland: `TTerminal`
 pub struct TerminalWidget {
     core: ViewCore,
     /// Output lines buffer
@@ -143,6 +148,7 @@ pub struct TerminalWidget {
 
 impl TerminalWidget {
     /// Create a new terminal widget
+    #[must_use]
     pub fn new(bounds: Rect) -> Self {
         Self {
             core: ViewCore {
@@ -160,6 +166,7 @@ impl TerminalWidget {
     }
 
     /// Create with vertical scrollbar
+    #[must_use]
     pub fn with_scrollbar(mut self) -> Self {
         let v_bounds = Rect::new(
             self.extent().b.x - 1,
@@ -254,6 +261,7 @@ impl TerminalWidget {
     }
 
     /// Get the number of lines
+    #[must_use]
     pub fn line_count(&self) -> usize {
         self.lines.len()
     }
@@ -273,7 +281,7 @@ impl TerminalWidget {
         self.top_line = 0;
     }
 
-    /// Trim buffer to max_lines
+    /// Trim buffer to `max_lines`
     fn trim_buffer(&mut self) {
         if self.lines.len() > self.max_lines {
             let excess = self.lines.len() - self.max_lines;
@@ -314,11 +322,7 @@ impl TerminalWidget {
         let total_lines = self.lines.len();
         let top_line = self.top_line;
 
-        let max_scroll = if total_lines > visible_rows {
-            total_lines - visible_rows
-        } else {
-            0
-        };
+        let max_scroll = total_lines.saturating_sub(visible_rows);
 
         if let Some(ref mut v_bar) = self.v_scrollbar {
             v_bar.set_params(
@@ -497,11 +501,9 @@ impl View for TerminalWidget {
                     event.clear();
                 }
             }
-            EventType::MouseWheelDown => {
-                if self.extent().contains(event.mouse.pos) {
-                    self.scroll_down();
-                    event.clear();
-                }
+            EventType::MouseWheelDown if self.extent().contains(event.mouse.pos) => {
+                self.scroll_down();
+                event.clear();
             }
             _ => {}
         }
@@ -536,6 +538,7 @@ pub struct TerminalWidgetBuilder {
 impl TerminalWidgetBuilder {
     /// Starts a builder with no scrollbar, a 10000-line scrollback and
     /// auto-scroll on.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             bounds: None,
@@ -578,6 +581,7 @@ impl TerminalWidgetBuilder {
     /// # Panics
     ///
     /// Panics if `bounds` is not set.
+    #[must_use]
     pub fn build(self) -> TerminalWidget {
         let bounds = self.bounds.expect("TerminalWidget bounds must be set");
         let mut widget = TerminalWidget::new(bounds);
@@ -590,6 +594,7 @@ impl TerminalWidgetBuilder {
     }
 
     /// Builds as a Box for convenience.
+    #[must_use]
     pub fn build_boxed(self) -> Box<TerminalWidget> {
         Box::new(self.build())
     }

@@ -2,7 +2,7 @@
 //! Displays biorhythm chart using Kitty graphics protocol.
 //!
 //! Usage:
-//!   cargo run --example kitty_biorhythm --features graphics,native
+//!   `cargo run --example kitty_biorhythm --features graphics,native`
 //!
 //! Shows biorhythm cycles for today based on birthdate 12/14/1972:
 //! - Physical (23-day cycle) - Red
@@ -76,7 +76,7 @@ fn generate_biorhythm_png(birth_date: NaiveDate, width: u32, height: u32) -> Vec
 
     // Horizontal grid (at -1, -0.5, 0, 0.5, 1)
     for i in 0..=4 {
-        let y = margin_top + (chart_height as f64 * i as f64 / 4.0) as u32;
+        let y = margin_top + (f64::from(chart_height) * f64::from(i) / 4.0) as u32;
         for x in margin_left..(width - margin_right) {
             set_pixel(&mut pixels, x as i32, y as i32, grid_color);
         }
@@ -85,7 +85,7 @@ fn generate_biorhythm_png(birth_date: NaiveDate, width: u32, height: u32) -> Vec
     // Vertical grid (every 5 days)
     for day in (-days_before..=days_after).step_by(5) {
         let x = margin_left
-            + ((day + days_before) as f64 / total_days as f64 * chart_width as f64) as u32;
+            + ((day + days_before) as f64 / total_days as f64 * f64::from(chart_width)) as u32;
         for y in margin_top..(height - margin_bottom) {
             set_pixel(&mut pixels, x as i32, y as i32, grid_color);
         }
@@ -99,7 +99,7 @@ fn generate_biorhythm_png(birth_date: NaiveDate, width: u32, height: u32) -> Vec
 
     // Draw today line (vertical)
     let today_x =
-        margin_left + (days_before as f64 / total_days as f64 * chart_width as f64) as u32;
+        margin_left + (days_before as f64 / total_days as f64 * f64::from(chart_width)) as u32;
     for y in margin_top..(height - margin_bottom) {
         set_pixel(&mut pixels, today_x as i32, y as i32, (100, 100, 120));
     }
@@ -118,13 +118,13 @@ fn generate_biorhythm_png(birth_date: NaiveDate, width: u32, height: u32) -> Vec
         let samples = (chart_width * 4) as i32;
 
         for i in 0..=samples {
-            let t = i as f64 / samples as f64;
+            let t = f64::from(i) / f64::from(samples);
             let day_offset = t * total_days as f64 - days_before as f64;
             let value = (2.0 * PI * (days_alive as f64 + day_offset) / cycle).sin();
 
             // Map to pixel coordinates
-            let x = margin_left as i32 + (t * chart_width as f64) as i32;
-            let y = margin_top as i32 + (chart_height as f64 * (1.0 - value) / 2.0) as i32;
+            let x = margin_left as i32 + (t * f64::from(chart_width)) as i32;
+            let y = margin_top as i32 + (f64::from(chart_height) * (1.0 - value) / 2.0) as i32;
 
             // Draw line from previous point to current point
             if let (Some(px), Some(py)) = (prev_x, prev_y) {
@@ -134,9 +134,9 @@ fn generate_biorhythm_png(birth_date: NaiveDate, width: u32, height: u32) -> Vec
                 let steps = dx.max(dy).max(1);
 
                 for step in 0..=steps {
-                    let t = step as f64 / steps as f64;
-                    let lx = px + ((x - px) as f64 * t) as i32;
-                    let ly = py + ((y - py) as f64 * t) as i32;
+                    let t = f64::from(step) / f64::from(steps);
+                    let lx = px + (f64::from(x - px) * t) as i32;
+                    let ly = py + (f64::from(y - py) * t) as i32;
 
                     // Draw 2-pixel thick line for visibility
                     set_pixel(pixels, lx, ly, color);
@@ -161,7 +161,7 @@ fn generate_biorhythm_png(birth_date: NaiveDate, width: u32, height: u32) -> Vec
 
     // Draw legend dots at today line
     let draw_dot = |pixels: &mut Vec<(u8, u8, u8)>, value: f64, color: (u8, u8, u8)| {
-        let y = margin_top as i32 + (chart_height as f64 * (1.0 - value) / 2.0) as i32;
+        let y = margin_top as i32 + (f64::from(chart_height) * (1.0 - value) / 2.0) as i32;
         for dy in -2..=2 {
             for dx in -2..=2 {
                 if dx * dx + dy * dy <= 5 {
@@ -218,6 +218,8 @@ fn create_png(pixels: &[(u8, u8, u8)], width: u32, height: u32) -> Vec<u8> {
     png_data
 }
 
+// chunk_type is the PNG spec's fixed 4-byte field; by reference mirrors the format.
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn write_png_chunk(output: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
     output.extend_from_slice(&(data.len() as u32).to_be_bytes());
     output.extend_from_slice(chunk_type);
@@ -238,7 +240,7 @@ fn crc32(data: &[u8]) -> u32 {
             let mut k = 0;
             while k < 8 {
                 if c & 1 != 0 {
-                    c = 0xEDB88320 ^ (c >> 1);
+                    c = 0xEDB8_8320 ^ (c >> 1);
                 } else {
                     c >>= 1;
                 }
@@ -250,11 +252,11 @@ fn crc32(data: &[u8]) -> u32 {
         table
     };
 
-    let mut crc = 0xFFFFFFFFu32;
+    let mut crc = 0xFFFF_FFFFu32;
     for byte in data {
-        crc = CRC_TABLE[((crc ^ (*byte as u32)) & 0xFF) as usize] ^ (crc >> 8);
+        crc = CRC_TABLE[((crc ^ u32::from(*byte)) & 0xFF) as usize] ^ (crc >> 8);
     }
-    crc ^ 0xFFFFFFFF
+    crc ^ 0xFFFF_FFFF
 }
 
 fn deflate_compress(data: &[u8]) -> Vec<u8> {
@@ -267,7 +269,7 @@ fn deflate_compress(data: &[u8]) -> Vec<u8> {
 
     for (i, chunk) in chunks.enumerate() {
         let is_last = i == chunk_count - 1;
-        output.push(if is_last { 0x01 } else { 0x00 });
+        output.push(u8::from(is_last));
         let len = chunk.len() as u16;
         output.push((len & 0xFF) as u8);
         output.push((len >> 8) as u8);
@@ -285,7 +287,7 @@ fn adler32(data: &[u8]) -> u32 {
     let mut a: u32 = 1;
     let mut b: u32 = 0;
     for byte in data {
-        a = (a + *byte as u32) % 65521;
+        a = (a + u32::from(*byte)) % 65521;
         b = (b + a) % 65521;
     }
     (b << 16) | a
@@ -348,7 +350,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
     // Add info labels
     let date_label = LabelBuilder::new()
         .bounds(Rect::new(2, 1, 56, 1))
-        .text(&format!(
+        .text(format!(
             "Birthdate: 12/14/1972  Today: {}",
             today.format("%m/%d/%Y")
         ))
@@ -356,7 +358,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
 
     let days_label = LabelBuilder::new()
         .bounds(Rect::new(2, 2, 56, 2))
-        .text(&format!("Days alive: {}", days_alive))
+        .text(format!("Days alive: {days_alive}"))
         .build();
 
     window.add(date_label);
@@ -369,17 +371,17 @@ fn main() -> turbo_vision::core::error::Result<()> {
     // Add legend
     let physical_label = LabelBuilder::new()
         .bounds(Rect::new(2, 15, 20, 15))
-        .text(&format!("Physical: {:+.0}%", physical * 100.0))
+        .text(format!("Physical: {:+.0}%", physical * 100.0))
         .build();
 
     let emotional_label = LabelBuilder::new()
         .bounds(Rect::new(20, 15, 38, 15))
-        .text(&format!("Emotional: {:+.0}%", emotional * 100.0))
+        .text(format!("Emotional: {:+.0}%", emotional * 100.0))
         .build();
 
     let intellectual_label = LabelBuilder::new()
         .bounds(Rect::new(38, 15, 56, 15))
-        .text(&format!("Intellectual: {:+.0}%", intellectual * 100.0))
+        .text(format!("Intellectual: {:+.0}%", intellectual * 100.0))
         .build();
 
     window.add(physical_label);

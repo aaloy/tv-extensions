@@ -1,7 +1,7 @@
 // (C) 2026 - Enzo Lombardi
 // Rust guideline compliant October 17th 2025
 
-//! LogWindow view - scrollable log window with `tracing::Subscriber` integration.
+//! `LogWindow` view - scrollable log window with `tracing::Subscriber` integration.
 //!
 //! A window that displays tracing log messages with timestamps, colored log levels,
 //! and a black background. Once installed, all `tracing::info!()`, `debug!()`, etc.
@@ -24,6 +24,8 @@
 //! tracing::info!("Application started");
 //! tracing::debug!("Loading config from {:?}", path);
 //! ```
+
+use std::fmt::Write;
 
 use super::terminal_widget::TerminalWidget;
 use turbo_vision::core::geometry::Rect;
@@ -114,7 +116,8 @@ impl tracing::field::Visit for MessageVisitor {
             self.message = format!("{}: {value:?}", field.name());
         } else {
             self.message
-                .push_str(&format!(" {}={value:?}", field.name()));
+                .write_fmt(format_args!(" {}={value:?}", field.name()))
+                .ok();
         }
     }
 
@@ -124,7 +127,9 @@ impl tracing::field::Visit for MessageVisitor {
         } else if self.message.is_empty() {
             self.message = format!("{}: {value}", field.name());
         } else {
-            self.message.push_str(&format!(" {}={value}", field.name()));
+            self.message
+                .write_fmt(format_args!(" {}={value}", field.name()))
+                .ok();
         }
     }
 }
@@ -140,7 +145,7 @@ fn level_attr(level: tracing::Level) -> Attr {
     }
 }
 
-/// LogWindow - a scrollable window displaying tracing log messages.
+/// `LogWindow` - a scrollable window displaying tracing log messages.
 ///
 /// Wraps a `Window` + `TerminalWidget` and drains incoming log entries
 /// from the `LogSubscriber` channel on each `draw()` call.
@@ -208,7 +213,7 @@ turbo_vision::impl_view_for_window!(LogWindow {
     }
 });
 
-/// Builder for creating a LogWindow with tracing integration.
+/// Builder for creating a `LogWindow` with tracing integration.
 pub struct LogWindowBuilder {
     bounds: Option<Rect>,
     title: Option<String>,
@@ -219,6 +224,7 @@ pub struct LogWindowBuilder {
 impl LogWindowBuilder {
     /// Starts a builder with `min_level` at `TRACE` and a 10000-line
     /// scrollback.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             bounds: None,
@@ -256,11 +262,12 @@ impl LogWindowBuilder {
         self
     }
 
-    /// Builds the LogWindow and installs the tracing subscriber as the global default.
+    /// Builds the `LogWindow` and installs the tracing subscriber as the global default.
     ///
     /// # Panics
     ///
     /// Panics if `bounds` is not set, or if a global tracing subscriber is already installed.
+    #[must_use]
     pub fn build(self) -> LogWindow {
         let bounds = self.bounds.expect("LogWindow bounds must be set");
         let title = self.title.unwrap_or_else(|| "Log".to_string());
@@ -303,6 +310,7 @@ impl LogWindowBuilder {
     }
 
     /// Builds as a Box for convenience.
+    #[must_use]
     pub fn build_boxed(self) -> Box<LogWindow> {
         Box::new(self.build())
     }

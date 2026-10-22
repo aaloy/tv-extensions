@@ -20,7 +20,7 @@ use super::backend::SshSessionHandle;
 /// Forward output from TUI to SSH channel.
 ///
 /// This runs as a background task, continuously reading output from the TUI
-/// and sending it to the SSH client. When the TUI exits (output_rx closes),
+/// and sending it to the SSH client. When the TUI exits (`output_rx` closes),
 /// this task sends EOF and closes the channel.
 async fn forward_output(
     handle: Handle,
@@ -29,14 +29,13 @@ async fn forward_output(
 ) {
     // Forward output until the TUI exits (channel closes)
     while let Some(data) = output_rx.recv().await {
-        if !data.is_empty() {
-            if handle
+        if !data.is_empty()
+            && handle
                 .data(channel_id, CryptoVec::from(data))
                 .await
                 .is_err()
-            {
-                break;
-            }
+        {
+            break;
         }
     }
 
@@ -89,30 +88,32 @@ where
         }
     }
 
-    /// Start the TUI application (called by shell_request or exec_request).
+    /// Start the TUI application (called by `shell_request` or `exec_request`).
+    // async because the TuiHandler trait declares it so; this impl needs no await.
+    #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
     async fn start_tui(
         &mut self,
         channel_id: ChannelId,
         session: &mut Session,
     ) -> Result<(), russh::Error> {
-        if let Some(ref mut s) = self.session {
-            if s.channel_id == channel_id {
-                // Start output forwarding first
-                if let Some(output_rx) = s.output_rx.take() {
-                    let handle = session.handle();
-                    tokio::spawn(async move {
-                        forward_output(handle, channel_id, output_rx).await;
-                    });
-                }
+        if let Some(ref mut s) = self.session
+            && s.channel_id == channel_id
+        {
+            // Start output forwarding first
+            if let Some(output_rx) = s.output_rx.take() {
+                let handle = session.handle();
+                tokio::spawn(async move {
+                    forward_output(handle, channel_id, output_rx).await;
+                });
+            }
 
-                // Now spawn the TUI application
-                if let Some(backend) = s.backend.take() {
-                    if let Some(factory) = self.app_factory.take() {
-                        tokio::task::spawn_blocking(move || {
-                            factory(Box::new(backend));
-                        });
-                    }
-                }
+            // Now spawn the TUI application
+            if let Some(backend) = s.backend.take()
+                && let Some(factory) = self.app_factory.take()
+            {
+                tokio::task::spawn_blocking(move || {
+                    factory(Box::new(backend));
+                });
             }
         }
         Ok(())
@@ -222,12 +223,12 @@ where
         _modes: &[(russh::Pty, u32)],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        log::debug!("PTY request: {}x{} term={}", col_width, row_height, term);
+        log::debug!("PTY request: {col_width}x{row_height} term={term}");
 
-        if let Some(ref mut s) = self.session {
-            if s.channel_id == channel_id {
-                s.handle.resize(col_width as u16, row_height as u16);
-            }
+        if let Some(ref mut s) = self.session
+            && s.channel_id == channel_id
+        {
+            s.handle.resize(col_width as u16, row_height as u16);
         }
 
         session.channel_success(channel_id)?;
@@ -268,12 +269,12 @@ where
         _pix_height: u32,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        log::debug!("Window change: {}x{}", col_width, row_height);
+        log::debug!("Window change: {col_width}x{row_height}");
 
-        if let Some(ref mut s) = self.session {
-            if s.channel_id == channel_id {
-                s.handle.resize(col_width as u16, row_height as u16);
-            }
+        if let Some(ref mut s) = self.session
+            && s.channel_id == channel_id
+        {
+            s.handle.resize(col_width as u16, row_height as u16);
         }
 
         Ok(())
@@ -286,12 +287,12 @@ where
         data: &[u8],
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        if let Some(ref mut s) = self.session {
-            if s.channel_id == channel_id {
-                // Parse input and send to TUI
-                s.handle.process_input(data);
-                // Note: Output is forwarded by the background task started in shell_request
-            }
+        if let Some(ref mut s) = self.session
+            && s.channel_id == channel_id
+        {
+            // Parse input and send to TUI
+            s.handle.process_input(data);
+            // Note: Output is forwarded by the background task started in shell_request
         }
 
         Ok(())
@@ -303,11 +304,11 @@ where
         channel_id: ChannelId,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        if let Some(ref s) = self.session {
-            if s.channel_id == channel_id {
-                log::info!("Channel closed for {:?}", self.peer_addr);
-                self.session = None;
-            }
+        if let Some(ref s) = self.session
+            && s.channel_id == channel_id
+        {
+            log::info!("Channel closed for {:?}", self.peer_addr);
+            self.session = None;
         }
 
         Ok(())
@@ -319,13 +320,13 @@ where
         channel_id: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        log::debug!("Channel EOF on {:?}", channel_id);
+        log::debug!("Channel EOF on {channel_id:?}");
 
         // Close the channel when we receive EOF
-        if let Some(ref s) = self.session {
-            if s.channel_id == channel_id {
-                session.close(channel_id)?;
-            }
+        if let Some(ref s) = self.session
+            && s.channel_id == channel_id
+        {
+            session.close(channel_id)?;
         }
 
         Ok(())

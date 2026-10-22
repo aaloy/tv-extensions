@@ -2,12 +2,12 @@
 //! Demonstrates displaying images using the Kitty graphics protocol.
 //!
 //! Usage:
-//!   cargo run --example kitty_image --features graphics,native [path/to/image.png]
+//!   `cargo run --example kitty_image --features graphics,native [path/to/image.png]`
 //!
 //! If no image path is provided, a built-in test pattern is used.
 //!
 //! Requirements:
-//! - Terminal with Kitty graphics protocol support (Kitty, WezTerm, Ghostty)
+//! - Terminal with Kitty graphics protocol support (Kitty, `WezTerm`, Ghostty)
 //! - For best results, use a PNG image
 //!
 //! Controls:
@@ -31,7 +31,6 @@ use tv_extensions::graphics::KittyImage;
 use tv_extensions::graphics::kitty::{clear_kitty_images, supports_kitty_graphics};
 
 // Command IDs for this demo
-const CM_RELOAD: CommandId = 1000;
 const CM_CLEAR: CommandId = 1001;
 
 /// Generate a simple test PNG image (a colorful gradient pattern)
@@ -91,6 +90,8 @@ fn generate_test_png() -> Vec<u8> {
 }
 
 /// Write a PNG chunk with CRC
+// chunk_type is the PNG spec's fixed 4-byte field; by reference mirrors the format.
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn write_png_chunk(output: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
     // Length (4 bytes, big-endian)
     output.extend_from_slice(&(data.len() as u32).to_be_bytes());
@@ -120,7 +121,7 @@ fn crc32(data: &[u8]) -> u32 {
             let mut k = 0;
             while k < 8 {
                 if c & 1 != 0 {
-                    c = 0xEDB88320 ^ (c >> 1);
+                    c = 0xEDB8_8320 ^ (c >> 1);
                 } else {
                     c >>= 1;
                 }
@@ -132,11 +133,11 @@ fn crc32(data: &[u8]) -> u32 {
         table
     };
 
-    let mut crc = 0xFFFFFFFFu32;
+    let mut crc = 0xFFFF_FFFFu32;
     for byte in data {
-        crc = CRC_TABLE[((crc ^ (*byte as u32)) & 0xFF) as usize] ^ (crc >> 8);
+        crc = CRC_TABLE[((crc ^ u32::from(*byte)) & 0xFF) as usize] ^ (crc >> 8);
     }
-    crc ^ 0xFFFFFFFF
+    crc ^ 0xFFFF_FFFF
 }
 
 /// Simple zlib/deflate compression (store-only for simplicity)
@@ -185,7 +186,7 @@ fn adler32(data: &[u8]) -> u32 {
     let mut b: u32 = 0;
 
     for byte in data {
-        a = (a + *byte as u32) % 65521;
+        a = (a + u32::from(*byte)) % 65521;
         b = (b + a) % 65521;
     }
 
@@ -253,7 +254,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
 
     // Add source label
     let source_text = match image_path {
-        Some(path) => format!("Image: {}", path),
+        Some(path) => format!("Image: {path}"),
         None => "Using generated test pattern".to_string(),
     };
     let source_label = LabelBuilder::new()
@@ -265,7 +266,7 @@ fn main() -> turbo_vision::core::error::Result<()> {
     // Load or generate image
     let png_data = match image_path {
         Some(path) => std::fs::read(path).unwrap_or_else(|e| {
-            eprintln!("Failed to load image: {}", e);
+            eprintln!("Failed to load image: {e}");
             generate_test_png()
         }),
         None => generate_test_png(),
@@ -319,12 +320,10 @@ fn main() -> turbo_vision::core::error::Result<()> {
                         let _ = clear_kitty_images(&mut app.terminal);
                         app.running = false;
                     }
-                    CM_RELOAD => {
-                        // Would reload the image here
-                    }
                     CM_CLEAR => {
                         let _ = clear_kitty_images(&mut app.terminal);
                     }
+                    // CM_RELOAD is a placeholder: there is nothing to reload yet.
                     _ => {}
                 }
             }

@@ -3,7 +3,7 @@
 //! Kitty image view - displays images using the Kitty graphics protocol.
 //!
 //! This view renders images in terminals that support the Kitty graphics protocol,
-//! such as Kitty, WezTerm, and Ghostty. The image is displayed at the specified
+//! such as Kitty, `WezTerm`, and Ghostty. The image is displayed at the specified
 //! position and can be scaled to fit the view bounds.
 //!
 //! # Kitty Graphics Protocol
@@ -144,6 +144,7 @@ impl KittyImage {
     }
 
     /// Gets the image ID used by the Kitty protocol.
+    #[must_use]
     pub fn image_id(&self) -> u32 {
         self.image_id
     }
@@ -156,6 +157,9 @@ impl KittyImage {
     }
 
     /// Loads a new image from a file.
+    ///
+    /// # Errors
+    /// When the file cannot be read.
     pub fn load_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let png_data = std::fs::read(path)?;
         self.set_image(png_data);
@@ -182,12 +186,12 @@ impl KittyImage {
     fn build_transmit_sequence(&self) -> Vec<u8> {
         use base64::{Engine as _, engine::general_purpose::STANDARD};
 
-        let encoded = STANDARD.encode(&self.png_data);
-        let mut result = Vec::new();
-
         // For large images, we need to chunk the data
         // Kitty protocol recommends chunks of 4096 bytes
         const CHUNK_SIZE: usize = 4096;
+
+        let encoded = STANDARD.encode(&self.png_data);
+        let mut result = Vec::new();
 
         let chunks: Vec<&str> = encoded
             .as_bytes()
@@ -213,7 +217,7 @@ impl KittyImage {
                 );
             } else {
                 // Continuation chunks only need m flag
-                result.extend_from_slice(format!("m={}", more_flag).as_bytes());
+                result.extend_from_slice(format!("m={more_flag}").as_bytes());
             }
 
             // Add payload separator and data
@@ -333,7 +337,7 @@ impl View for KittyImage {
             }
 
             // Display the image at the view position
-            let display_seq = self.build_display_sequence(0 as u16, 0 as u16, cols, rows);
+            let display_seq = self.build_display_sequence(0_u16, 0_u16, cols, rows);
             let _ = terminal.write_raw(&display_seq);
 
             // Remember bounds for next draw
@@ -371,6 +375,7 @@ pub struct KittyImageBuilder {
 
 impl KittyImageBuilder {
     /// Creates a new builder.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             bounds: None,
@@ -436,7 +441,8 @@ impl KittyImageBuilder {
     /// Builds the `KittyImage`.
     ///
     /// # Panics
-    /// Panics if bounds or png_data are not set.
+    /// Panics if bounds or `png_data` are not set.
+    #[must_use]
     pub fn build(self) -> KittyImage {
         let mut image = KittyImage::from_bytes(
             self.bounds.expect("bounds must be set"),
@@ -452,6 +458,7 @@ impl KittyImageBuilder {
     }
 
     /// Builds and boxes the `KittyImage`.
+    #[must_use]
     pub fn build_boxed(self) -> Box<KittyImage> {
         Box::new(self.build())
     }

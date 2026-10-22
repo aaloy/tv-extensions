@@ -3,7 +3,7 @@
 //! Demonstrates how to customize the desktop background with a pattern or ANSI art
 //!
 //! Run with:
-//!   cargo run --example desktop_logo --features graphics,native
+//!   `cargo run --example desktop_logo --features graphics,native`
 
 // (C) 2025 - Enzo Lombardi
 
@@ -123,7 +123,7 @@ impl View for CrabWidget {
 
 // The Turbo Vision logo pattern (13 rows x ~43 columns)
 // ASCII art logo pattern (fallback when no ANSI file is available)
-const ASCII_LOGO: &str = r#"████████╗██╗   ██╗██████╗ ██████╗  ██████╗
+const ASCII_LOGO: &str = r"████████╗██╗   ██╗██████╗ ██████╗  ██████╗
 ╚══██╔══╝██║   ██║██╔══██╗██╔══██╗██╔═══██╗
    ██║   ██║   ██║██████╔╝██████╔╝██║   ██║
    ██║   ██║   ██║██╔══██╗██╔══██╗██║   ██║
@@ -135,7 +135,7 @@ const ASCII_LOGO: &str = r#"████████╗██╗   ██╗█�
 ██║   ██║██║███████╗██║██║   ██║██╔██╗ ██║
 ╚██╗ ██╔╝██║╚════██║██║██║   ██║██║╚██╗██║
  ╚████╔╝ ██║███████║██║╚██████╔╝██║ ╚████║
-  ╚═══╝  ╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝ "#;
+  ╚═══╝  ╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ";
 
 // Custom Desktop Background with Logo Pattern (fallback for ASCII art)
 struct LogoBackground {
@@ -145,7 +145,10 @@ struct LogoBackground {
 
 impl LogoBackground {
     fn new(bounds: Rect) -> Self {
-        let logo_lines: Vec<String> = ASCII_LOGO.lines().map(|s| s.to_string()).collect();
+        let logo_lines: Vec<String> = ASCII_LOGO
+            .lines()
+            .map(std::string::ToString::to_string)
+            .collect();
         Self {
             core: ViewCore {
                 bounds,
@@ -295,12 +298,12 @@ fn find_logo_file() -> Option<PathBuf> {
     ];
 
     // Also try relative to executable location
-    if let Ok(exe_path) = env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let from_exe = exe_dir.join("examples/logo.txt");
-            if from_exe.exists() {
-                return Some(from_exe);
-            }
+    if let Ok(exe_path) = env::current_exe()
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        let from_exe = exe_dir.join("examples/logo.txt");
+        if from_exe.exists() {
+            return Some(from_exe);
         }
     }
 
@@ -318,15 +321,13 @@ fn create_background(desktop_bounds: Rect, use_ansi: bool) -> Box<dyn View> {
     let bg_bounds = Rect::new(0, 0, desktop_bounds.width(), desktop_bounds.height());
     let default_attr = Attr::new(TvColor::LightGray, TvColor::DarkGray);
 
-    if use_ansi {
-        if let Some(logo_path) = find_logo_file() {
-            match AnsiBackground::from_file(bg_bounds, &logo_path, default_attr) {
-                Ok(bg) => {
-                    return Box::new(bg);
-                }
-                Err(e) => {
-                    eprintln!("Failed to load ANSI file: {}", e);
-                }
+    if use_ansi && let Some(logo_path) = find_logo_file() {
+        match AnsiBackground::from_file(bg_bounds, &logo_path, default_attr) {
+            Ok(bg) => {
+                return Box::new(bg);
+            }
+            Err(e) => {
+                eprintln!("Failed to load ANSI file: {e}");
             }
         }
     }
@@ -375,12 +376,11 @@ fn main() -> turbo_vision::core::error::Result<()> {
                 turbo_vision::views::view::dispatch_to_child(menu_bar, &mut event);
 
                 // Check for cascading submenu
-                if event.what == EventType::Keyboard || event.what == EventType::MouseUp {
-                    if let Some(command) = menu_bar.check_cascading_submenu(&mut app.terminal) {
-                        if command != 0 {
-                            event = Event::command(command);
-                        }
-                    }
+                if (event.what == EventType::Keyboard || event.what == EventType::MouseUp)
+                    && let Some(command) = menu_bar.check_cascading_submenu(&mut app.terminal)
+                    && command != 0
+                {
+                    event = Event::command(command);
                 }
             }
 
@@ -424,9 +424,9 @@ fn main() -> turbo_vision::core::error::Result<()> {
                             let _ = new_bg;
                         }
                     }
-                    CM_LOAD_ASCII => {
+                    CM_LOAD_ASCII
                         // Switch to ASCII art background
-                        if using_ansi {
+                        if using_ansi => {
                             message_box(
                                 &mut app,
                                 "ASCII art mode.\nRestart to apply.",
@@ -434,7 +434,6 @@ fn main() -> turbo_vision::core::error::Result<()> {
                             );
                             using_ansi = false;
                         }
-                    }
                     _ => {}
                 }
             }

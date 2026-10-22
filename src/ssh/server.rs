@@ -66,6 +66,7 @@ impl SshServerConfig {
     /// via [`auth_password_fn`](Self::auth_password_fn) /
     /// [`auth_publickey_fn`](Self::auth_publickey_fn), or
     /// [`allow_anonymous`](Self::allow_anonymous) is enabled explicitly.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             bind_addr: "0.0.0.0:2222".to_string(),
@@ -76,6 +77,7 @@ impl SshServerConfig {
     }
 
     /// Set the password authentication callback.
+    #[must_use]
     pub fn auth_password_fn(
         mut self,
         f: impl Fn(&str, &str) -> bool + Send + Sync + 'static,
@@ -85,6 +87,7 @@ impl SshServerConfig {
     }
 
     /// Set the public key authentication callback.
+    #[must_use]
     pub fn auth_publickey_fn(
         mut self,
         f: impl Fn(&str, &russh_keys::PublicKey) -> bool + Send + Sync + 'static,
@@ -94,6 +97,7 @@ impl SshServerConfig {
     }
 
     /// Accept every authentication attempt (demos and trusted networks only).
+    #[must_use]
     pub fn allow_anonymous(mut self) -> Self {
         log::warn!("SSH server configured to accept ALL credentials (allow_anonymous)");
         self.auth.allow_anonymous = true;
@@ -101,18 +105,21 @@ impl SshServerConfig {
     }
 
     /// Set the bind address.
+    #[must_use]
     pub fn bind_addr(mut self, addr: impl Into<String>) -> Self {
         self.bind_addr = addr.into();
         self
     }
 
     /// Add a host key.
+    #[must_use]
     pub fn add_key(mut self, key: PrivateKey) -> Self {
         self.keys.push(key);
         self
     }
 
     /// Generate a random Ed25519 host key.
+    #[must_use]
     pub fn generate_key(mut self) -> Self {
         use rand::rngs::OsRng;
         if let Ok(key) = PrivateKey::random(&mut OsRng, ssh_key::Algorithm::Ed25519) {
@@ -137,7 +144,10 @@ impl SshServerConfig {
     ///     .bind_addr("0.0.0.0:2222")
     ///     .load_or_generate_key("host_key");
     /// ```
+    #[must_use]
     pub fn load_or_generate_key(mut self, path: impl AsRef<Path>) -> Self {
+        use rand::rngs::OsRng;
+
         let path = path.as_ref();
 
         // Try to load existing key
@@ -155,7 +165,6 @@ impl SshServerConfig {
         }
 
         // Generate new key and save it
-        use rand::rngs::OsRng;
         match PrivateKey::random(&mut OsRng, ssh_key::Algorithm::Ed25519) {
             Ok(key) => {
                 if let Err(e) = save_key_to_file(&key, path) {
@@ -166,13 +175,14 @@ impl SshServerConfig {
                 self.keys.push(key);
             }
             Err(e) => {
-                log::error!("Failed to generate host key: {}", e);
+                log::error!("Failed to generate host key: {e}");
             }
         }
         self
     }
 
     /// Set maximum concurrent connections.
+    #[must_use]
     pub fn max_connections(mut self, max: usize) -> Self {
         self.max_connections = Some(max);
         self
@@ -183,13 +193,13 @@ impl SshServerConfig {
         use rand::rngs::OsRng;
         let mut config = Config::default();
 
-        if !self.keys.is_empty() {
-            config.keys = self.keys.clone();
-        } else {
+        if self.keys.is_empty() {
             // Generate a key if none provided
             if let Ok(key) = PrivateKey::random(&mut OsRng, ssh_key::Algorithm::Ed25519) {
                 config.keys = vec![key];
             }
+        } else {
+            self.keys.clone_into(&mut config.keys);
         }
 
         config
@@ -231,7 +241,10 @@ impl Default for SshServerConfig {
 /// ```
 pub struct SshServer<F>
 where
-    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send> + Send + Sync + 'static,
+    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send>
+        + Send
+        + Sync
+        + 'static,
 {
     config: SshServerConfig,
     app_factory: Arc<F>,
@@ -239,7 +252,10 @@ where
 
 impl<F> SshServer<F>
 where
-    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send> + Send + Sync + 'static,
+    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send>
+        + Send
+        + Sync
+        + 'static,
 {
     /// Create a new SSH server with an application factory.
     ///
@@ -255,11 +271,14 @@ where
     /// Run the SSH server.
     ///
     /// This will block until the server is shut down.
+    ///
+    /// # Errors
+    /// When the server cannot bind its address or an accept fails.
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
         let russh_config = Arc::new(self.config.build_russh_config());
         let addr = &self.config.bind_addr;
 
-        log::info!("Starting SSH server on {}", addr);
+        log::info!("Starting SSH server on {addr}");
 
         let mut server = TuiServer {
             app_factory: self.app_factory,
@@ -275,7 +294,10 @@ where
 /// Internal server implementation.
 struct TuiServer<F>
 where
-    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send> + Send + Sync + 'static,
+    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send>
+        + Send
+        + Sync
+        + 'static,
 {
     app_factory: Arc<F>,
     auth: SshAuthPolicy,
@@ -283,12 +305,15 @@ where
 
 impl<F> Server for TuiServer<F>
 where
-    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send> + Send + Sync + 'static,
+    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send>
+        + Send
+        + Sync
+        + 'static,
 {
     type Handler = TuiHandler<Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send>>;
 
     fn new_client(&mut self, peer_addr: Option<SocketAddr>) -> Self::Handler {
-        log::info!("New SSH connection from {:?}", peer_addr);
+        log::info!("New SSH connection from {peer_addr:?}");
         let factory = (self.app_factory)();
         TuiHandler::new(factory, peer_addr, self.auth.clone())
     }
@@ -312,9 +337,15 @@ where
 ///     }).await.unwrap();
 /// }
 /// ```
+///
+/// # Errors
+/// When the server cannot bind its address or an accept fails.
 pub async fn run_ssh_server<F>(addr: &str, app_factory: F) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send> + Send + Sync + 'static,
+    F: Fn() -> Box<dyn FnOnce(Box<dyn turbo_vision::terminal::Backend>) + Send>
+        + Send
+        + Sync
+        + 'static,
 {
     let config = SshServerConfig::new().bind_addr(addr).generate_key();
 

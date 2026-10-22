@@ -123,6 +123,9 @@ impl Overlay {
 }
 
 /// A `w` x `h` dialog centred on the desktop.
+// Geometry locals: width, height, desktop bounds, x/y. Naming them apart would
+// make the centring arithmetic harder to read, not easier.
+#[allow(clippy::many_single_char_names)]
 fn centred(app: &Application, w: i16, h: i16, title: &str) -> Dialog {
     let d = app.desktop.bounds();
     let w = w.min(d.width());

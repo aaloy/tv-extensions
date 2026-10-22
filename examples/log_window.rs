@@ -1,10 +1,10 @@
-//! LogWindow Demo - demonstrates tracing integration with a scrollable log window
+//! `LogWindow` Demo - demonstrates tracing integration with a scrollable log window
 //!
 //! Run with:
-//!   cargo run --example log_window --features log,native
+//!   `cargo run --example log_window --features log,native`
 //!
-//! Shows how tracing::info!(), debug!(), warn!(), error!() macros
-//! automatically route to a LogWindow with colored, timestamped output
+//! Shows how the tracing info!(), debug!(), warn!(), error!() macros
+//! automatically route to a `LogWindow` with colored, timestamped output
 //! on a black background.
 
 // (C) 2025 - Enzo Lombardi

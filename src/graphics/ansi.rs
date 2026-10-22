@@ -47,6 +47,7 @@ pub struct AnsiImage {
 
 impl AnsiImage {
     /// Creates an empty ANSI image.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             lines: Vec::new(),
@@ -62,12 +63,16 @@ impl AnsiImage {
     ///
     /// # Returns
     /// The parsed ANSI image or an IO error.
+    ///
+    /// # Errors
+    /// When the file cannot be read.
     pub fn load<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
         Ok(Self::parse(&content))
     }
 
     /// Parses ANSI art from a string.
+    #[must_use]
     pub fn parse(content: &str) -> Self {
         let parser = AnsiParser::new();
         let mut lines = Vec::new();
@@ -89,11 +94,13 @@ impl AnsiImage {
     }
 
     /// Gets a specific cell, or None if out of bounds.
+    #[must_use]
     pub fn get(&self, x: usize, y: usize) -> Option<&Cell> {
         self.lines.get(y).and_then(|line| line.get(x))
     }
 
     /// Gets a cell at position, returning a space with default colors if out of bounds.
+    #[must_use]
     pub fn get_or_default(&self, x: usize, y: usize, default_attr: Attr) -> Cell {
         self.get(x, y)
             .copied()
@@ -117,6 +124,7 @@ pub struct AnsiParser {
 
 impl AnsiParser {
     /// Creates a new ANSI parser with default colors (light gray on black).
+    #[must_use]
     pub fn new() -> Self {
         Self {
             default_fg: TvColor::LightGray,
@@ -125,6 +133,7 @@ impl AnsiParser {
     }
 
     /// Creates a new ANSI parser with custom default colors.
+    #[must_use]
     pub fn with_defaults(fg: TvColor, bg: TvColor) -> Self {
         Self {
             default_fg: fg,
@@ -135,6 +144,9 @@ impl AnsiParser {
     /// Parses a single line of text containing ANSI escape sequences.
     ///
     /// Returns a vector of cells, one for each visible character.
+    // fg/bg always come in pairs here; renaming them apart would hurt more than help.
+    #[allow(clippy::similar_names)]
+    #[must_use]
     pub fn parse_line(&self, line: &str) -> Vec<Cell> {
         let mut cells = Vec::new();
         let mut current_fg = self.default_fg;

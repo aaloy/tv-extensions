@@ -1,7 +1,7 @@
 //! Terminal Widget Demo - demonstrates scrolling output viewer with simulated build log
 //!
 //! Run with:
-//!   cargo run --example terminal_widget --features log,native
+//!   `cargo run --example terminal_widget --features log,native`
 //!
 //! This matches Borland's terminal.cc example structure:
 //! - Terminal widget inside a Dialog/Window
@@ -191,21 +191,21 @@ fn update_log_streaming(app: &mut Application, term_vid: ViewId, log_state: &mut
     }
 }
 
-/// Handle START_LOG command
+/// Handle `START_LOG` command
 fn handle_start_log(app: &mut Application, term_vid: ViewId, log_state: &mut LogState) {
     command_set::disable_command(CM_START_LOG);
     command_set::enable_command(CM_STOP_LOG);
     command_set::enable_command(CM_CLEAR_LOG);
 
     log_state.start();
-    if log_state.index == 0 {
-        if let Some(terminal) = get_terminal_widget(app, term_vid) {
-            terminal.clear();
-        }
+    if log_state.index == 0
+        && let Some(terminal) = get_terminal_widget(app, term_vid)
+    {
+        terminal.clear();
     }
 }
 
-/// Handle STOP_LOG command
+/// Handle `STOP_LOG` command
 fn handle_stop_log(log_state: &mut LogState) {
     command_set::enable_command(CM_START_LOG);
     command_set::disable_command(CM_STOP_LOG);
@@ -214,7 +214,7 @@ fn handle_stop_log(log_state: &mut LogState) {
     log_state.stop();
 }
 
-/// Handle CLEAR_LOG command
+/// Handle `CLEAR_LOG` command
 fn handle_clear_log(app: &mut Application, term_vid: ViewId, log_state: &mut LogState) {
     command_set::enable_command(CM_START_LOG);
     command_set::disable_command(CM_STOP_LOG);

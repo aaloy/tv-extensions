@@ -39,9 +39,11 @@ sh scripts/check-wasm.sh                    # wasm32-wasip1 check
 
 - `missing_docs = "warn"`: every public item needs a doc comment.
   `unsafe_code = "forbid"`.
-- Clippy `pedantic` is on as warnings and the default-features build must be
-  `-D warnings` clean (the hook enforces it). `--all-features` is not gated:
-  feature-gated examples carry pedantic warnings on purpose.
+- Clippy `pedantic` is on as warnings and both the default-features build (the
+  hook enforces it) and `--all-features --all-targets` are `-D warnings` clean.
+  The cast family and `too_many_lines` are allowed in `Cargo.toml` for the
+  `i16` geometry and the fixed-width wire formats; fix new lints, don't allow
+  anything else.
 - turbo-vision is depended on with `default-features = false` so the default
   feature set builds for `wasm32-wasip1`. Never add a default dependency that
   breaks that; terminal/OS things go behind `native` (or `remote-input`/`ssh`,

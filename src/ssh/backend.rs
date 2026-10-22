@@ -103,6 +103,7 @@ impl SshBackend {
     }
 
     /// Get a clone of the size handle for the SSH handler.
+    #[must_use]
     pub fn size_handle(&self) -> Arc<Mutex<(u16, u16)>> {
         Arc::clone(&self.size)
     }
@@ -282,6 +283,7 @@ pub struct SshSessionBuilder {
 
 impl SshSessionBuilder {
     /// Create a new session builder with default terminal size.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             width: 80,
@@ -290,6 +292,7 @@ impl SshSessionBuilder {
     }
 
     /// Set the initial terminal size.
+    #[must_use]
     pub fn size(mut self, width: u16, height: u16) -> Self {
         self.width = width;
         self.height = height;
@@ -301,6 +304,7 @@ impl SshSessionBuilder {
     /// Returns a tuple of:
     /// - `SshBackend` - For use with `Terminal::with_backend()`
     /// - `SshSessionHandle` - For use by the SSH handler
+    #[must_use]
     pub fn build(self) -> (SshBackend, SshSessionHandle) {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let (output_tx, output_rx) = mpsc::unbounded_channel();
@@ -370,6 +374,7 @@ impl SshSessionHandle {
     }
 
     /// Check if the TUI has disconnected.
+    #[must_use]
     pub fn is_disconnected(&self) -> bool {
         self.event_tx.is_closed()
     }

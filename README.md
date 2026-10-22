@@ -169,14 +169,15 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
-cargo clippy --all-targets -- -D warnings
+cargo clippy --all-features --all-targets -- -D warnings
 sh scripts/check-wasm.sh
 ```
 
 `-D warnings` is the bar: clippy's `pedantic` lints are on (see `Cargo.toml`)
-and the default-features tree is clean under it, which is what the global
-pre-commit hook enforces. `--all-features` is not gated; feature-gated
-examples carry pedantic warnings on purpose.
+and both the default-features build (which is what the global pre-commit hook
+enforces) and `--all-features` are clean under it. The cast family and
+`too_many_lines` are allowed crate-wide for the `i16` geometry and the
+fixed-width wire formats.
 
 The documentation site lives in `website/` and is built with `mkdocs build -f website/mkdocs.yml` from the pages in `docs/`.
 

@@ -28,9 +28,8 @@ use tv_extensions::ssh::{SshServer, SshServerConfig};
 
 /// Run the TUI application with the provided backend.
 fn run_tui_app(backend: Box<dyn Backend>) {
-    let terminal = match Terminal::with_backend(backend) {
-        Ok(t) => t,
-        Err(_) => return,
+    let Ok(terminal) = Terminal::with_backend(backend) else {
+        return;
     };
 
     run_tui_inner(terminal);
@@ -68,7 +67,7 @@ fn run_tui_inner(mut terminal: Terminal) {
         Rect::new(
             (dialog_width - 12) / 2,
             dialog_height - 4,
-            (dialog_width + 12) / 2,
+            i16::midpoint(dialog_width, 12),
             dialog_height - 2,
         ),
         "Quit",

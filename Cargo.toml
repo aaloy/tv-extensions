@@ -119,3 +119,14 @@ required-features = ["native"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+# The cast family fires on the code that cannot avoid it: turbo-vision geometry
+# is i16 while slices are usize, and the graphics/ssh wire formats are fixed-width
+# integers. Every value crossing those boundaries is bounded by construction
+# (a terminal is not 2^16 rows tall, a PNG chunk is not 4 GiB), so try_from here
+# would add unwraps without adding safety.
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+# Long render/parse functions in the graphics module and the kitty examples.
+too_many_lines = "allow"
