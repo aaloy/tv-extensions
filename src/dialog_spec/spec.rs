@@ -678,6 +678,16 @@ pub enum Kind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<usize>,
     },
+    /// A horizontal or vertical rule drawn with line characters. It runs
+    /// the whole of its width (or height, if `vertical`).
+    Line {
+        /// A column instead of a row.
+        #[serde(default, skip_serializing_if = "is_false")]
+        vertical: bool,
+        /// Double line characters instead of single.
+        #[serde(default, skip_serializing_if = "is_false")]
+        double: bool,
+    },
     /// Where the dialog shows what is wrong when validation fails. Without
     /// one, the first error is shown in a message box.
     ErrorLine {},
@@ -714,6 +724,7 @@ impl Kind {
             Self::Tabs { .. } => "tabs",
             Self::AutoComplete { .. } => "auto_complete",
             Self::DualList { .. } => "dual_list",
+            Self::Line { .. } => "line",
             Self::ErrorLine {} => "error_line",
         }
     }
@@ -728,6 +739,7 @@ impl Kind {
                 | Self::Button { .. }
                 | Self::GroupBox { .. }
                 | Self::Tabs { .. }
+                | Self::Line { .. }
                 | Self::ErrorLine {}
         )
     }

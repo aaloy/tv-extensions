@@ -3,6 +3,7 @@
 //! The runtime: a [`DialogSpec`] built into a live dialog, its values as
 //! JSON, validation shown in the dialog, and actions bound in code.
 
+use super::line::LineView;
 use super::spec::{Align, Control, DialogSpec, Kind, SpecError, ValidatorSpec};
 use crate::autocomplete::AutoCompleteBuilder;
 use crate::dual_list::{DualList, DualListBuilder};
@@ -1332,6 +1333,9 @@ impl<'a> Builder<'a> {
                 let mut list: dual_list::DualList<String> = builder.build();
                 list.set_chosen(chosen);
                 group.add(list)
+            }
+            Kind::Line { vertical, double } => {
+                group.add(LineView::new(bounds, *vertical, *double))
             }
             Kind::ErrorLine {} => {
                 let mut line = ErrorLine::new();

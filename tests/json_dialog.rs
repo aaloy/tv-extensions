@@ -363,3 +363,35 @@ fn the_example_specs_load_and_name_what_the_example_binds() {
         json!({ "name": "", "email": "", "country": 0, "kind": 0, "vip": false })
     );
 }
+
+#[test]
+fn a_line_draws_line_characters_along_its_width_or_height() {
+    let mut dialog = JsonDialog::from_json(
+        r#"{ "title": "Lines", "width": 30, "height": 10, "controls": [
+            { "type": "line", "x": 2, "y": 1, "w": 10, "h": 1 },
+            { "type": "line", "x": 2, "y": 3, "w": 10, "h": 1, "double": true },
+            { "type": "line", "x": 15, "y": 1, "w": 1, "h": 5, "vertical": true }
+        ] }"#,
+    )
+    .unwrap();
+    // A line has no value in the data.
+    assert_eq!(dialog.data(), json!({}));
+    let mut app = app();
+    dialog.dialog_mut().draw(&mut app.terminal);
+    let row = |y: usize| -> String {
+        app.terminal.buffer()[y]
+            .iter()
+            .map(|c| c.ch)
+            .collect::<String>()
+    };
+    let mut seen = (false, false, 0);
+    for y in 0..10 {
+        let text = row(y);
+        seen.0 |= text.contains("──────────");
+        seen.1 |= text.contains("══════════");
+        seen.2 += text.matches('│').count();
+    }
+    assert!(seen.0, "single horizontal line");
+    assert!(seen.1, "double horizontal line");
+    assert_eq!(seen.2, 5, "a vertical line five rows tall");
+}

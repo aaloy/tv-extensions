@@ -34,7 +34,7 @@ pub enum Sel {
 
 /// Every control type the designer inserts: the JSON type and its menu
 /// text, in menu order.
-pub const KINDS: [(&str, &str); 19] = [
+pub const KINDS: [(&str, &str); 20] = [
     ("label", "~L~abel"),
     ("static_text", "~S~tatic text"),
     ("button", "~B~utton"),
@@ -53,6 +53,7 @@ pub const KINDS: [(&str, &str); 19] = [
     ("tabs", "Ta~b~s"),
     ("auto_complete", "Auto-co~m~plete"),
     ("dual_list", "Dual ~l~ist"),
+    ("line", "Li~n~e"),
     ("error_line", "~E~rror line"),
 ];
 
@@ -653,6 +654,14 @@ impl Design {
                     max: None,
                 },
             ),
+            "line" => (
+                String::new(),
+                (20, 1),
+                Kind::Line {
+                    vertical: false,
+                    double: false,
+                },
+            ),
             "error_line" => (String::new(), ((width - 4).max(10), 1), Kind::ErrorLine {}),
             other => panic!("no control type {other}"),
         };
@@ -949,7 +958,7 @@ fn first_free(stem: &str, taken: impl Fn(&str) -> bool) -> String {
 fn usize_gap(type_name: &str) -> i16 {
     i16::from(!matches!(
         type_name,
-        "label" | "input" | "check_box" | "static_text"
+        "label" | "input" | "check_box" | "static_text" | "line"
     ))
 }
 

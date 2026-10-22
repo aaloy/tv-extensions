@@ -417,6 +417,11 @@ fn sheet(c: &Control, others: &[String]) -> Value {
             ]);
             v
         }
+        Kind::Line { vertical, double } => vec![
+            flag("vertical", "~V~ertical", *vertical),
+            flag("double", "~D~ouble line", *double),
+            note("Drawn along its width, or its height if vertical."),
+        ],
         Kind::ErrorLine {} => vec![note(
             "Validation messages show here.\nWithout an error line, a message box shows them.",
         )],
@@ -805,6 +810,17 @@ fn apply(c: &Control, answers: &Value) -> Result<Control, String> {
                 titles,
                 min: a.usize("min", 0),
                 max: Some(a.usize("max", 0)).filter(|&m| m > 0),
+            }
+        }
+        Kind::Line { vertical, .. } => {
+            let vertical_now = a.bool("vertical");
+            if vertical_now != *vertical {
+                // Turning it round keeps its length.
+                std::mem::swap(&mut out.w, &mut out.h);
+            }
+            Kind::Line {
+                vertical: vertical_now,
+                double: a.bool("double"),
             }
         }
         Kind::ErrorLine {} => Kind::ErrorLine {},

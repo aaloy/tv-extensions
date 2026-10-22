@@ -98,6 +98,7 @@
 //! | `tabs` | `pages` (each `title` and `controls`), `active` | — |
 //! | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 //! | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
+//! | `line` | `vertical`, `double` (a rule drawn with line characters) | — |
 //! | `error_line` | — (where validation messages show) | — |
 //!
 //! A `validator` on an input checks keystrokes as they are typed:
@@ -182,6 +183,7 @@
 //! - **More views**: [`JsonDialog::dialog_mut`] is a plain turbo-vision
 //!   `Dialog`; add views of your own to it.
 
+mod line;
 mod runtime;
 mod spec;
 

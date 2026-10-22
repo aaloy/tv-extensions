@@ -75,7 +75,7 @@ right shows the selection as JSON (View > Inspector hides it).
 | Undo / redo | | Ctrl+Z / Ctrl+Y |
 | Test the dialog | | F9 |
 | Show the JSON | | F4 |
-| Code to use it | | Ctrl+G |
+| Save code to use it... | | Ctrl+G |
 | Save / open / new | | F2 / F3 / Ctrl+N |
 
 A drag is one undo step. Moves and resizes keep a control inside its
@@ -118,9 +118,9 @@ with any custom validators the spec names.
 
 ### Using it from code
 
-Ctrl+G shows Rust that loads the file and binds every action and custom
-validator it names, with a sample field rule: paste it into the
-application and fill in the bodies.
+Ctrl+G asks, in a file dialog, for a folder and a name, and writes Rust
+that loads the file and binds every action and custom validator it names,
+with a sample field rule: add it to the application and fill in the bodies.
 
 ## The JSON
 
@@ -170,6 +170,7 @@ from the corner inside the frame (or inside its tab page), an optional
 | `tabs` | `pages` (each a `title` and its `controls`), `active` | — |
 | `auto_complete` | `items`, `text`, `max_len`, `min_chars = 1`, `required`, `require_match` | string |
 | `dual_list` | `items` (strings, or `{"key", "label"}`), `chosen` (keys), `titles`, `min`, `max` | list of chosen keys |
+| `line` | `vertical`, `double` (both default false): a rule of line characters along its width, or height if vertical | — |
 | `error_line` | none: validation messages show here | — |
 
 An input's `validator` checks keystrokes as they are typed:

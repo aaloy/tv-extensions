@@ -94,7 +94,7 @@ Keys
   Ctrl+Z / Ctrl+Y  undo / redo
   F9               test the dialog
   F4               show the JSON
-  Ctrl+G           code to use it
+  Ctrl+G           save the code to use it
   F2 / F3          save / open";
 
 /// The designer: the design, the views that show it, and its commands.
@@ -182,6 +182,46 @@ impl Designer {
         let mut dialog = FileDialog::new(bounds, "Open dialog", "*.json", None).build();
         if let Some(path) = dialog.execute(app) {
             self.load(app, &path);
+        }
+    }
+
+    /// Write the Rust that uses the dialog to a file chosen in a file
+    /// dialog, which starts in the folder of the dialog's JSON.
+    fn save_code(&mut self, app: &mut Application) {
+        let (code, start) = {
+            let d = self.design.borrow();
+            let start = d
+                .path
+                .as_deref()
+                .and_then(Path::parent)
+                .filter(|p| p.is_dir())
+                .map(Path::to_path_buf);
+            (skeleton(&d.spec, d.path.as_deref()), start)
+        };
+        let (w, h) = app.terminal.size();
+        let bounds = centred(Rect::new(0, 0, w, h), 60.min(w), 20.min(h));
+        let mut dialog = FileDialog::new(bounds, "Save code as", "*.rs", start)
+            .with_button_label("~S~ave")
+            .build();
+        let Some(mut path) = dialog.execute(app) else {
+            return;
+        };
+        if path.extension().is_none() {
+            path.set_extension("rs");
+        }
+        if path.exists() {
+            let question = format!("{} exists. Replace it?", path.display());
+            if confirmation_box(app, &question) != turbo_vision::core::command::CM_YES {
+                return;
+            }
+        }
+        match std::fs::write(&path, code) {
+            Ok(()) => {
+                message_box_ok(app, &format!("Code written to {}", path.display()));
+            }
+            Err(e) => {
+                message_box_error(app, &e.to_string());
+            }
         }
     }
 
@@ -339,13 +379,7 @@ impl AppHandler for Designer {
                 let json = design.borrow().spec.to_json();
                 show_text(app, "JSON", &json);
             }
-            CM_CODE => {
-                let code = {
-                    let d = design.borrow();
-                    skeleton(&d.spec, d.path.as_deref())
-                };
-                show_text(app, "Code to use the dialog", &code);
-            }
+            CM_CODE => self.save_code(app),
             CM_TAB_ORDER => {
                 if let Some(surface) = self.surface_mut(app) {
                     surface.show_order = !surface.show_order;
@@ -360,7 +394,7 @@ impl AppHandler for Designer {
                     "Dialog designer\n\nDesign Turbo Vision dialogs and save them as JSON for tv_extensions::dialog_spec.",
                 );
             }
-            c if (CM_INSERT..CM_INSERT + 19).contains(&c) => self.insert(c),
+            c if (CM_INSERT..CM_INSERT + 20).contains(&c) => self.insert(c),
             _ => return false,
         }
         self.refresh(app);
@@ -625,7 +659,7 @@ fn menu_bar(width: i16) -> MenuBar {
             item("~T~est", CM_TEST, Some("F9")),
             MenuItem::separator(),
             item("Show ~J~SON", CM_SHOW_JSON, Some("F4")),
-            item("~C~ode to use it", CM_CODE, Some("Ctrl+G")),
+            item("~C~ode to use it...", CM_CODE, Some("Ctrl+G")),
         ]),
     ));
     bar.add_submenu(SubMenu::new(

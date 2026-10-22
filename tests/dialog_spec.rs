@@ -16,7 +16,7 @@ fn every_kind_is_read() {
     let spec = everything();
     assert_eq!(spec.title, "Everything");
     assert_eq!((spec.width, spec.height), (76, 26));
-    assert_eq!(spec.controls.len(), 20);
+    assert_eq!(spec.controls.len(), 22);
 
     let name = spec.find("name").unwrap();
     assert_eq!((name.x, name.y, name.w, name.h), (11, 1, 30, 1));
