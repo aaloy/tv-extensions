@@ -63,6 +63,7 @@ pub fn set_menu_item_checked(menu: &mut Menu, index: usize, checked: bool) {
 }
 
 /// True when the menu item at `index` carries a check mark.
+#[must_use]
 pub fn is_menu_item_checked(menu: &Menu, index: usize) -> bool {
     matches!(
         menu.items.get(index),

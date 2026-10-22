@@ -169,11 +169,14 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
-cargo clippy --all-targets
+cargo clippy --all-targets -- -D warnings
 sh scripts/check-wasm.sh
 ```
 
-`-D warnings` is not used: clippy's `pedantic` lints are on as warnings (see `Cargo.toml`), and a few files copied verbatim from turbo-vision core carry pedantic warnings inherited from there as-is. The bar is no clippy *errors*, and no new warnings in hand-written code; `cargo clippy --all-targets` and read the output rather than failing the build on every pedantic nit.
+`-D warnings` is the bar: clippy's `pedantic` lints are on (see `Cargo.toml`)
+and the default-features tree is clean under it, which is what the global
+pre-commit hook enforces. `--all-features` is not gated; feature-gated
+examples carry pedantic warnings on purpose.
 
 The documentation site lives in `website/` and is built with `mkdocs build -f website/mkdocs.yml` from the pages in `docs/`.
 

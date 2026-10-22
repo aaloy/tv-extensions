@@ -1,6 +1,6 @@
 // (C) 2026 - Enzo Lombardi
 
-//! ScrollPane - scrolling interior for oversized dialogs (TV Tool Box style).
+//! `ScrollPane` - scrolling interior for oversized dialogs (TV Tool Box style).
 
 use turbo_vision::core::event::{Event, EventType, MB_LEFT_BUTTON};
 use turbo_vision::core::geometry::Rect;
@@ -53,12 +53,15 @@ impl std::fmt::Debug for ScrollPane {
             .field("virtual_height", &self.virtual_height)
             .field("offset", &self.offset)
             .field("children", &self.group.len())
+            .field("virtual_bounds", &self.virtual_bounds.len())
+            .field("palette_chain", &self.palette_chain.is_some())
             .finish()
     }
 }
 
 impl ScrollPane {
     /// Create a pane whose virtual area is `virtual_height` rows tall.
+    #[must_use]
     pub fn new(bounds: Rect, virtual_height: i16) -> Self {
         Self {
             core: ViewCore {
@@ -92,6 +95,7 @@ impl ScrollPane {
     }
 
     /// Current vertical scroll offset in rows.
+    #[must_use]
     pub fn scroll_offset(&self) -> i16 {
         self.offset
     }
@@ -139,6 +143,7 @@ impl ScrollPane {
     }
 
     /// Access the interior group.
+    #[must_use]
     pub fn group(&self) -> &Group {
         &self.group
     }
@@ -206,13 +211,12 @@ impl View for ScrollPane {
                 event.clear();
                 return;
             }
-            EventType::MouseDown => {
-                // Clicks outside the visible pane never reach hidden children
+            // Clicks outside the visible pane never reach hidden children
+            EventType::MouseDown
                 if event.mouse.buttons & MB_LEFT_BUTTON != 0
-                    && !self.extent().contains(event.mouse.pos)
-                {
-                    return;
-                }
+                    && !self.extent().contains(event.mouse.pos) =>
+            {
+                return;
             }
             _ => {}
         }
