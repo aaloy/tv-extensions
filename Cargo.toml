@@ -132,6 +132,10 @@ required-features = ["json"]
 name = "dialog_spec"
 required-features = ["dialog"]
 
+[[test]]
+name = "json_dialog"
+required-features = ["dialog"]
+
 [[example]]
 name = "form_layout"
 required-features = ["native"]
