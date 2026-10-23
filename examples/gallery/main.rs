@@ -946,7 +946,8 @@ mod tests {
         assert!(gallery.handle_command(&mut app, *DEMO_COMMANDS.start(), &Event::nothing()));
         app.step(&mut gallery, None);
         app.draw();
-        let rows = |app: &Application| -> Vec<String> { (0..25).map(|y| screen_row(app, y)).collect() };
+        let rows =
+            |app: &Application| -> Vec<String> { (0..25).map(|y| screen_row(app, y)).collect() };
         let find = |app: &Application, text: &str| -> Point {
             rows(app)
                 .iter()
@@ -954,14 +955,20 @@ mod tests {
                 .find_map(|(y, r)| {
                     let x = r.find(text)?;
                     let col = r[..x].chars().count();
-                    Some(Point::new(i16::try_from(col).unwrap(), i16::try_from(y).unwrap()))
+                    Some(Point::new(
+                        i16::try_from(col).unwrap(),
+                        i16::try_from(y).unwrap(),
+                    ))
                 })
                 .unwrap_or_else(|| panic!("no {text} on the screen"))
         };
         let click = |app: &mut Application, gallery: &mut Gallery, at: Point, double: bool| {
             let down = Event::mouse(EventType::MouseDown, at, MB_LEFT_BUTTON, double);
             app.step(gallery, Some(down));
-            app.step(gallery, Some(Event::mouse(EventType::MouseUp, at, 0, false)));
+            app.step(
+                gallery,
+                Some(Event::mouse(EventType::MouseUp, at, 0, false)),
+            );
             app.draw();
         };
 
@@ -969,11 +976,18 @@ mod tests {
         let file = find(&app, "File");
         click(&mut app, &mut gallery, file, false);
         let dropped = rows(&app)[usize::try_from(file.y).unwrap() + 2..].join("\n");
-        assert!(dropped.contains("Save"), "the File menu opens:\n{}", rows(&app).join("\n"));
+        assert!(
+            dropped.contains("Save"),
+            "the File menu opens:\n{}",
+            rows(&app).join("\n")
+        );
         // A click outside it closes it; a double click on Venus edits it.
         let neptune = find(&app, "Neptune");
         click(&mut app, &mut gallery, neptune, false);
-        assert!(!rows(&app).join("\n").contains("Save as"), "the menu closes");
+        assert!(
+            !rows(&app).join("\n").contains("Save as"),
+            "the menu closes"
+        );
         let venus = find(&app, "Venus");
         click(&mut app, &mut gallery, venus, false);
         click(&mut app, &mut gallery, venus, true);
