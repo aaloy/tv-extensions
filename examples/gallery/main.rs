@@ -464,8 +464,8 @@ fn add_code(dialog: &mut Dialog, area: Rect, code: &str) {
     dialog.add(Shared::new(h_bar));
 }
 
-fn main() -> turbo_vision::core::error::Result<()> {
-    let mut app = Application::new()?;
+/// The status line along the bottom of the screen.
+fn status_line(app: &mut Application) {
     let (width, height) = app.terminal.size();
     app.set_status_line(StatusLine::new(
         Rect::new(0, height - 1, width, height),
@@ -479,11 +479,20 @@ fn main() -> turbo_vision::core::error::Result<()> {
             StatusItemBuilder::new().text("~Tab~ Next control").build(),
         ],
     ));
+}
+
+fn main() -> turbo_vision::core::error::Result<()> {
+    let mut app = Application::new()?;
+    status_line(&mut app);
     let mut gallery = Gallery::open(&mut app);
     gallery.show(&mut app, 0);
     app.run_with(&mut gallery);
     Ok(())
 }
+
+#[cfg(all(test, feature = "screenshot"))]
+#[path = "../shared/png.rs"]
+mod png;
 
 #[cfg(test)]
 mod tests {
@@ -996,5 +1005,82 @@ mod tests {
             "a double click edits the cell:\n{}",
             rows(&app).join("\n")
         );
+    }
+
+    /// The pictures in the docs, one per page: each demo in the gallery on
+    /// a 100x30 screen, driven to a moment worth showing, saved under
+    /// `docs/assets/captures`. Run it after changing a demo:
+    /// `cargo test --example gallery --features native,csv,log,graphics,screenshot -- --ignored captures`
+    #[cfg(feature = "screenshot")]
+    #[test]
+    #[ignore = "writes the docs' pictures"]
+    fn captures() {
+        use turbo_vision::core::keys::KeyCode;
+        use turbo_vision::core::screenshot::render_to_png;
+
+        let f6 = || key(KeyCode::F(6));
+        let typed = |text: &str| text.chars().map(|c| key(KeyCode::Char(c))).collect();
+        let command = |n: u16| Event::command(*DEMO_COMMANDS.start() + n);
+        let open = || command(0);
+        // The picture's file, the demo, and the events that set it up.
+        let shots: Vec<(&str, &str, Vec<Event>)> = vec![
+            (
+                "autocomplete",
+                "AutoComplete",
+                [vec![f6()], typed("m")].concat(),
+            ),
+            ("dual-list", "DualList", vec![f6()]),
+            (
+                "scroll-pane",
+                "ScrollPane",
+                [vec![f6()], typed("Ada Lovelace")].concat(),
+            ),
+            // Open, then Info, Warn and Error.
+            (
+                "log",
+                "LogWindow",
+                vec![open(), command(1), command(2), command(3)],
+            ),
+            ("graphics", "AnsiBackground", vec![]),
+            (
+                "csv",
+                "CSV editor",
+                vec![
+                    open(),
+                    key(KeyCode::Down),
+                    key(KeyCode::Down),
+                    key(KeyCode::Enter),
+                ],
+            ),
+            (
+                "host",
+                "Host-driven app",
+                [vec![f6()], typed("Ada")].concat(),
+            ),
+        ];
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/docs/assets/captures");
+        std::fs::create_dir_all(dir).unwrap();
+        for (file, name, events) in shots {
+            let (mut app, _) = app(100, 30);
+            status_line(&mut app);
+            let mut gallery = Gallery::open(&mut app);
+            gallery.show(&mut app, registry::find(name).unwrap());
+            app.step(&mut gallery, None);
+            for event in events {
+                if event.what == turbo_vision::core::event::EventType::Command {
+                    gallery.handle_command(&mut app, event.command, &event);
+                } else {
+                    app.step(&mut gallery, Some(event));
+                }
+            }
+            app.step(&mut gallery, None);
+            app.draw();
+            let (w, h) = app.terminal.size();
+            let path = format!("{dir}/{file}.png");
+            let (w, h) = (usize::try_from(w).unwrap(), usize::try_from(h).unwrap());
+            let path = std::path::Path::new(&path);
+            render_to_png(app.terminal.buffer(), w, h, 1, path).unwrap();
+            super::png::recompress_png(path).unwrap();
+        }
     }
 }

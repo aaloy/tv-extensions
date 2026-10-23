@@ -5,6 +5,8 @@ like the typeahead fields of web toolkits. Once enough characters are typed,
 a list of the items containing them opens under the field, with the matched
 text in its own colour. It is always available, with no feature flag.
 
+![The AutoComplete demo in the gallery: "m" typed in the Planet field, its list open on Mercury and Mars with the M picked out](assets/captures/autocomplete.png)
+
 ## Validation rules
 
 Two independent rules decide what the field accepts when a dialog's OK (or

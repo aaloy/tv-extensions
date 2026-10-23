@@ -4,6 +4,8 @@
 matching Borland's `TTerminal`) and a window that shows `tracing` events in
 it (`LogWindow`, fed by `LogSubscriber`, a `tracing::Subscriber`).
 
+![The LogWindow demo in the gallery: info, warn and error events in their colours, on black](assets/captures/log.png)
+
 ## TerminalWidget
 
 A read-only, auto-scrolling viewer for program output: build output,

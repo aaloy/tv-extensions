@@ -2,6 +2,8 @@
 
 Turbo Vision was written for a program that owns its terminal. `Application::run` sits in a loop, asks the backend for the next event, waits up to a few milliseconds for one, and draws whenever something changed. That shape does not fit an embedder. A plank frame, a WASM guest or a test harness has its own loop and its own screen, and it calls into the application when it has something to hand over: a key, a resize, or just the next frame. The `host` module turns turbo-vision inside out so it can be driven that way.
 
+![The host-driven demo in the gallery: a second application, stepped by the gallery, with "Ada" typed into its Name field](assets/captures/host.png)
+
 ## The pieces
 
 `HostBackend` is a `Backend` with no terminal behind it. Its input is a queue, its size is whatever the host last said, and its output goes nowhere, because the host reads the finished cells straight out of `Terminal::buffer`. `HostInput` is the host's end of that queue. It is cheap to clone, so it can live wherever the host receives its input, and it offers `push` for an event and `set_size` for a new screen size. `host::app(w, h)` builds the three together and returns the application with its input handle.

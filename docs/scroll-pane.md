@@ -4,6 +4,8 @@ Both modules are always available, with no feature flag, and come from the
 classic Turbo Vision add-on kits: `ScrollPane` from TV Tool Box's scrolling
 dialog boxes, `popup_menu` from the context-menu kits built on `MenuBox`.
 
+![The ScrollPane demo in the gallery: an address form taller than its pane, with "Ada Lovelace" typed into Name](assets/captures/scroll-pane.png)
+
 ## ScrollPane
 
 `ScrollPane` is a viewport over a virtual area larger than its own screen

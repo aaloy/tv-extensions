@@ -6,6 +6,8 @@ available items and the right list the chosen ones. Each list has a filter
 field above it, labelled "Filter:", and four buttons between the lists move items across. It
 is always available, with no feature flag.
 
+![The DualList demo in the gallery: six planets available on the left, Earth and Mars visited on the right, the move buttons between them](assets/captures/dual-list.png)
+
 ```text
  Toppings (22)                     On the pizza (2)
  Filter: [ch      ]                Filter: [        ]

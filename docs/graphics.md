@@ -5,6 +5,8 @@ backgrounds (`AnsiBackground`, parsed by the `ansi` module) and bitmap
 images over the Kitty graphics protocol (`KittyImage`, with the protocol
 helpers in the `kitty` module).
 
+![The AnsiBackground demo in the gallery: an ANSI-art boat on a blue sea, with a Night button](assets/captures/graphics.png)
+
 ## Kitty images
 
 `KittyImage` transmits PNG bytes to the terminal and displays them over the

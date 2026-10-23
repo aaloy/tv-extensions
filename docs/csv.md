@@ -7,6 +7,8 @@ host-driven, like [`host`](host.md): the caller pushes one key with
 `Session::key`, asks for a frame with `Session::step`, and reads the
 finished cells from `Session::buffer`.
 
+![The CSV editor running inside the gallery: planets.csv in its own window and menu bar, with the Edit cell dialog open on Earth](assets/captures/csv.png)
+
 ## Documents and storage
 
 - `CsvDoc` is the table being edited: a header row and a rectangular,
