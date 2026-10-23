@@ -236,7 +236,7 @@ fn the_json_reference_shows_every_control_type() {
     }
 }
 
-/// The block of a doc fenced with `fence` (such as "```json dialog").
+/// The block of a doc fenced with `fence` (such as ````` ```json dialog `````).
 fn block<'a>(doc: &'a str, fence: &str) -> &'a str {
     let at = doc
         .find(fence)

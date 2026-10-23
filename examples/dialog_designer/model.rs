@@ -1204,7 +1204,7 @@ impl Design {
         let mut has_tabs = matches!(control.kind, Kind::Tabs { .. });
         for list in control.child_lists() {
             visit_all(list, &mut |c| {
-                has_tabs |= matches!(c.kind, Kind::Tabs { .. })
+                has_tabs |= matches!(c.kind, Kind::Tabs { .. });
             });
         }
         if has_tabs
@@ -1619,7 +1619,7 @@ mod tests {
         assert!(d.undo());
         assert_eq!(d.selected().unwrap().x, 2);
         assert!(d.undo());
-        assert!(d.spec.controls.is_empty());
+        assert_eq!(d.spec.controls.len(), 0);
         assert!(!d.undo());
         assert!(d.redo());
         assert!(d.redo());

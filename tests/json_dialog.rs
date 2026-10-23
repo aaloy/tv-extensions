@@ -318,7 +318,7 @@ fn a_change_can_set_other_controls() {
         ctx.set_value("meter", &level).unwrap();
         Flow::Stay
     });
-    assert!(dialog.unbound().is_empty());
+    assert_eq!(dialog.unbound(), Vec::<String>::new());
     // The first control is the mode: Down and Space pick Loud.
     key(&mut app, KB_DOWN);
     type_text(&mut app, " ");
@@ -469,7 +469,7 @@ fn a_custom_validator_is_bound_by_name() {
         "digits",
         Rc::new(RefCell::new(FilterValidator::new("0123456789"))),
     );
-    assert!(dialog.unbound().is_empty());
+    assert_eq!(dialog.unbound(), Vec::<String>::new());
     dialog.set_value("code", &json!("12a")).unwrap();
     let errors = dialog.validate().unwrap_err();
     assert_eq!(errors.field("code"), Some("Code is not valid"));
