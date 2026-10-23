@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] - 2026-10-23
+
+Requires turbo-vision 4.0.2; works with 4.1.0, whose host-driven
+applications send a keyboard-pressed button's command at once.
 
 ### Added
 

@@ -14,7 +14,7 @@ Extensions for [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4
 ```toml
 [dependencies]
 turbo-vision = { version = "4.0.1", default-features = false }
-tv-extensions = "0.3"
+tv-extensions = "0.4"
 ```
 
 ## Component gallery
