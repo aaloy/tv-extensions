@@ -1180,7 +1180,7 @@ mod tests {
         let (mut auto, _) = make();
         type_str(&mut auto, "zz");
         assert!(auto.is_open());
-        assert!(auto.filtered.is_empty());
+        assert_eq!(auto.filtered, Vec::<usize>::new());
     }
 
     #[test]
