@@ -78,12 +78,13 @@ saving it for use in code. Try each step in the designer behind the window.
 |----|-------|------|
 | Select a control | click it | Tab / Shift+Tab, in tab order |
 | Select the container | click empty space | Esc (a page's control → its tabs → the dialog) |
-| Move it | drag it | arrows |
+| Select several | Ctrl+click (or Shift or Alt) each, or drag a band over empty space | |
+| Move it (or all those selected) | drag it | arrows |
 | Resize it | drag its yellow corner | Shift+arrows or Ctrl+arrows |
 | Resize the dialog | drag the frame's bottom-right corner | select the dialog, then Shift+arrows |
 | Insert a control | right click | Ins, or the Insert menu |
 | Edit its properties | double click | Enter |
-| Delete / duplicate | | Del / Ctrl+D |
+| Delete (all those selected) / duplicate | | Del / Ctrl+D |
 | Earlier / later in tab order | | F7 / F8 |
 | Set the whole tab order | | F5 |
 | Show the tab order | | Ctrl+O |
@@ -125,6 +126,16 @@ keyboard or a PC terminal that sends Ctrl+letters.
 A drag is one undo step. Moves and resizes keep a control inside its
 container, the dialog or its tab page.
 
+Several controls can be selected at once, to move or delete them
+together: Ctrl+click adds a control to the selection or takes it out,
+and a band dragged over an empty part of the dialog selects the controls
+that lie wholly inside it. Only controls in the same container go
+together; a Ctrl+click on one elsewhere selects it alone. Drag any of
+them, or press the arrows, and they all move, as far as the one nearest
+the edge can. A plain click on one selects it alone. Many macOS
+terminals turn Ctrl+click into a right click, and keep Shift+click for
+selecting text; Alt+click (Option) or the band works there.
+
 ### Inserting
 
 A new control goes after the selected one in tab order, just below it, and
@@ -145,7 +156,7 @@ Buttons come as OK first (the default button), then Cancel, then actions
 named `action1`, `action2`, …
 
 A selected container is marked by its frame only, so you can still see
-what is inside it.
+what is inside it. So is a line drawn as a box.
 
 The Insert menu on the bar lists the sections of controls, and Ins opens
 every control type at once, a line between the sections. On a screen too

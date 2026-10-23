@@ -3,6 +3,8 @@
 //! The design surface: the dialog being designed, drawn by its real
 //! controls but inert, with the selection marked on top. The mouse selects,
 //! drags and resizes; the keyboard moves, resizes and walks the controls.
+//! Ctrl+click (or Shift or Alt) adds a control to the selection, and a band
+//! dragged over the dialog selects what it covers: they move together.
 
 use crate::model::{Design, Sel};
 use std::cell::RefCell;
@@ -21,7 +23,7 @@ use turbo_vision::core::state::State;
 use turbo_vision::terminal::Terminal;
 use turbo_vision::views::tabbed_pane::TabbedPane;
 use turbo_vision::views::view::{View, ViewCore, draw_child};
-use tv_extensions::dialog_spec::{Control, DialogSpec, JsonDialog, Kind};
+use tv_extensions::dialog_spec::{DialogSpec, JsonDialog, Kind};
 
 /// The commands the surface sends the application.
 pub struct Commands {
@@ -33,7 +35,8 @@ pub struct Commands {
 /// What a mouse drag is doing.
 #[derive(Debug, Clone, Copy)]
 enum Drag {
-    /// Moving `sel`, held at `grab` from its corner.
+    /// Moving `sel`, and what is selected with it, held at `grab` from its
+    /// corner.
     Move { sel: Sel, grab: Point },
     /// Resizing `sel` by its bottom-right corner.
     Resize { sel: Sel },
@@ -42,6 +45,8 @@ enum Drag {
     /// Moving the whole surface on the desktop, held at `grab` (in the
     /// surface's own space) from its corner.
     Canvas { grab: Point },
+    /// Dragging a band over the dialog from `from` (inside the frame).
+    Band { from: Point },
 }
 
 /// The surface: a view on the desktop exactly as big as the dialog.
@@ -56,6 +61,12 @@ pub struct Surface {
     broken: Option<String>,
     built: Option<DialogSpec>,
     drag: Option<Drag>,
+    /// The band being dragged, inside the frame.
+    band: Option<Rect>,
+    /// A click on one of several selected controls: if it does not drag,
+    /// that control is selected alone when the button goes up. With the
+    /// design's revision when it went down.
+    collapse: Option<(Sel, u64)>,
     /// The desktop area the surface may be moved within.
     pub area: Rect,
     /// Number each control with its place in tab order.
@@ -79,6 +90,8 @@ impl Surface {
             broken: None,
             built: None,
             drag: None,
+            band: None,
+            collapse: None,
             area: Rect::new(0, 0, i16::MAX, i16::MAX),
             show_order: false,
         }
@@ -198,27 +211,50 @@ impl Surface {
             }
         }
 
-        let double = event.mouse.double_click;
-        design.select(sel);
-        if double {
+        if event.mouse.double_click {
+            design.select(sel);
             drop(design);
             Self::send(event, self.commands.properties);
             return;
         }
-        if sel != Sel::Dialog {
-            let r = design.rect_of(sel);
-            let corner = Point::new(r.b.x - 1, r.b.y - 1);
-            design.begin_drag();
-            self.drag = Some(if inner == corner && (r.width() > 1 || r.height() > 1) {
+        if sel == Sel::Dialog {
+            // Nothing there: a band dragged from here selects what it covers.
+            design.select(Sel::Dialog);
+            self.drag = Some(Drag::Band { from: inner });
+            self.set_state_flag(State::DRAGGING, true);
+            event.clear();
+            return;
+        }
+        let adding = event
+            .key_modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::SHIFT | KeyModifiers::ALT);
+        if adding {
+            design.toggle(sel);
+            if !design.is_selected(sel) {
+                event.clear();
+                return;
+            }
+        } else if design.selection().len() > 1 && design.is_selected(sel) {
+            // Keep the others selected, so the press can drag them all.
+            self.collapse = Some((sel, design.revision));
+        } else {
+            design.select(sel);
+        }
+        let alone = design.selection().len() == 1;
+        let r = design.rect_of(sel);
+        let corner = Point::new(r.b.x - 1, r.b.y - 1);
+        design.begin_drag();
+        self.drag = Some(
+            if alone && inner == corner && (r.width() > 1 || r.height() > 1) {
                 Drag::Resize { sel }
             } else {
                 Drag::Move {
                     sel,
                     grab: Point::new(inner.x - r.a.x, inner.y - r.a.y),
                 }
-            });
-            self.set_state_flag(State::DRAGGING, true);
-        }
+            },
+        );
+        self.set_state_flag(State::DRAGGING, true);
         event.clear();
     }
 
@@ -234,17 +270,22 @@ impl Surface {
             return;
         }
         let inner = Point::new(pos.x - 1, pos.y - 1);
+        if let Drag::Band { from } = drag {
+            self.band = Some(band(from, inner));
+            event.clear();
+            return;
+        }
         let mut design = self.design.borrow_mut();
         match drag {
-            Drag::Canvas { .. } => {}
+            Drag::Canvas { .. } | Drag::Band { .. } => {}
             Drag::Dialog => {
                 design.set_dialog_size(pos.x + 1, pos.y + 1);
             }
             Drag::Move { sel, grab } => {
                 let o = design.container_origin(sel);
                 if let Some(c) = design.control(sel) {
-                    let place = (inner.x - grab.x - o.x, inner.y - grab.y - o.y, c.w, c.h);
-                    design.set_place(sel, place);
+                    let (dx, dy) = (inner.x - grab.x - o.x - c.x, inner.y - grab.y - o.y - c.y);
+                    design.move_by(dx, dy);
                 }
             }
             Drag::Resize { sel } => {
@@ -262,9 +303,22 @@ impl Surface {
 
     fn mouse_up(&mut self, event: &mut Event) {
         if let Some(drag) = self.drag.take() {
-            if !matches!(drag, Drag::Canvas { .. }) {
-                self.design.borrow_mut().end_drag();
+            let mut design = self.design.borrow_mut();
+            match drag {
+                Drag::Canvas { .. } => {}
+                Drag::Band { from } => {
+                    let inner = Point::new(event.mouse.pos.x - 1, event.mouse.pos.y - 1);
+                    design.select_within(band(from, inner));
+                    self.band = None;
+                }
+                Drag::Move { .. } | Drag::Resize { .. } | Drag::Dialog => design.end_drag(),
             }
+            if let Some((sel, revision)) = self.collapse.take()
+                && design.revision == revision
+            {
+                design.select(sel);
+            }
+            drop(design);
             self.set_state_flag(State::DRAGGING, false);
             event.clear();
         }
@@ -375,24 +429,33 @@ impl Surface {
             ..a
         };
         let (w, h) = (self.core.bounds.width(), self.core.bounds.height());
-        match design.sel {
-            Sel::Dialog => {
+        let all = design.selection();
+        for &sel in &all {
+            let Some(c) = design.control(sel) else {
                 Self::paint(terminal, Rect::new(w - 1, h - 1, w, h), handle);
+                continue;
+            };
+            let mut r = design.rect_of(sel);
+            r.move_by(1, 1);
+            // A container and a line are marked by their edge, so what is
+            // inside a frame stays as it is.
+            if c.is_container() || matches!(c.kind, Kind::Line { .. }) {
+                Self::paint_border(terminal, r, selected);
+            } else {
+                Self::paint(terminal, r, selected);
             }
-            sel @ Sel::At(_) => {
-                let mut r = design.rect_of(sel);
-                r.move_by(1, 1);
-                if design.control(sel).is_some_and(Control::is_container) {
-                    Self::paint_border(terminal, r, selected);
-                } else {
-                    Self::paint(terminal, r, selected);
-                }
+            // One control alone can be resized by its corner.
+            if all.len() == 1 {
                 Self::paint(
                     terminal,
                     Rect::new(r.b.x - 1, r.b.y - 1, r.b.x, r.b.y),
                     handle,
                 );
             }
+        }
+        if let Some(mut r) = self.band {
+            r.move_by(1, 1);
+            Self::paint_border(terminal, r, handle);
         }
         if self.show_order {
             let number = Attr::new(TvColor::White, TvColor::Magenta);
@@ -405,6 +468,16 @@ impl Surface {
             }
         }
     }
+}
+
+/// The cells from `from` to `to`, both included, whichever way it was dragged.
+fn band(from: Point, to: Point) -> Rect {
+    Rect::new(
+        from.x.min(to.x),
+        from.y.min(to.y),
+        from.x.max(to.x) + 1,
+        from.y.max(to.y) + 1,
+    )
 }
 
 impl View for Surface {

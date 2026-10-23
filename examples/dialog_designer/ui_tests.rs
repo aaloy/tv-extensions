@@ -715,3 +715,150 @@ fn the_tutorial_goes_forward_and_back() {
     queue(&mut app, &[KB_ALT_N, KB_ALT_N, KB_ALT_B, KB_ESC]);
     command(&mut app, &mut designer, CM_TUTORIAL);
 }
+
+/// A design of three inputs, 10 wide: two on the left, one apart.
+fn three_inputs() -> Design {
+    let mut design = Design::default();
+    for place in [(5, 2, 10, 1), (5, 5, 10, 1), (30, 8, 10, 1)] {
+        let sel = design.insert("input");
+        design.set_place(sel, place);
+    }
+    design.select(Sel::Dialog);
+    design
+}
+
+fn places(designer: &Designer) -> Vec<(i16, i16)> {
+    let design = designer.design.borrow();
+    design.spec.controls.iter().map(|c| (c.x, c.y)).collect()
+}
+
+fn ctrl_click(app: &mut Application, designer: &mut Designer, at: Point) {
+    use turbo_vision::core::keys::KeyModifiers;
+    let mut press = Event::mouse(EventType::MouseDown, at, MB_LEFT_BUTTON, false);
+    press.key_modifiers = KeyModifiers::CONTROL;
+    step(app, designer, press);
+    mouse(app, designer, EventType::MouseUp, at);
+}
+
+#[test]
+fn a_line_drawn_as_a_box_is_marked_by_its_edge() {
+    use turbo_vision::core::palette::TvColor;
+    let mut design = Design::default();
+    let sel = design.insert("line");
+    design.set_place(sel, (2, 1, 10, 4));
+    design.select(sel);
+    let mut app = app();
+    let mut designer = open_designer(&mut app, design);
+    designer.refresh(&mut app);
+    app.draw();
+    let bg = |app: &Application, at: Point| {
+        app.terminal
+            .read_cell(at.x, at.y)
+            .map(|c| c.attr.bg)
+            .unwrap()
+    };
+    let edge = on_surface(&app, &designer, Point::new(2, 2));
+    let inside = on_surface(&app, &designer, Point::new(5, 2));
+    assert_eq!(bg(&app, edge), TvColor::LightCyan);
+    assert_ne!(bg(&app, inside), TvColor::LightCyan);
+}
+
+#[test]
+fn ctrl_click_selects_several_and_a_drag_moves_them_together() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, three_inputs());
+    let first = on_surface(&app, &designer, Point::new(6, 2));
+    let second = on_surface(&app, &designer, Point::new(6, 5));
+    mouse(&mut app, &mut designer, EventType::MouseDown, first);
+    mouse(&mut app, &mut designer, EventType::MouseUp, first);
+    ctrl_click(&mut app, &mut designer, second);
+    assert_eq!(designer.design.borrow().selection().len(), 2);
+
+    // Drag the second: both go 3 right and 1 down, the third stays.
+    let to = on_surface(&app, &designer, Point::new(9, 6));
+    mouse(&mut app, &mut designer, EventType::MouseDown, second);
+    mouse(&mut app, &mut designer, EventType::MouseMove, to);
+    mouse(&mut app, &mut designer, EventType::MouseUp, to);
+    assert_eq!(places(&designer), [(8, 3), (8, 6), (30, 8)]);
+    assert_eq!(designer.design.borrow().selection().len(), 2);
+    // One drag, one undo step.
+    command(&mut app, &mut designer, CM_UNDO);
+    assert_eq!(places(&designer), [(5, 2), (5, 5), (30, 8)]);
+}
+
+#[test]
+fn ctrl_click_on_a_selected_control_takes_it_out() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, three_inputs());
+    let first = on_surface(&app, &designer, Point::new(6, 2));
+    let second = on_surface(&app, &designer, Point::new(6, 5));
+    mouse(&mut app, &mut designer, EventType::MouseDown, first);
+    mouse(&mut app, &mut designer, EventType::MouseUp, first);
+    ctrl_click(&mut app, &mut designer, second);
+    ctrl_click(&mut app, &mut designer, first);
+    let design = designer.design.borrow();
+    assert_eq!(design.selection(), [Sel::top(1)]);
+}
+
+#[test]
+fn a_plain_click_on_one_of_several_selects_it_alone() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, three_inputs());
+    let first = on_surface(&app, &designer, Point::new(6, 2));
+    let second = on_surface(&app, &designer, Point::new(6, 5));
+    mouse(&mut app, &mut designer, EventType::MouseDown, first);
+    mouse(&mut app, &mut designer, EventType::MouseUp, first);
+    ctrl_click(&mut app, &mut designer, second);
+    mouse(&mut app, &mut designer, EventType::MouseDown, second);
+    mouse(&mut app, &mut designer, EventType::MouseUp, second);
+    assert_eq!(designer.design.borrow().selection(), [Sel::top(1)]);
+}
+
+#[test]
+fn a_band_selects_what_it_covers_and_del_deletes_them() {
+    use turbo_vision::core::event::KB_DEL;
+    let mut app = app();
+    let mut designer = open_designer(&mut app, three_inputs());
+    // From empty space above the first input to below the second.
+    let from = on_surface(&app, &designer, Point::new(3, 1));
+    let to = on_surface(&app, &designer, Point::new(20, 6));
+    mouse(&mut app, &mut designer, EventType::MouseDown, from);
+    mouse(&mut app, &mut designer, EventType::MouseMove, to);
+    mouse(&mut app, &mut designer, EventType::MouseUp, to);
+    assert_eq!(
+        designer.design.borrow().selection(),
+        [Sel::top(0), Sel::top(1)]
+    );
+    key(&mut app, &mut designer, KB_RIGHT);
+    assert_eq!(places(&designer), [(6, 2), (6, 5), (30, 8)]);
+
+    key(&mut app, &mut designer, KB_DEL);
+    assert_eq!(places(&designer), [(30, 8)]);
+    command(&mut app, &mut designer, CM_UNDO);
+    assert_eq!(places(&designer).len(), 3);
+}
+
+#[test]
+fn a_band_over_nothing_selects_the_dialog() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, three_inputs());
+    designer.design.borrow_mut().select(Sel::top(0));
+    let from = on_surface(&app, &designer, Point::new(20, 1));
+    let to = on_surface(&app, &designer, Point::new(25, 3));
+    mouse(&mut app, &mut designer, EventType::MouseDown, from);
+    mouse(&mut app, &mut designer, EventType::MouseMove, to);
+    mouse(&mut app, &mut designer, EventType::MouseUp, to);
+    assert_eq!(designer.design.borrow().selection(), [Sel::Dialog]);
+}
+
+#[test]
+fn controls_moved_together_stop_at_the_edge_together() {
+    let mut design = three_inputs();
+    design.select(Sel::top(0));
+    design.toggle(Sel::top(1));
+    // The first is 5 from the left edge: a move of 8 goes only 5.
+    assert!(design.move_by(-8, 0));
+    let xs: Vec<i16> = design.spec.controls.iter().map(|c| c.x).collect();
+    assert_eq!(xs, [0, 0, 30]);
+    assert!(!design.move_by(-1, 0));
+}

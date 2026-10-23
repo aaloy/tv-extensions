@@ -226,6 +226,9 @@ pub fn section(n: usize) -> std::ops::Range<usize> {
 pub struct Design {
     pub spec: DialogSpec,
     pub sel: Sel,
+    /// Controls selected along with `sel` (Ctrl+click, or a band dragged
+    /// over the dialog): its siblings, which move and are deleted with it.
+    also: Vec<Place>,
     pub path: Option<PathBuf>,
     /// Changed since it was last saved or loaded.
     pub dirty: bool,
@@ -250,6 +253,7 @@ impl Design {
         Self {
             spec,
             sel: Sel::Dialog,
+            also: Vec::new(),
             path,
             dirty: false,
             revision: 0,
@@ -438,10 +442,70 @@ impl Design {
     // ---- selecting ----------------------------------------------------------
 
     pub fn select(&mut self, sel: Sel) {
-        if self.sel != sel {
+        if self.sel != sel || !self.also.is_empty() {
+            self.also.clear();
             self.sel = sel;
             self.revision += 1;
         }
+    }
+
+    /// Everything selected: `sel` first, then the controls selected along
+    /// with it.
+    pub fn selection(&self) -> Vec<Sel> {
+        let mut all = vec![self.sel];
+        all.extend(self.also.iter().map(|&p| Sel::At(p)));
+        all
+    }
+
+    /// Whether `sel` is selected, alone or along with others.
+    pub fn is_selected(&self, sel: Sel) -> bool {
+        self.sel == sel || sel.path().is_some_and(|p| self.also.contains(&p))
+    }
+
+    /// Add `sel` to the selection, or take it out if it is in it (Ctrl+click).
+    /// Only siblings are selected together: a control elsewhere, or the
+    /// dialog, is selected alone.
+    pub fn toggle(&mut self, sel: Sel) {
+        let (Sel::At(path), Sel::At(first)) = (sel, self.sel) else {
+            self.select(sel);
+            return;
+        };
+        if path.container() != first.container() {
+            self.select(sel);
+            return;
+        }
+        if let Some(i) = self.also.iter().position(|&p| p == path) {
+            self.also.remove(i);
+        } else if path == first {
+            // The first goes; the next one selected takes its place.
+            if self.also.is_empty() {
+                return;
+            }
+            self.sel = Sel::At(self.also.remove(0));
+        } else {
+            self.also.push(path);
+        }
+        self.revision += 1;
+    }
+
+    /// Select the dialog's own controls that lie wholly inside `band` (in
+    /// the frame's inside), in list order; the dialog when there are none.
+    pub fn select_within(&mut self, band: Rect) {
+        let inside: Vec<Place> = (0..self.spec.controls.len())
+            .filter_map(|i| Container::Dialog.at(i))
+            .filter(|&p| {
+                let r = self.rect_of(Sel::At(p));
+                r.a.x >= band.a.x && r.a.y >= band.a.y && r.b.x <= band.b.x && r.b.y <= band.b.y
+            })
+            .collect();
+        if let Some((&first, rest)) = inside.split_first() {
+            self.sel = Sel::At(first);
+            self.also = rest.to_vec();
+        } else {
+            self.sel = Sel::Dialog;
+            self.also.clear();
+        }
+        self.revision += 1;
     }
 
     /// Select the next (or previous) thing in tab order, wrapping.
@@ -509,6 +573,7 @@ impl Design {
         };
         self.redo
             .push((std::mem::replace(&mut self.spec, spec), self.sel));
+        self.also.clear();
         self.sel = sel;
         self.changed();
         true
@@ -520,6 +585,7 @@ impl Design {
         };
         self.undo
             .push((std::mem::replace(&mut self.spec, spec), self.sel));
+        self.also.clear();
         self.sel = sel;
         self.changed();
         true
@@ -589,6 +655,7 @@ impl Design {
         let at = at.min(list.len());
         list.insert(at, control);
         let sel = Sel::At(into.at(at).expect("the container has room"));
+        self.also.clear();
         self.sel = sel;
         self.changed();
         sel
@@ -874,8 +941,12 @@ impl Design {
     }
 
     /// Remove the selected control (with what is inside it), and any label
-    /// link to it. Selects what came before it.
+    /// link to it. Selects what came before it. With others selected, they
+    /// all go.
     pub fn delete(&mut self) -> bool {
+        if !self.also.is_empty() {
+            return self.delete_all();
+        }
         let sel = self.sel;
         let Some(removed) = self.control(sel).cloned() else {
             return false;
@@ -892,10 +963,41 @@ impl Design {
             visit_all(list, &mut |c| gone.push(c.name.clone()));
         }
         unlink(&mut self.spec.controls, &gone);
+        self.also.clear();
         self.sel = if path.index() > 0 {
             Sel::At(path.with_index(path.index() - 1))
         } else {
             path.owner().map_or(Sel::Dialog, Sel::At)
+        };
+        self.changed();
+        true
+    }
+
+    fn delete_all(&mut self) -> bool {
+        let mut paths: Vec<Place> = self.selection().iter().filter_map(|s| s.path()).collect();
+        // From the end of the list, so the indices still to go stay put.
+        paths.sort_by_key(|p| std::cmp::Reverse(p.index()));
+        let Some(&first) = paths.last() else {
+            return false;
+        };
+        self.snapshot();
+        let mut gone = Vec::new();
+        for path in &paths {
+            let list = self
+                .siblings_mut(Sel::At(*path))
+                .expect("a control has siblings");
+            let removed = list.remove(path.index());
+            gone.push(removed.name.clone());
+            for list in removed.child_lists() {
+                visit_all(list, &mut |c| gone.push(c.name.clone()));
+            }
+        }
+        unlink(&mut self.spec.controls, &gone);
+        self.also.clear();
+        self.sel = if first.index() > 0 {
+            Sel::At(first.with_index(first.index() - 1))
+        } else {
+            first.owner().map_or(Sel::Dialog, Sel::At)
         };
         self.changed();
         true
@@ -918,6 +1020,7 @@ impl Design {
         let list = self.siblings_mut(sel).expect("a control has siblings");
         let index = path.index() + 1;
         list.insert(index, copy);
+        self.also.clear();
         self.sel = Sel::At(path.with_index(index));
         self.changed();
         true
@@ -972,12 +1075,40 @@ impl Design {
 
     /// Move the selected control by `(dx, dy)`, kept inside its container.
     /// The dialog does not move: it is placed when it runs.
+    /// With others selected, they all move together, as far as the one
+    /// nearest the edge can.
     pub fn move_by(&mut self, dx: i16, dy: i16) -> bool {
+        if !self.also.is_empty() {
+            return self.move_all_by(dx, dy);
+        }
         let Some(c) = self.selected() else {
             return false;
         };
         let place = (c.x + dx, c.y + dy, c.w, c.h);
         self.set_place(self.sel, place)
+    }
+
+    fn move_all_by(&mut self, mut dx: i16, mut dy: i16) -> bool {
+        let (cw, ch) = self.container_size(self.sel);
+        let all = self.selection();
+        for &sel in &all {
+            let Some(c) = self.control(sel) else {
+                return false;
+            };
+            dx = dx.clamp(-c.x, (cw - c.w - c.x).max(0));
+            dy = dy.clamp(-c.y, (ch - c.h.max(1) - c.y).max(0));
+        }
+        if (dx, dy) == (0, 0) {
+            return false;
+        }
+        self.snapshot();
+        for sel in all {
+            let c = self.control_mut(sel).expect("checked above");
+            c.x += dx;
+            c.y += dy;
+        }
+        self.changed();
+        true
     }
 
     /// Grow or shrink the selection by `(dw, dh)`: a control within its
@@ -1038,6 +1169,7 @@ impl Design {
         };
         self.snapshot();
         self.siblings_mut(sel).expect("checked").swap(index, to);
+        self.also.clear();
         self.sel = Sel::At(path.with_index(to));
         self.changed();
         true
@@ -1089,6 +1221,7 @@ impl Design {
             .map(|&i| old[i].take().expect("a permutation"))
             .collect();
         let at = order.iter().position(|&i| i == path.index()).unwrap_or(0);
+        self.also.clear();
         self.sel = Sel::At(path.with_index(at));
         self.changed();
         true
@@ -1112,6 +1245,7 @@ impl Design {
             && tabs.contains(&sel)
             && sel != tabs
         {
+            self.also.clear();
             self.sel = Sel::At(tabs);
         }
         self.changed();
@@ -1243,6 +1377,7 @@ impl Design {
         list.push(control);
         let index = list.len() - 1;
         let sel = Sel::At(to.at(index).expect("the target has room"));
+        self.also.clear();
         self.sel = sel;
         self.reveal(sel);
         self.changed();

@@ -620,7 +620,11 @@ fn inspector_text(design: &Design) -> String {
             |n| n.to_string_lossy().into_owned(),
         );
     let dirty = if design.dirty { " *" } else { "" };
+    let together = design.selection().len();
     let body = match design.selected() {
+        Some(_) if together > 1 => format!(
+            "{together} controls selected\n\nArrows or a drag: move them together\nDel: delete them\nA click: select one alone"
+        ),
         None => {
             let s = &design.spec;
             format!(
