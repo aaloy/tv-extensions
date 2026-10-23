@@ -19,7 +19,7 @@
 //! - `Form::<T>::for_record(title)`: binds the fields to a struct of yours
 //!   (`input`, `check`, `memo`, `choice`) and validates them.
 //!
-//! See also: DualList, AutoComplete
+//! See also: Form from JSON, DualList
 
 use crate::panel::Panel;
 use turbo_vision::app::Application;

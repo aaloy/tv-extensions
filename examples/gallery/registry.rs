@@ -106,6 +106,15 @@ pub const DEMOS: &[Demo] = &[
         handle: Some(demos::forms::handle),
     },
     Demo {
+        name: "Form from JSON",
+        group: Group::Views,
+        module: "forms::json",
+        source: include_str!("demos/forms_json.rs"),
+        height: 3,
+        build: demos::forms_json::build,
+        handle: Some(demos::forms_json::handle),
+    },
+    Demo {
         name: "ScrollPane",
         group: Group::Views,
         module: "scroll_pane",
