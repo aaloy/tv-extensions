@@ -7,7 +7,7 @@
 //! that built it. That code is the demo's source file, shown as written, so
 //! what you read is what runs.
 //!
-//! Run with: cargo run --example gallery --features native,csv,log,graphics,json
+//! Run with: cargo run --example gallery --features native,csv,log,graphics,dialog
 //! Arrows move through the list; F6 switches to the panel to try a
 //! component (Tab moves between its controls, the text, the links and the
 //! code); F6 again goes back.
@@ -1010,7 +1010,7 @@ mod tests {
     /// The pictures in the docs, one per page: each demo in the gallery on
     /// a 100x30 screen, driven to a moment worth showing, saved under
     /// `docs/assets/captures`. Run it after changing a demo:
-    /// `cargo test --example gallery --features native,csv,log,graphics,json,screenshot -- --ignored captures`
+    /// `cargo test --example gallery --features native,csv,log,graphics,dialog,screenshot -- --ignored captures`
     #[cfg(feature = "screenshot")]
     #[test]
     #[ignore = "writes the docs' pictures"]

@@ -20,7 +20,7 @@ tv-extensions = "0.4"
 ## Component gallery
 
 ```sh
-cargo run --example gallery --features native,csv,log,graphics,json
+cargo run --example gallery --features native,csv,log,graphics,dialog
 ```
 
 Every component, live, beside how it works, its parameters and the code that built it, as in turbo-vision's own gallery. The list on the left is grouped by kind; F6 moves into the panel to try a component, and F6 again goes back. The code shown is the demo's own source file (`examples/gallery/demos/`), so what you read is what runs. The CSV editor and the host-driven demo run a second, host-driven application inside a view of the gallery.
@@ -275,7 +275,7 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
-cargo test --example gallery --features native,csv,log,graphics,json
+cargo test --example gallery --features native,csv,log,graphics,dialog
 cargo clippy --all-features --all-targets -- -D warnings
 sh scripts/check-wasm.sh
 ```

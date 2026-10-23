@@ -23,7 +23,8 @@ Requires turbo-vision 4.1.0.
   custom validators bound by name, and actions on buttons and `on_change`
   bound with `on` that stay, submit or close (`Flow`). `unbound` lists what
   the spec names and no code has bound. Tests in `tests/dialog_spec.rs` and
-  `tests/json_dialog.rs`; guide in `docs/dialog-designer.md`.
+  `tests/json_dialog.rs`; guide in `docs/dialog-designer.md`. Gallery:
+  Dialog from JSON.
 - `examples/dialog_designer`: the dialog designer. The dialog being
   designed is drawn by its real controls; click, drag and resize with the
   mouse or the keyboard, insert any control (Ins or a right click), edit
@@ -33,7 +34,6 @@ Requires turbo-vision 4.1.0.
   actions (Ctrl+G). `examples/dialog_from_json` uses a designed dialog in an
   application.
 - `AutoComplete::set_text`, so code can fill the field.
-
 - `forms::json` (feature `json`): a form described as JSON and answered as
   JSON, for an agent or an MCP tool that needs a person to fill something
   in. `forms::json::run(&mut app, &spec)` builds a record form from the spec

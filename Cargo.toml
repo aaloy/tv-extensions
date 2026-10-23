@@ -195,10 +195,10 @@ required-features = ["native"]
 
 # The component gallery. Its tests (every demo builds and fits, every
 # module has a demo) run with
-# `cargo test --example gallery --features native,csv,log,graphics,json`.
+# `cargo test --example gallery --features native,csv,log,graphics,dialog`.
 [[example]]
 name = "gallery"
-required-features = ["native", "csv", "log", "graphics", "json"]
+required-features = ["native", "csv", "log", "graphics", "dialog"]
 test = true
 
 [lints.clippy]
