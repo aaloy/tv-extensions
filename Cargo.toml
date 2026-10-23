@@ -5,6 +5,7 @@ edition = "2024"
 authors = ["Enzo Lombardi <enzinol@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/aovestdipaperino/tv-extensions"
+homepage = "https://tv.enzolombardi.net/extensions/"
 description = "Extensions for turbo-vision: host-driven applications, ScrollPane, popup menus, a CSV editor, a logging window, Kitty/ANSI graphics, remote input, and SSH"
 keywords = ["tui", "turbo-vision", "wasm"]
 categories = ["command-line-interface", "wasm"]

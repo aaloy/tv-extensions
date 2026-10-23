@@ -8,7 +8,10 @@ This file provides guidance to the agent when working with code in this reposito
 [turbo-vision](https://github.com/aovestdipaperino/turbo-vision-4-rust) —
 host-driven embedding, `ScrollPane`, popup menus, key translation, and the
 feature-gated `csv`, `log`, `graphics`, `remote-input` and `ssh` modules.
-Not a monorepo. The docs site (`website/`, mkdocs) is built from `docs/`.
+Not a monorepo. The pages in `docs/` are published as the Extensions section
+of tv.enzolombardi.net: core's `website/sync_docs.py` copies them from this
+checkout, then core's site is built and deployed. `website/` here only
+previews them locally.
 
 The core crate lives as a sibling checkout at `/Users/enzo/Code/turbo-vision-4-rust`.
 The host-driven hooks this crate builds on (`Backend::is_host_driven`,
@@ -30,7 +33,8 @@ sh scripts/check-wasm.sh                    # wasm32-wasip1 check
 - Examples are feature-gated via `required-features`; `cargo build --examples`
   silently skips most of them. Run one explicitly, e.g.
   `cargo run --example csv_edit --features csv,native`.
-- Docs site: `mkdocs build -f website/mkdocs.yml` (deps in `website/requirements.txt`).
+- Docs preview: `mkdocs build -f website/mkdocs.yml` (deps in `website/requirements.txt`).
+  To publish, run core's `python3 website/sync_docs.py` and deploy core's site.
 - There is no CI. The gate is the global pre-commit hook
   (`core.hooksPath=~/.githooks`): rustfmt on staged `.rs` files plus
   `cargo clippy --workspace --all-targets -- -D warnings`.
