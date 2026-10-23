@@ -984,10 +984,10 @@ pub(crate) fn find_view_mut(dialog: &mut Dialog, id: ViewId) -> Option<&mut (dyn
     if dialog.child_by_id(id).is_some() {
         return dialog.child_by_id_mut(id);
     }
-    let (pane, page) = locate(dialog, id)?;
-    let pane = dialog.group_mut().child_at_mut(pane);
+    let (at, tab) = locate(dialog, id)?;
+    let pane = dialog.group_mut().child_at_mut(at);
     let pane = pane.as_any_mut().downcast_mut::<TabbedPane>()?;
-    pane.page_mut(page)?.child_by_id_mut(id)
+    pane.page_mut(tab)?.child_by_id_mut(id)
 }
 
 /// Where `id` is among the dialog's tab panes: the pane's index in the
@@ -1016,15 +1016,15 @@ pub(crate) fn focus_view(dialog: &mut Dialog, id: ViewId) -> bool {
     if dialog.group_mut().focus_by_view_id(id) {
         return true;
     }
-    let Some((pane, page)) = locate(dialog, id) else {
+    let Some((at, page)) = locate(dialog, id) else {
         return false;
     };
-    let Some(pane_id) = dialog.group().view_id_at(pane) else {
+    let Some(pane_id) = dialog.group().view_id_at(at) else {
         return false;
     };
     if let Some(p) = dialog
         .group_mut()
-        .child_at_mut(pane)
+        .child_at_mut(at)
         .as_any_mut()
         .downcast_mut::<TabbedPane>()
     {
@@ -1033,7 +1033,7 @@ pub(crate) fn focus_view(dialog: &mut Dialog, id: ViewId) -> bool {
     dialog.group_mut().focus_by_view_id(pane_id);
     dialog
         .group_mut()
-        .child_at_mut(pane)
+        .child_at_mut(at)
         .as_any_mut()
         .downcast_mut::<TabbedPane>()
         .and_then(|p| p.page_mut(page))

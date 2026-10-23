@@ -1248,7 +1248,7 @@ mod tests {
         assert_eq!(label(3), "~Z~ip");
     }
 
-    fn radio(extra: Value) -> Value {
+    fn radio(extra: &Value) -> Value {
         let mut field = json!({
             "name": "env", "type": "choice", "widget": "radio",
             "options": ["staging", { "label": "Production", "value": 2 }]
@@ -1263,11 +1263,11 @@ mod tests {
     #[test]
     fn radio_buttons_hold_the_default_and_answer_with_the_options_value() {
         assert_eq!(
-            form(&radio(json!({ "default": 2 }))).read().unwrap(),
+            form(&radio(&json!({ "default": 2 }))).read().unwrap(),
             json!({ "env": 2 })
         );
         assert_eq!(
-            form(&radio(json!({ "default": "staging" })))
+            form(&radio(&json!({ "default": "staging" })))
                 .read()
                 .unwrap(),
             json!({ "env": "staging" })
@@ -1276,14 +1276,14 @@ mod tests {
 
     #[test]
     fn radio_buttons_with_nothing_chosen_are_refused() {
-        let errors = form(&radio(json!({}))).read().expect_err("nothing chosen");
+        let errors = form(&radio(&json!({}))).read().expect_err("nothing chosen");
         assert!(errors.to_string().contains("must be chosen"), "{errors}");
     }
 
     #[test]
     fn the_widget_is_checked() {
         assert_eq!(
-            why(&radio(json!({ "widget": "slider" }))),
+            why(&radio(&json!({ "widget": "slider" }))),
             "fields[0].widget: unknown widget \"slider\"; expected dropdown, radio"
         );
         assert_eq!(
@@ -1291,11 +1291,11 @@ mod tests {
             "fields[0].widget: a text has no choice of widget"
         );
         let many: Vec<String> = (0..33).map(|i| format!("o{i}")).collect();
-        assert!(why(&radio(json!({ "options": many }))).contains("at most 32 options"),);
+        assert!(why(&radio(&json!({ "options": many }))).contains("at most 32 options"),);
         // The dropdown takes as many as you like.
         let many: Vec<String> = (0..40).map(|i| format!("o{i}")).collect();
         assert!(
-            JsonForm::from_spec(&radio(json!({ "widget": "dropdown", "options": many }))).is_ok()
+            JsonForm::from_spec(&radio(&json!({ "widget": "dropdown", "options": many }))).is_ok()
         );
     }
 
@@ -1365,13 +1365,13 @@ mod tests {
 
     // ---- more widgets and layout ----
 
-    fn fields(list: Value) -> Value {
+    fn fields(list: &Value) -> Value {
         json!({ "fields": list })
     }
 
     #[test]
     fn spinners_and_sliders_start_on_their_default_or_min() {
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "name": "a", "type": "integer", "widget": "spinner", "min": 1, "max": 9 },
             { "name": "b", "type": "integer", "widget": "slider", "min": 0, "max": 100, "default": 40 },
             { "name": "c", "type": "integer", "widget": "input" }
@@ -1390,7 +1390,7 @@ mod tests {
                 .as_object_mut()
                 .unwrap()
                 .extend(extra.as_object().unwrap().clone());
-            why(&fields(json!([field])))
+            why(&fields(&json!([field])))
         };
         assert_eq!(
             bad(json!({})),
@@ -1406,7 +1406,7 @@ mod tests {
         );
         assert_eq!(
             why(&fields(
-                json!([{ "name": "a", "type": "integer", "widget": "dial" }])
+                &json!([{ "name": "a", "type": "integer", "widget": "dial" }])
             )),
             "fields[0].widget: unknown widget \"dial\"; expected input, spinner, slider"
         );
@@ -1414,27 +1414,27 @@ mod tests {
 
     #[test]
     fn a_multichoice_answers_a_list_in_the_options_order() {
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "name": "tags", "type": "multichoice", "options": ["a", "b", { "label": "C", "value": 3 }],
               "default": [3, "a"] }
         ]));
         assert_eq!(form(&spec).read().unwrap(), json!({ "tags": ["a", 3] }));
-        let none = fields(json!([{ "name": "t", "type": "multichoice", "options": ["a"] }]));
+        let none = fields(&json!([{ "name": "t", "type": "multichoice", "options": ["a"] }]));
         assert_eq!(form(&none).read().unwrap(), json!({ "t": [] }));
     }
 
     #[test]
     fn a_required_multichoice_needs_one_ticked() {
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "name": "t", "type": "multichoice", "options": ["a", "b"], "required": true }
         ]));
         let errors = form(&spec).read().expect_err("none ticked");
         assert!(errors.to_string().contains("at least one"), "{errors}");
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "name": "t", "type": "multichoice", "options": ["a", "b"], "required": true, "default": ["b"] }
         ]));
         assert_eq!(form(&spec).read().unwrap(), json!({ "t": ["b"] }));
-        let bad = fields(json!([
+        let bad = fields(&json!([
             { "name": "t", "type": "multichoice", "options": ["a"], "default": ["z"] }
         ]));
         assert!(why(&bad).starts_with("fields[0].default: \"z\" is not one of"));
@@ -1442,7 +1442,7 @@ mod tests {
 
     #[test]
     fn groups_and_rows_nest_and_answers_stay_flat() {
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "type": "note", "text": "Fill in\nboth parts" },
             { "type": "group", "label": "Person", "fields": [
                 { "name": "first", "type": "text", "default": "Ada" },
@@ -1464,7 +1464,7 @@ mod tests {
 
     #[test]
     fn names_stay_unique_across_groups_and_hot_keys_across_rows() {
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "name": "a", "type": "text" },
             { "type": "group", "fields": [{ "name": "a", "type": "text" }] }
         ]));
@@ -1474,43 +1474,43 @@ mod tests {
     #[test]
     fn layout_items_are_checked() {
         assert_eq!(
-            why(&fields(json!([{ "type": "group" }]))),
+            why(&fields(&json!([{ "type": "group" }]))),
             "fields[0].fields: a list of fields is required"
         );
         assert_eq!(
-            why(&fields(json!([{ "type": "row", "fields": [] }]))),
+            why(&fields(&json!([{ "type": "row", "fields": [] }]))),
             "fields[0].fields: a list of fields is required"
         );
         assert_eq!(
             why(&fields(
-                json!([{ "type": "row", "fields": [{ "name": "m", "type": "memo" }] }])
+                &json!([{ "type": "row", "fields": [{ "name": "m", "type": "memo" }] }])
             )),
             "fields[0].fields[0].type: a memo cannot be in a row; put it outside"
         );
         assert_eq!(
             why(&fields(
-                json!([{ "type": "row", "fields": [{ "type": "row", "fields": [] }] }])
+                &json!([{ "type": "row", "fields": [{ "type": "row", "fields": [] }] }])
             )),
             "fields[0].fields[0].type: a row cannot be in a row; put it outside"
         );
         assert_eq!(
-            why(&fields(json!([{ "type": "note" }]))),
+            why(&fields(&json!([{ "type": "note" }]))),
             "fields[0].text: a note needs its text"
         );
         assert!(
             why(&fields(
-                json!([{ "type": "note", "text": "x", "name": "n" }])
+                &json!([{ "type": "note", "text": "x", "name": "n" }])
             ))
             .starts_with("fields[0].name: unknown key; expected one of type, text")
         );
         assert_eq!(
             why(&fields(
-                json!([{ "name": "a", "type": "text", "fields": [] }])
+                &json!([{ "name": "a", "type": "text", "fields": [] }])
             )),
             "fields[0].fields: a text has no fields"
         );
         assert!(
-            why(&fields(json!([{ "name": "a", "type": "text" }]))
+            why(&fields(&json!([{ "name": "a", "type": "text" }]))
                 .as_object()
                 .map(|o| {
                     let mut o = o.clone();
@@ -1525,7 +1525,7 @@ mod tests {
     #[test]
     fn labels_above_and_right_aligned_build() {
         for (labels, align) in [("above", "left"), ("left", "right")] {
-            let mut spec = fields(json!([{ "name": "a", "type": "text", "default": "x" }]));
+            let mut spec = fields(&json!([{ "name": "a", "type": "text", "default": "x" }]));
             spec["labels"] = json!(labels);
             spec["label_align"] = json!(align);
             assert_eq!(form(&spec).read().unwrap(), json!({ "a": "x" }));
@@ -1534,7 +1534,7 @@ mod tests {
 
     #[test]
     fn hot_keys_in_rows_and_groups_do_not_repeat() {
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "name": "street", "type": "text" },
             { "type": "row", "fields": [
                 { "name": "stop", "type": "text" },
@@ -1546,23 +1546,23 @@ mod tests {
 
     // ---- masks ----
 
-    fn masked(extra: Value) -> Value {
+    fn masked(extra: &Value) -> Value {
         let mut field = json!({ "name": "phone", "type": "text", "mask": "(###) ###-####" });
         field
             .as_object_mut()
             .unwrap()
             .extend(extra.as_object().unwrap().clone());
-        fields(json!([field]))
+        fields(&json!([field]))
     }
 
     #[test]
     fn a_masked_text_accepts_what_fits_and_refuses_the_rest() {
-        let ok = masked(json!({ "default": "(555) 123-4567" }));
+        let ok = masked(&json!({ "default": "(555) 123-4567" }));
         assert_eq!(
             form(&ok).read().unwrap(),
             json!({ "phone": "(555) 123-4567" })
         );
-        let bad = masked(json!({ "default": "555" }));
+        let bad = masked(&json!({ "default": "555" }));
         let errors = form(&bad).read().expect_err("does not fit the mask");
         assert!(
             errors.to_string().contains("must look like (###) ###-####"),
@@ -1573,10 +1573,10 @@ mod tests {
     #[test]
     fn an_empty_masked_text_is_fine_unless_required() {
         assert_eq!(
-            form(&masked(json!({}))).read().unwrap(),
+            form(&masked(&json!({}))).read().unwrap(),
             json!({ "phone": "" })
         );
-        let errors = form(&masked(json!({ "required": true })))
+        let errors = form(&masked(&json!({ "required": true })))
             .read()
             .expect_err("required");
         assert!(errors.to_string().contains("is required"), "{errors}");
@@ -1585,16 +1585,16 @@ mod tests {
     #[test]
     fn a_mask_is_checked_where_it_is_written() {
         assert_eq!(
-            why(&masked(json!({ "mask": "" }))),
+            why(&masked(&json!({ "mask": "" }))),
             "fields[0].mask: must not be empty"
         );
         assert_eq!(
-            why(&masked(json!({ "max_len": 5 }))),
+            why(&masked(&json!({ "max_len": 5 }))),
             "fields[0].max_len: a masked text is as long as its mask"
         );
         assert_eq!(
             why(&fields(
-                json!([{ "name": "n", "type": "integer", "mask": "##" }])
+                &json!([{ "name": "n", "type": "integer", "mask": "##" }])
             )),
             "fields[0].mask: only a text can have a mask"
         );
@@ -1602,13 +1602,13 @@ mod tests {
 
     // ---- tabs ----
 
-    fn tabs(pages: Value) -> Value {
-        fields(json!([{ "type": "tabs", "pages": pages }]))
+    fn tabs(pages: &Value) -> Value {
+        fields(&json!([{ "type": "tabs", "pages": pages }]))
     }
 
     #[test]
     fn tab_pages_hold_fields_and_answers_stay_flat() {
-        let spec = tabs(json!([
+        let spec = tabs(&json!([
             { "label": "One", "fields": [
                 { "name": "a", "type": "text", "default": "x" },
                 { "type": "group", "label": "G", "fields": [{ "name": "b", "type": "integer", "default": 2 }] }
@@ -1625,7 +1625,7 @@ mod tests {
 
     #[test]
     fn a_required_field_on_any_page_is_checked() {
-        let spec = tabs(json!([
+        let spec = tabs(&json!([
             { "label": "One", "fields": [{ "name": "a", "type": "text" }] },
             { "label": "Two", "fields": [{ "name": "b", "type": "text", "required": true }] }
         ]));
@@ -1636,26 +1636,26 @@ mod tests {
     #[test]
     fn tabs_are_checked() {
         assert_eq!(
-            why(&fields(json!([{ "type": "tabs" }]))),
+            why(&fields(&json!([{ "type": "tabs" }]))),
             "fields[0].pages: a list of pages is required"
         );
         assert_eq!(
             why(&tabs(
-                json!([{ "fields": [{ "name": "a", "type": "text" }] }])
+                &json!([{ "fields": [{ "name": "a", "type": "text" }] }])
             )),
             "fields[0].pages[0].label: a page needs a label"
         );
         assert_eq!(
-            why(&tabs(json!([{ "label": "One" }]))),
+            why(&tabs(&json!([{ "label": "One" }]))),
             "fields[0].pages[0].fields: a list of fields is required"
         );
         assert!(
             why(&tabs(
-                json!([{ "label": "One", "fields": [], "name": "x" }])
+                &json!([{ "label": "One", "fields": [], "name": "x" }])
             ))
             .starts_with("fields[0].pages[0].name: unknown key")
         );
-        let nested = tabs(json!([{ "label": "One", "fields": [
+        let nested = tabs(&json!([{ "label": "One", "fields": [
             { "type": "tabs", "pages": [{ "label": "Inner", "fields": [{ "name": "a", "type": "text" }] }] }
         ] }]));
         assert_eq!(
@@ -1663,7 +1663,7 @@ mod tests {
             "fields[0].pages[0].fields[0].type: tabs cannot be inside tabs"
         );
         let in_row =
-            fields(json!([{ "type": "row", "fields": [{ "type": "tabs", "pages": [] }] }]));
+            fields(&json!([{ "type": "row", "fields": [{ "type": "tabs", "pages": [] }] }]));
         assert_eq!(
             why(&in_row),
             "fields[0].fields[0].type: a tabs cannot be in a row; put it outside"
@@ -1672,7 +1672,7 @@ mod tests {
 
     #[test]
     fn two_tab_sets_in_one_form_are_independent() {
-        let spec = fields(json!([
+        let spec = fields(&json!([
             { "type": "tabs", "pages": [{ "label": "A", "fields": [{ "name": "a", "type": "text", "default": "1" }] }] },
             { "type": "tabs", "pages": [{ "label": "B", "fields": [{ "name": "b", "type": "text", "default": "2" }] }] }
         ]));

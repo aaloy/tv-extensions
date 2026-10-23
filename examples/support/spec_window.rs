@@ -23,7 +23,11 @@ fn layout(value: &Value, indent: usize, width: usize, out: &mut Vec<String>, lea
         return;
     }
     let (open, close, items): (_, _, Vec<(Option<&str>, &Value)>) = match value {
-        Value::Object(map) => ('{', '}', map.iter().map(|(k, v)| (Some(k.as_str()), v)).collect()),
+        Value::Object(map) => (
+            '{',
+            '}',
+            map.iter().map(|(k, v)| (Some(k.as_str()), v)).collect(),
+        ),
         Value::Array(list) => ('[', ']', list.iter().map(|v| (None, v)).collect()),
         _ => {
             out.push(format!("{pad}{lead}{one}"));
@@ -33,7 +37,9 @@ fn layout(value: &Value, indent: usize, width: usize, out: &mut Vec<String>, lea
     out.push(format!("{pad}{lead}{open}"));
     for (i, (key, item)) in items.iter().enumerate() {
         let comma = if i + 1 < items.len() { "," } else { "" };
-        let key = key.map(|k| format!("{}: ", Value::from(k))).unwrap_or_default();
+        let key = key
+            .map(|k| format!("{}: ", Value::from(k)))
+            .unwrap_or_default();
         layout(item, indent + 2, width, out, &key);
         if let Some(last) = out.last_mut() {
             last.push_str(comma);

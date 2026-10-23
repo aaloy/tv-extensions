@@ -1544,11 +1544,11 @@ mod tests {
 
         e.load(ada());
         assert!(!label_error(&e, ids.name), "loading clears them");
-        assert!(
+        assert_eq!(
             view_ref::<ErrorLine>(e.dialog(), e.error_line)
                 .unwrap()
-                .text
-                .is_empty()
+                .text,
+            ""
         );
     }
 
