@@ -279,6 +279,21 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              the way to reach one hidden under another or on a tab page.",
         ),
         topic(
+            "Arranging",
+            "The Arrange menu lines up the selected controls, as drawing\n\
+             programs do. With several selected, Align left, right, top or\n\
+             bottom edges moves them to the edge of the box around them, and\n\
+             Center horizontally or vertically to its middle. With one\n\
+             control alone they use its container instead: Center\n\
+             horizontally centres it in the dialog, or in its group box or\n\
+             tab page.\n\
+             \n\
+             Same width and Same height give them all the size of the first\n\
+             one selected. Distribute across or down spaces three or more\n\
+             evenly: the outermost two stay, and the gaps between them all\n\
+             become equal. Each is one undo step.",
+        ),
+        topic(
             "Containers",
             "A group box draws a frame with a title around other controls. A\n\
              tabs control holds pages; each page has its own controls. Both\n\
@@ -584,7 +599,7 @@ mod tests {
     #[test]
     fn the_contents_lists_the_topics_then_every_control() {
         let all = topics(&crate::keys::PC);
-        assert_eq!(all.len(), 9 + KINDS.len());
+        assert_eq!(all.len(), 10 + KINDS.len());
         assert!(
             all.iter()
                 .all(|t| !t.title.is_empty() && !t.text.is_empty())

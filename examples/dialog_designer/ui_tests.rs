@@ -862,3 +862,119 @@ fn controls_moved_together_stop_at_the_edge_together() {
     assert_eq!(xs, [0, 0, 30]);
     assert!(!design.move_by(-1, 0));
 }
+
+/// [`three_inputs`] with all three selected.
+fn all_three() -> Design {
+    let mut design = three_inputs();
+    design.select(Sel::top(0));
+    design.toggle(Sel::top(1));
+    design.toggle(Sel::top(2));
+    design
+}
+
+fn xs(design: &Design) -> Vec<i16> {
+    design.spec.controls.iter().map(|c| c.x).collect()
+}
+
+fn ys(design: &Design) -> Vec<i16> {
+    design.spec.controls.iter().map(|c| c.y).collect()
+}
+
+#[test]
+fn align_lines_the_selection_up_on_the_box_around_it() {
+    // The box runs from 5 to 40 across and from 2 to 9 down.
+    let mut design = all_three();
+    assert!(design.align(Arrange::Right));
+    assert_eq!(xs(&design), [30, 30, 30]);
+    assert!(
+        !design.align(Arrange::Left),
+        "the box is where they are now"
+    );
+
+    let mut design = all_three();
+    assert!(design.align(Arrange::Left));
+    assert_eq!(xs(&design), [5, 5, 5]);
+    let mut design = all_three();
+    assert!(design.align(Arrange::Center));
+    assert_eq!(xs(&design), [17, 17, 17]);
+    let mut design = all_three();
+    assert!(design.align(Arrange::Top));
+    assert_eq!(ys(&design), [2, 2, 2]);
+    let mut design = all_three();
+    assert!(design.align(Arrange::Bottom));
+    assert_eq!(ys(&design), [8, 8, 8]);
+    let mut design = all_three();
+    assert!(design.align(Arrange::Middle));
+    assert_eq!(ys(&design), [5, 5, 5]);
+}
+
+#[test]
+fn one_control_alone_aligns_to_its_container() {
+    // The default dialog is 50 x 14: 48 x 12 inside its frame.
+    let mut design = three_inputs();
+    design.select(Sel::top(0));
+    assert!(design.align(Arrange::Center));
+    assert!(design.align(Arrange::Middle));
+    let c = &design.spec.controls[0];
+    assert_eq!((c.x, c.y), (19, 5));
+    assert!(design.align(Arrange::Right));
+    assert!(design.align(Arrange::Bottom));
+    let c = &design.spec.controls[0];
+    assert_eq!((c.x, c.y), (38, 11));
+    assert!(!design.align(Arrange::Right), "already there");
+}
+
+#[test]
+fn same_width_and_height_follow_the_first_selected() {
+    let mut design = three_inputs();
+    design.set_place(Sel::top(1), (5, 5, 16, 2));
+    design.select(Sel::top(1));
+    design.toggle(Sel::top(0));
+    design.toggle(Sel::top(2));
+    assert!(design.same_size(true));
+    let sizes: Vec<(i16, i16)> = design.spec.controls.iter().map(|c| (c.w, c.h)).collect();
+    assert_eq!(sizes, [(16, 1), (16, 2), (16, 1)]);
+    assert!(design.same_size(false));
+    let heights: Vec<i16> = design.spec.controls.iter().map(|c| c.h).collect();
+    assert_eq!(heights, [2, 2, 2]);
+}
+
+#[test]
+fn distribute_makes_the_gaps_equal_and_keeps_the_outermost() {
+    let mut design = three_inputs();
+    design.set_place(Sel::top(1), (12, 3, 10, 1));
+    let mut design = {
+        design.select(Sel::top(0));
+        design.toggle(Sel::top(1));
+        design.toggle(Sel::top(2));
+        design
+    };
+    // Down: rows 2, 3 and 8; 6 rows between them, 3 a gap.
+    assert!(design.distribute(false));
+    assert_eq!(ys(&design), [2, 5, 8]);
+    // Across: 5 to 40 holds 30 columns of input and 5 of gap: 3 then 2.
+    assert!(design.distribute(true));
+    assert_eq!(xs(&design), [5, 18, 30]);
+    assert!(!design.distribute(true), "already even");
+}
+
+#[test]
+fn same_size_and_distribute_need_enough_controls() {
+    let mut design = three_inputs();
+    design.select(Sel::top(0));
+    assert!(!design.same_size(true));
+    design.toggle(Sel::top(1));
+    assert!(!design.distribute(true));
+    design.select(Sel::Dialog);
+    assert!(!design.align(Arrange::Left));
+}
+
+#[test]
+fn the_arrange_menu_aligns_and_undoes_in_one_step() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, all_three());
+    command(&mut app, &mut designer, CM_ALIGN + 1); // right edges
+    assert_eq!(xs(&designer.design.borrow()), [30, 30, 30]);
+    command(&mut app, &mut designer, CM_UNDO);
+    assert_eq!(xs(&designer.design.borrow()), [5, 5, 30]);
+}

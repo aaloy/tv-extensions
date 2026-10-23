@@ -138,6 +138,20 @@ impl Container {
     }
 }
 
+/// Where Arrange lines the selection up: to the edges or the middle of the
+/// box around the controls selected, or of the container for one alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Arrange {
+    Left,
+    Right,
+    /// The middle, across.
+    Center,
+    Top,
+    Bottom,
+    /// The middle, down.
+    Middle,
+}
+
 /// What is selected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sel {
@@ -1106,6 +1120,130 @@ impl Design {
             let c = self.control_mut(sel).expect("checked above");
             c.x += dx;
             c.y += dy;
+        }
+        self.changed();
+        true
+    }
+
+    /// Line the selected controls up on `how`: to the box around them, or
+    /// for one control alone, to its container (so Center centres it in the
+    /// dialog). One undo step; `false` when nothing moved.
+    pub fn align(&mut self, how: Arrange) -> bool {
+        let all = self.selection();
+        let Some(rects) = self.places_of(&all) else {
+            return false;
+        };
+        let (cw, ch) = self.container_size(self.sel);
+        let (left, top, right, bottom) = if rects.len() == 1 {
+            (0, 0, cw, ch)
+        } else {
+            rects.iter().fold(
+                (i16::MAX, i16::MAX, i16::MIN, i16::MIN),
+                |(l, t, r, b), &(x, y, w, h)| (l.min(x), t.min(y), r.max(x + w), b.max(y + h)),
+            )
+        };
+        let moved: Vec<(i16, i16)> = rects
+            .iter()
+            .map(|&(x, y, w, h)| match how {
+                Arrange::Left => (left, y),
+                Arrange::Right => (right - w, y),
+                Arrange::Center => (left + (right - left - w) / 2, y),
+                Arrange::Top => (x, top),
+                Arrange::Bottom => (x, bottom - h),
+                Arrange::Middle => (x, top + (bottom - top - h) / 2),
+            })
+            .collect();
+        self.place_all(&all, &moved, None)
+    }
+
+    /// Give the selected controls the width (`across`) or the height of the
+    /// first one selected. Needs two or more.
+    pub fn same_size(&mut self, across: bool) -> bool {
+        let all = self.selection();
+        let Some(rects) = self.places_of(&all) else {
+            return false;
+        };
+        if rects.len() < 2 {
+            return false;
+        }
+        let (_, _, w, h) = rects[0];
+        let at: Vec<(i16, i16)> = rects.iter().map(|&(x, y, _, _)| (x, y)).collect();
+        let sizes: Vec<(i16, i16)> = rects
+            .iter()
+            .map(|&(_, _, cw, ch)| if across { (w, ch) } else { (cw, h) })
+            .collect();
+        self.place_all(&all, &at, Some(&sizes))
+    }
+
+    /// Space the selected controls evenly, across or down: the first and
+    /// the last stay, the others go so the gaps between them are equal.
+    /// Needs three or more.
+    pub fn distribute(&mut self, across: bool) -> bool {
+        let all = self.selection();
+        let Some(rects) = self.places_of(&all) else {
+            return false;
+        };
+        let n = rects.len();
+        if n < 3 {
+            return false;
+        }
+        // Start and length along the axis, in order along it.
+        let span = |&(x, y, w, h): &(i16, i16, i16, i16)| if across { (x, w) } else { (y, h) };
+        let mut order: Vec<usize> = (0..n).collect();
+        order.sort_by_key(|&i| span(&rects[i]).0);
+        let (first, _) = span(&rects[order[0]]);
+        let (last, last_len) = span(&rects[order[n - 1]]);
+        let lengths: i16 = order.iter().map(|&i| span(&rects[i]).1).sum();
+        let room = last + last_len - first - lengths;
+        let gaps = i16::try_from(n - 1).unwrap_or(i16::MAX);
+        let mut moved: Vec<(i16, i16)> = rects.iter().map(|&(x, y, _, _)| (x, y)).collect();
+        let mut at = first;
+        for (k, &i) in order.iter().enumerate() {
+            let k = i16::try_from(k).unwrap_or(i16::MAX);
+            moved[i] = if across {
+                (at, rects[i].1)
+            } else {
+                (rects[i].0, at)
+            };
+            // The cells left over go to the first gaps, one each.
+            at += span(&rects[i]).1 + room / gaps + i16::from(k < room % gaps);
+        }
+        self.place_all(&all, &moved, None)
+    }
+
+    /// `(x, y, w, h)` of each of `all`, a control taking at least one row;
+    /// `None` when one of them is the dialog.
+    fn places_of(&self, all: &[Sel]) -> Option<Vec<(i16, i16, i16, i16)>> {
+        all.iter()
+            .map(|&sel| self.control(sel).map(|c| (c.x, c.y, c.w, c.h.max(1))))
+            .collect()
+    }
+
+    /// Put each of `all` at its corner in `at` (and size in `sizes`), kept
+    /// inside the container, as one undo step. `false` when nothing changed.
+    fn place_all(&mut self, all: &[Sel], at: &[(i16, i16)], sizes: Option<&[(i16, i16)]>) -> bool {
+        let (cw, ch) = self.container_size(self.sel);
+        let mut changed = Vec::new();
+        for (k, &sel) in all.iter().enumerate() {
+            let Some(current) = self.control(sel) else {
+                return false;
+            };
+            let mut placed = current.clone();
+            (placed.x, placed.y) = at[k];
+            if let Some(sizes) = sizes {
+                (placed.w, placed.h) = sizes[k];
+            }
+            fit(&mut placed, cw, ch);
+            if placed != *current {
+                changed.push((sel, placed));
+            }
+        }
+        if changed.is_empty() {
+            return false;
+        }
+        self.snapshot();
+        for (sel, placed) in changed {
+            *self.control_mut(sel).expect("checked above") = placed;
         }
         self.changed();
         true

@@ -24,7 +24,7 @@ mod tree;
 
 #[cfg(test)]
 use model::Place;
-use model::{Design, KINDS, SECTION_ENDS, SECTION_NAMES, Sel, section};
+use model::{Arrange, Design, KINDS, SECTION_ENDS, SECTION_NAMES, Sel, section};
 use serde_json::Value;
 use std::cell::RefCell;
 use std::fmt::Write as _;
@@ -84,6 +84,21 @@ const CM_SET_ORDER: CommandId = CM_USER + 25;
 const CM_HELP_ON: CommandId = CM_USER + 26;
 const CM_HELP_CONTENTS: CommandId = CM_USER + 27;
 const CM_TUTORIAL: CommandId = CM_USER + 28;
+/// Arrange: the alignments in [`ALIGNMENTS`]' order, then same width,
+/// same height, distribute across, distribute down.
+const CM_ALIGN: CommandId = CM_USER + 30;
+const CM_SAME_WIDTH: CommandId = CM_USER + 36;
+const CM_SAME_HEIGHT: CommandId = CM_USER + 37;
+const CM_DISTRIBUTE_ACROSS: CommandId = CM_USER + 38;
+const CM_DISTRIBUTE_DOWN: CommandId = CM_USER + 39;
+const ALIGNMENTS: [Arrange; 6] = [
+    Arrange::Left,
+    Arrange::Right,
+    Arrange::Center,
+    Arrange::Top,
+    Arrange::Bottom,
+    Arrange::Middle,
+];
 /// `CM_MOVE_TO + i` moves the selection to the i-th target of the move menu.
 const CM_MOVE_TO: CommandId = CM_USER + 100;
 /// `CM_INSERT + i` inserts `KINDS[i]`.
@@ -548,6 +563,23 @@ impl AppHandler for Designer {
                     d.move_selected(to);
                 }
             }
+            CM_SAME_WIDTH => {
+                design.borrow_mut().same_size(true);
+            }
+            CM_SAME_HEIGHT => {
+                design.borrow_mut().same_size(false);
+            }
+            CM_DISTRIBUTE_ACROSS => {
+                design.borrow_mut().distribute(true);
+            }
+            CM_DISTRIBUTE_DOWN => {
+                design.borrow_mut().distribute(false);
+            }
+            c if (CM_ALIGN..CM_ALIGN + 6).contains(&c) => {
+                design
+                    .borrow_mut()
+                    .align(ALIGNMENTS[usize::from(c - CM_ALIGN)]);
+            }
             CM_EARLIER => {
                 design.borrow_mut().reorder(-1);
             }
@@ -623,7 +655,7 @@ fn inspector_text(design: &Design) -> String {
     let together = design.selection().len();
     let body = match design.selected() {
         Some(_) if together > 1 => format!(
-            "{together} controls selected\n\nArrows or a drag: move them together\nDel: delete them\nA click: select one alone"
+            "{together} controls selected\n\nArrows or a drag: move them together\nArrange: align, size or space them\nDel: delete them\nA click: select one alone"
         ),
         None => {
             let s = &design.spec;
@@ -1135,6 +1167,23 @@ fn menu_bar(width: i16) -> MenuBar {
             MenuItem::separator(),
             item("~M~ove to container...", CM_MOVE_MENU, Some(k.move_to)),
             item("~S~et tab order...", CM_SET_ORDER, Some(k.set_order)),
+        ]),
+    ));
+    bar.add_submenu(SubMenu::new(
+        "~A~rrange",
+        Menu::from_items(vec![
+            item("Align ~l~eft edges", CM_ALIGN, None),
+            item("Align ~r~ight edges", CM_ALIGN + 1, None),
+            item("Center ~h~orizontally", CM_ALIGN + 2, None),
+            item("Align ~t~op edges", CM_ALIGN + 3, None),
+            item("Align ~b~ottom edges", CM_ALIGN + 4, None),
+            item("Center ~v~ertically", CM_ALIGN + 5, None),
+            MenuItem::separator(),
+            item("Same ~w~idth", CM_SAME_WIDTH, None),
+            item("Same h~e~ight", CM_SAME_HEIGHT, None),
+            MenuItem::separator(),
+            item("Distribute ~a~cross", CM_DISTRIBUTE_ACROSS, None),
+            item("Distribute d~o~wn", CM_DISTRIBUTE_DOWN, None),
         ]),
     ));
     // Short, so every entry can be clicked on any screen: the full list is

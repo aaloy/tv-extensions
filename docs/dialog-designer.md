@@ -136,6 +136,22 @@ the edge can. A plain click on one selects it alone. Many macOS
 terminals turn Ctrl+click into a right click, and keep Shift+click for
 selecting text; Alt+click (Option) or the band works there.
 
+### Arranging
+
+The Arrange menu lines the selection up, as drawing programs do:
+
+| Item | With several selected | With one alone |
+|------|-----------------------|----------------|
+| Align left / right edges | to the left or right of the box around them | to the container's left or right |
+| Center horizontally | to the middle of that box, across | centred across the container |
+| Align top / bottom edges | to its top or bottom | to the container's top or bottom |
+| Center vertically | to its middle, down | centred down the container |
+| Same width / Same height | the size of the first one selected | |
+| Distribute across / down | three or more spaced evenly; the outermost two stay | |
+
+The container is the dialog, a group box or a tab page. Each item is one
+undo step, and keeps the controls inside their container.
+
 ### Inserting
 
 A new control goes after the selected one in tab order, just below it, and
