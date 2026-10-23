@@ -978,3 +978,77 @@ fn the_arrange_menu_aligns_and_undoes_in_one_step() {
     command(&mut app, &mut designer, CM_UNDO);
     assert_eq!(xs(&designer.design.borrow()), [5, 5, 30]);
 }
+
+/// A group box and a tab pane, each holding two inputs, 10 wide.
+fn containers_design() -> Design {
+    let spec = DialogSpec::from_json(
+        r#"{ "title": "C", "width": 70, "height": 18, "controls": [
+            { "type": "group_box", "x": 1, "y": 1, "w": 30, "h": 10, "title": "Box", "controls": [
+                { "type": "input", "name": "a", "x": 2, "y": 1, "w": 10, "h": 1 },
+                { "type": "input", "name": "b", "x": 2, "y": 4, "w": 10, "h": 1 }
+            ] },
+            { "type": "tabs", "x": 33, "y": 1, "w": 34, "h": 12, "pages": [
+                { "title": "~O~ne", "controls": [
+                    { "type": "input", "name": "c", "x": 2, "y": 1, "w": 10, "h": 1 },
+                    { "type": "input", "name": "d", "x": 2, "y": 4, "w": 10, "h": 1 }
+                ] }
+            ] }
+        ] }"#,
+    )
+    .unwrap();
+    Design::new(spec, None)
+}
+
+/// Where control `name` is, inside the dialog's frame.
+fn rect_named(designer: &Designer, name: &str) -> Rect {
+    let design = designer.design.borrow();
+    let sel = design
+        .order()
+        .into_iter()
+        .find(|&s| design.control(s).is_some_and(|c| c.name == name))
+        .unwrap();
+    design.rect_of(sel)
+}
+
+fn names_selected(designer: &Designer) -> Vec<String> {
+    let design = designer.design.borrow();
+    design
+        .selection()
+        .into_iter()
+        .filter_map(|s| design.control(s).map(|c| c.name.clone()))
+        .collect()
+}
+
+#[test]
+fn ctrl_click_selects_several_in_a_group_box_and_on_a_tab_page() {
+    for (one, two) in [("a", "b"), ("c", "d")] {
+        let mut app = app();
+        let mut designer = open_designer(&mut app, containers_design());
+        let first = rect_named(&designer, one).a;
+        let second = rect_named(&designer, two).a;
+        let first = on_surface(&app, &designer, Point::new(first.x + 1, first.y));
+        let second = on_surface(&app, &designer, Point::new(second.x + 1, second.y));
+        mouse(&mut app, &mut designer, EventType::MouseDown, first);
+        mouse(&mut app, &mut designer, EventType::MouseUp, first);
+        ctrl_click(&mut app, &mut designer, second);
+        assert_eq!(names_selected(&designer), [one, two]);
+    }
+}
+
+#[test]
+fn a_band_selects_several_in_a_group_box_and_on_a_tab_page() {
+    for (one, two) in [("a", "b"), ("c", "d")] {
+        let mut app = app();
+        let mut designer = open_designer(&mut app, containers_design());
+        let first = rect_named(&designer, one);
+        let second = rect_named(&designer, two);
+        // From the empty space left of and above the first, inside the
+        // container, to past the second.
+        let from = on_surface(&app, &designer, Point::new(first.a.x - 1, first.a.y - 1));
+        let to = on_surface(&app, &designer, Point::new(second.b.x + 1, second.b.y));
+        mouse(&mut app, &mut designer, EventType::MouseDown, from);
+        mouse(&mut app, &mut designer, EventType::MouseMove, to);
+        mouse(&mut app, &mut designer, EventType::MouseUp, to);
+        assert_eq!(names_selected(&designer), [one, two]);
+    }
+}

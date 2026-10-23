@@ -6,7 +6,7 @@
 //! Ctrl+click (or Shift or Alt) adds a control to the selection, and a band
 //! dragged over the dialog selects what it covers: they move together.
 
-use crate::model::{Design, Sel};
+use crate::model::{Container, Design, Sel};
 use std::cell::RefCell;
 use std::rc::Rc;
 use turbo_vision::core::command::CommandId;
@@ -45,8 +45,9 @@ enum Drag {
     /// Moving the whole surface on the desktop, held at `grab` (in the
     /// surface's own space) from its corner.
     Canvas { grab: Point },
-    /// Dragging a band over the dialog from `from` (inside the frame).
-    Band { from: Point },
+    /// Dragging a band from `from` (inside the frame) over the empty space
+    /// of `container`: the dialog, a group box or a tab page.
+    Band { from: Point, container: Container },
 }
 
 /// The surface: a view on the desktop exactly as big as the dialog.
@@ -217,17 +218,23 @@ impl Surface {
             Self::send(event, self.commands.properties);
             return;
         }
-        if sel == Sel::Dialog {
-            // Nothing there: a band dragged from here selects what it covers.
-            design.select(Sel::Dialog);
-            self.drag = Some(Drag::Band { from: inner });
+        let adding = event
+            .key_modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::SHIFT | KeyModifiers::ALT);
+        if let Some(container) = design.space_at(sel, inner)
+            && !(adding && sel != Sel::Dialog)
+        {
+            // Empty space: a band dragged from here selects what it covers
+            // in that container; a click alone selects the container.
+            design.select(sel);
+            self.drag = Some(Drag::Band {
+                from: inner,
+                container,
+            });
             self.set_state_flag(State::DRAGGING, true);
             event.clear();
             return;
         }
-        let adding = event
-            .key_modifiers
-            .intersects(KeyModifiers::CONTROL | KeyModifiers::SHIFT | KeyModifiers::ALT);
         if adding {
             design.toggle(sel);
             if !design.is_selected(sel) {
@@ -270,7 +277,7 @@ impl Surface {
             return;
         }
         let inner = Point::new(pos.x - 1, pos.y - 1);
-        if let Drag::Band { from } = drag {
+        if let Drag::Band { from, .. } = drag {
             self.band = Some(band(from, inner));
             event.clear();
             return;
@@ -306,9 +313,9 @@ impl Surface {
             let mut design = self.design.borrow_mut();
             match drag {
                 Drag::Canvas { .. } => {}
-                Drag::Band { from } => {
+                Drag::Band { from, container } => {
                     let inner = Point::new(event.mouse.pos.x - 1, event.mouse.pos.y - 1);
-                    design.select_within(band(from, inner));
+                    design.select_within(container, band(from, inner));
                     self.band = None;
                 }
                 Drag::Move { .. } | Drag::Resize { .. } | Drag::Dialog => design.end_drag(),

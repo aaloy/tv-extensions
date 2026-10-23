@@ -271,7 +271,8 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              \n\
              To move or delete several controls at once, Ctrl+click each\n\
              (Shift or Alt work too), or drag a band over an empty part of\n\
-             the dialog: the controls wholly inside it are selected. Then\n\
+             the dialog, a group box or a tab page: its controls wholly\n\
+             inside the band are selected. Then\n\
              drag one, or press the arrows, and they move together; Del\n\
              deletes them all. Controls in the same container go together.\n\
              \n\
@@ -302,6 +303,8 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              \n\
              To put a control in a container, use Edit > Move to container,\n\
              or drag its row in the inspector onto the container's row.\n\
+             Drag a container by its frame or its tab strip; dragging\n\
+             inside it draws a band to select what it holds.\n\
              Selecting a container highlights its frame only, so you can see\n\
              what you are about to move; a line drawn as a box too.",
         ),

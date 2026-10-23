@@ -25,11 +25,21 @@ pub const MAX_DEPTH: usize = 4;
 /// controls to look in (`slot`: a group box has one, tabs have one per
 /// page; the first step's is always 0, the dialog's own list) and the
 /// control's index in it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Place {
     steps: [(usize, usize); MAX_DEPTH],
     len: usize,
 }
+
+// Two places are the same when their steps are: `owner` leaves the steps
+// past `len` as they were, so the whole array is not compared.
+impl PartialEq for Place {
+    fn eq(&self, other: &Self) -> bool {
+        self.steps() == other.steps()
+    }
+}
+
+impl Eq for Place {}
 
 impl Place {
     /// The control at `index` in the dialog's own list.
@@ -502,11 +512,29 @@ impl Design {
         self.revision += 1;
     }
 
-    /// Select the dialog's own controls that lie wholly inside `band` (in
-    /// the frame's inside), in list order; the dialog when there are none.
-    pub fn select_within(&mut self, band: Rect) {
-        let inside: Vec<Place> = (0..self.spec.controls.len())
-            .filter_map(|i| Container::Dialog.at(i))
+    /// The container whose empty inside `p` is on, given the control `hit`
+    /// there: the shown list of a group box or tab pane, the dialog's own
+    /// for the dialog. `None` on a control, or on a container's frame or
+    /// tab strip, which drag the container.
+    pub fn space_at(&self, hit: Sel, p: Point) -> Option<Container> {
+        let Sel::At(path) = hit else {
+            return Some(Container::Dialog);
+        };
+        let slot = shown_slot(self.at(path)?)?;
+        let inside = Container::In { owner: path, slot };
+        let (origin, (w, h)) = self.geometry(inside);
+        Rect::new(origin.x, origin.y, origin.x + w, origin.y + h)
+            .contains(p)
+            .then_some(inside)
+    }
+
+    /// Select the controls of `container` that lie wholly inside `band` (in
+    /// the frame's inside), in list order; the container itself (or the
+    /// dialog) when there are none.
+    pub fn select_within(&mut self, container: Container, band: Rect) {
+        let len = self.list(container).map_or(0, Vec::len);
+        let inside: Vec<Place> = (0..len)
+            .filter_map(|i| container.at(i))
             .filter(|&p| {
                 let r = self.rect_of(Sel::At(p));
                 r.a.x >= band.a.x && r.a.y >= band.a.y && r.b.x <= band.b.x && r.b.y <= band.b.y
@@ -516,7 +544,10 @@ impl Design {
             self.sel = Sel::At(first);
             self.also = rest.to_vec();
         } else {
-            self.sel = Sel::Dialog;
+            self.sel = match container {
+                Container::Dialog => Sel::Dialog,
+                Container::In { owner, .. } => Sel::At(owner),
+            };
             self.also.clear();
         }
         self.revision += 1;

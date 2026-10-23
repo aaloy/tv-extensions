@@ -128,8 +128,10 @@ container, the dialog or its tab page.
 
 Several controls can be selected at once, to move or delete them
 together: Ctrl+click adds a control to the selection or takes it out,
-and a band dragged over an empty part of the dialog selects the controls
-that lie wholly inside it. Only controls in the same container go
+and a band dragged over an empty part of the dialog, a group box or a tab
+page selects the controls of that container that lie wholly inside it.
+(So a container is dragged by its frame or its tab strip; a click on its
+empty inside selects it.) Only controls in the same container go
 together; a Ctrl+click on one elsewhere selects it alone. Drag any of
 them, or press the arrows, and they all move, as far as the one nearest
 the edge can. A plain click on one selects it alone. Many macOS
