@@ -1202,7 +1202,7 @@ mod tests {
 
         assert!(list.run_command(CMD_ADD_ALL));
         assert_eq!(*data.borrow(), vec![1, 3, 4]);
-        assert!(labels(&list, Side::Available).is_empty());
+        assert_eq!(labels(&list, Side::Available), Vec::<&str>::new());
     }
 
     #[test]
