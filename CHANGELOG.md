@@ -1,9 +1,8 @@
 # Changelog
 
-## [0.4.0] - 2026-10-23
+## [Unreleased]
 
-Requires turbo-vision 4.0.2; works with 4.1.0, whose host-driven
-applications send a keyboard-pressed button's command at once.
+Requires turbo-vision 4.1.0.
 
 ### Added
 
@@ -16,7 +15,8 @@ applications send a keyboard-pressed button's command at once.
   errors, and returns the answers as a JSON object in the spec's order, or
   `FormError::Cancelled`. A bad spec is `FormError::Spec` with a message
   naming the path and the problem. Examples: `form_json` (with three spec
-  files) and `form_json_agent`; tests in `tests/forms_json.rs`.
+  files) and `form_json_agent`; tests in `tests/forms_json.rs`. Gallery:
+  Form from JSON.
 - `forms::json`: `"widget": "radio"` on a `choice` field shows its options as
   radio buttons instead of a drop-down (the `deploy` and `survey` specs use it).
 - `forms::json`: more widgets and layout. `integer` with `"widget": "spinner"`
@@ -40,9 +40,16 @@ applications send a keyboard-pressed button's command at once.
   fields and rules, errors shown in the dialog, and a save step whose
   errors keep the dialog open. Moved here from turbo-vision's
   `views::form`. Needs `GroupBox` and a public `Dialog::prepare_modal`,
-  which are in turbo-vision after 4.0.3. Feature `chrono` (default) adds
+  which are in turbo-vision 4.1.0. Feature `chrono` (default) adds
   `NaiveDate` and `NaiveTime` fields. Examples: `form_layout`,
   `form_labels`, `form_record`. Gallery: Form.
+
+## [0.4.0] - 2026-10-23
+
+Requires turbo-vision 4.0.2; works with 4.1.0, whose host-driven
+applications send a keyboard-pressed button's command at once.
+
+### Added
 
 - `autocomplete`: `AutoComplete` and `AutoCompleteBuilder`, a text field
   that filters a suggestion list as you type and highlights the matched
