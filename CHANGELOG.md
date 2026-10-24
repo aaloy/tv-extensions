@@ -1,5 +1,49 @@
 # Changelog
 
+## [Unreleased]
+
+Requires turbo-vision 4.1.0.
+
+### Added
+
+- `forms::json` (feature `json`): a form described as JSON and answered as
+  JSON, for an agent or an MCP tool that needs a person to fill something
+  in. `forms::json::run(&mut app, &spec)` builds a record form from the spec
+  (field types `text`, `memo`, `integer`, `number`, `boolean`, `choice`,
+  `date`, `section`; `required`, `default`, `min`, `max`, `max_len`,
+  `options`), lets the person fill it in with the usual validation and
+  errors, and returns the answers as a JSON object in the spec's order, or
+  `FormError::Cancelled`. A bad spec is `FormError::Spec` with a message
+  naming the path and the problem. Examples: `form_json` (with three spec
+  files) and `form_json_agent`; tests in `tests/forms_json.rs`. Gallery:
+  Form from JSON.
+- `forms::json`: `"widget": "radio"` on a `choice` field shows its options as
+  radio buttons instead of a drop-down (the `deploy` and `survey` specs use it).
+- `forms::json`: more widgets and layout. `integer` with `"widget": "spinner"`
+  or `"slider"`; the `multichoice` type (check boxes, answering a list);
+  `note`, `group` (nestable) and `row` (side by side) items; top-level `labels`
+  (`left`/`above`) and `label_align`. Answers stay flat. New example spec
+  `layout` for `form_json`.
+- `forms::json`: a `text` field takes a `mask` (a picture such as
+  `###-###-###`): the literals are filled in as the person types and the
+  form refuses a value that does not fit.
+- `forms`: tabs. `Form::tab(title)` starts a page of a tab pane and
+  `Form::end_tabs()` ends it; the rows after each `tab` go on that page, and
+  groups and lines work inside. `forms::json` gets a `tabs` item with `pages`
+  (new example spec `tabs`). An error on another page brings that page
+  forward. **Breaking:** `Editor::read` takes `&mut self`, since reading a
+  field on a tab page needs the pane mutably.
+- `forms`: `Form` lays a dialog out from labelled fields with no
+  coordinates (lines of fields, titled groups, sections, label placement,
+  button alignment), and `Form::<T>::for_record` edits a struct of yours:
+  typed fields (`input`, `check`, `memo`, `choice`, `bind`), required
+  fields and rules, errors shown in the dialog, and a save step whose
+  errors keep the dialog open. Moved here from turbo-vision's
+  `views::form`. Needs `GroupBox` and a public `Dialog::prepare_modal`,
+  which are in turbo-vision 4.1.0. Feature `chrono` (default) adds
+  `NaiveDate` and `NaiveTime` fields. Examples: `form_layout`,
+  `form_labels`, `form_record`. Gallery: Form.
+
 ## [0.4.0] - 2026-10-23
 
 Requires turbo-vision 4.0.2; works with 4.1.0, whose host-driven

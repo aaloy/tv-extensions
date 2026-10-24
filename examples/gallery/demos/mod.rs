@@ -19,6 +19,8 @@ pub mod ansi_background;
 pub mod autocomplete;
 pub mod csv_editor;
 pub mod dual_list;
+pub mod forms;
+pub mod forms_json;
 pub mod host_app;
 pub mod key_names;
 pub mod log_window;

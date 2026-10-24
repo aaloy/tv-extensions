@@ -17,8 +17,10 @@ The core crate lives as a sibling checkout at `/Users/enzo/Code/turbo-vision-4-r
 The host-driven hooks this crate builds on (`Backend::is_host_driven`,
 `Application::step`, `Terminal::event_injector`, `Terminal::write_raw`,
 `InputParser`) live in core — changes to them belong there, and this crate
-consumes them from crates.io. The pin is `turbo-vision >= 4.0.2` (4.0.1/4.0.2
-carry the `update_cursor`/flush fixes `HostInput::cursor()` depends on).
+consumes them from crates.io. The pin is `turbo-vision >= 4.1.0` (4.0.1/4.0.2
+carry the `update_cursor`/flush fixes `HostInput::cursor()` depends on;
+4.1.0 adds the `GroupBox` and public `Dialog::prepare_modal` that `forms`
+uses).
 
 ## Commands
 

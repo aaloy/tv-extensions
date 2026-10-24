@@ -26,10 +26,11 @@ rustdoc-args = ["--cfg", "docsrs"]
 # host-driven hooks this crate depends on. 4.0.1 is required: it is the
 # version where Desktop (and TabbedPane/SplitPane) forward update_cursor,
 # which HostInput::cursor()/Session::cursor() depend on.
-turbo-vision = { version = "4.0.2", default-features = false }
+turbo-vision = { version = "4.1.0", default-features = false }
 tracing = { version = "0.1", optional = true }
 base64 = { version = "0.22", optional = true }
 chrono = { version = "0.4.45", optional = true }
+serde_json = { version = "1", features = ["preserve_order"], optional = true }
 log = { version = "0.4.33", optional = true }
 russh = { version = "0.48", optional = true }
 russh-keys = { version = "0.48", optional = true }
@@ -41,7 +42,7 @@ ssh-key = { version = "0.6", optional = true }
 unicode-width = { version = "0.1", optional = true }
 
 [dev-dependencies]
-turbo-vision = { version = "4.0.2", default-features = false, features = ["test-util"] }
+turbo-vision = { version = "4.1.0", default-features = false, features = ["test-util"] }
 tempfile = "3"
 # Used by the kitty_biorhythm example only; not part of the library's API.
 chrono = "0.4.45"
@@ -50,7 +51,10 @@ chrono = "0.4.45"
 flate2 = "1"
 
 [features]
-default = []
+default = ["chrono"]
+# Forms described as JSON and answered as JSON (`forms::json`), for an agent or
+# an MCP tool that needs a person to fill something in.
+json = ["dep:serde_json"]
 # A real terminal (crossterm, OS clipboard) in turbo-vision.
 native = ["turbo-vision/native"]
 # LogWindow and TerminalWidget, with a tracing subscriber.
@@ -63,6 +67,8 @@ remote-input = ["native", "dep:log"]
 ssh = ["native", "dep:russh", "dep:russh-keys", "dep:async-trait", "dep:parking_lot", "dep:tokio", "dep:rand", "dep:ssh-key", "dep:log"]
 # The CSV table editor.
 csv = []
+# Date and time fields (`NaiveDate`, `NaiveTime`) in record forms. On by default.
+chrono = ["dep:chrono"]
 # PNG screenshots of the terminal buffer, forwarded from turbo-vision core.
 screenshot = ["turbo-vision/screenshot"]
 
@@ -114,6 +120,30 @@ required-features = ["native"]
 name = "controls"
 required-features = ["native"]
 
+[[test]]
+name = "forms_json"
+required-features = ["json"]
+
+[[example]]
+name = "form_layout"
+required-features = ["native"]
+
+[[example]]
+name = "form_labels"
+required-features = ["native"]
+
+[[example]]
+name = "form_record"
+required-features = ["native"]
+
+[[example]]
+name = "form_json"
+required-features = ["native", "json"]
+
+[[example]]
+name = "form_json_agent"
+required-features = ["native", "json"]
+
 [[example]]
 name = "dual_list"
 required-features = ["native"]
@@ -132,10 +162,10 @@ required-features = ["native"]
 
 # The component gallery. Its tests (every demo builds and fits, every
 # module has a demo) run with
-# `cargo test --example gallery --features native,csv,log,graphics`.
+# `cargo test --example gallery --features native,csv,log,graphics,json`.
 [[example]]
 name = "gallery"
-required-features = ["native", "csv", "log", "graphics"]
+required-features = ["native", "csv", "log", "graphics", "json"]
 test = true
 
 [lints.clippy]

@@ -1,0 +1,14 @@
+{
+  "title": "Quick survey",
+  "fields": [
+    { "type": "section", "label": "About you" },
+    { "name": "role", "type": "choice", "widget": "radio",
+      "options": [ { "label": "Developer", "value": 1 }, { "label": "Designer", "value": 2 }, { "label": "Other", "value": 3 } ] },
+    { "name": "years", "type": "number", "label": "Years of experience", "min": 0, "max": 60 },
+    { "name": "born", "type": "date" },
+    { "type": "section", "label": "Feedback" },
+    { "name": "rating", "type": "integer", "min": 1, "max": 5, "required": true },
+    { "name": "comments", "type": "memo", "rows": 4 },
+    { "name": "contact_me", "type": "boolean", "label": "You may contact me" }
+  ]
+}

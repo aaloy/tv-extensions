@@ -1,0 +1,64 @@
+//! Form JSON Demo - a form described as JSON, answered as JSON.
+//!
+//! What an agent or an MCP tool does to ask a person something: it passes a
+//! spec, the person fills the form in, and the answers come back as JSON (or
+//! the person cancels). The answers are printed on stdout once the screen is
+//! restored.
+//!
+//! Run with: `cargo run --example form_json --features native,json`
+//! One of the specs in `examples/form_json_specs/`: add `-- deploy`,
+//! `-- survey`, `-- tabs` or `-- layout` (groups, rows, spinner, slider; the default is `customer`).
+//! Your own: `-- path/to/spec.json`
+//!
+//! The spec is shown in a window at the left of the screen, with the form
+//! beside it, laid out to fit (a form is modal, so the window cannot
+//! scroll); `--no-spec` leaves the window out.
+
+// (C) 2026 - Antoni Aloy
+
+use serde_json::Value;
+use turbo_vision::app::Application;
+use tv_extensions::forms::json::{FormError, run};
+
+#[path = "support/spec_window.rs"]
+mod spec_window;
+
+const CUSTOMER: &str = include_str!("form_json_specs/customer.json");
+const DEPLOY: &str = include_str!("form_json_specs/deploy.json");
+const SURVEY: &str = include_str!("form_json_specs/survey.json");
+const LAYOUT: &str = include_str!("form_json_specs/layout.json");
+const TABS: &str = include_str!("form_json_specs/tabs.json");
+
+fn load(which: Option<&str>) -> Result<Value, Box<dyn std::error::Error>> {
+    let text = match which {
+        None | Some("customer") => CUSTOMER.to_string(),
+        Some("deploy") => DEPLOY.to_string(),
+        Some("survey") => SURVEY.to_string(),
+        Some("layout") => LAYOUT.to_string(),
+        Some("tabs") => TABS.to_string(),
+        Some(path) => std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?,
+    };
+    Ok(serde_json::from_str(&text)?)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let show = !args.iter().any(|a| a == "--no-spec");
+    let which = args.iter().find(|a| *a != "--no-spec").map(String::as_str);
+    let spec = load(which)?;
+
+    let result = {
+        let mut app = Application::new()?;
+        if show {
+            spec_window::show(&mut app, &spec)?;
+        }
+        run(&mut app, &spec)
+    }; // the application is dropped here: the terminal is restored
+
+    match result {
+        Ok(answers) => println!("{}", serde_json::to_string_pretty(&answers)?),
+        Err(FormError::Cancelled) => eprintln!("cancelled"),
+        Err(FormError::Spec(why)) => eprintln!("invalid form: {why}"),
+    }
+    Ok(())
+}

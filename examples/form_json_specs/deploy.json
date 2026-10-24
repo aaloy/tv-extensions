@@ -1,0 +1,10 @@
+{
+  "title": "Deploy to production?",
+  "fields": [
+    { "name": "environment", "type": "choice", "widget": "radio", "default": "staging",
+      "options": ["staging", "production"] },
+    { "name": "reason", "type": "text", "label": "Reason", "required": true, "max_len": 80 },
+    { "name": "replicas", "type": "integer", "default": 3, "min": 1, "max": 20 },
+    { "name": "i_have_a_backup", "type": "boolean", "label": "I have a backup", "required": true }
+  ]
+}

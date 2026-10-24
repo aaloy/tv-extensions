@@ -20,7 +20,7 @@ tv-extensions = "0.4"
 ## Component gallery
 
 ```sh
-cargo run --example gallery --features native,csv,log,graphics
+cargo run --example gallery --features native,csv,log,graphics,json
 ```
 
 Every component, live, beside how it works, its parameters and the code that built it, as in turbo-vision's own gallery. The list on the left is grouped by kind; F6 moves into the panel to try a component, and F6 again goes back. The code shown is the demo's own source file (`examples/gallery/demos/`), so what you read is what runs. The CSV editor and the host-driven demo run a second, host-driven application inside a view of the gallery.
@@ -123,6 +123,10 @@ let fruit_field = AutoCompleteBuilder::new()
 ```
 
 `cargo run --example autocomplete --features native` shows the combinations in one dialog.
+
+## Forms
+
+`Form` lays a dialog out from labelled fields, with no coordinates: labels in one column, fields in the next, lines of fields, titled groups, label placement, and buttons along the bottom, the dialog sized to fit and centred. `Form::<T>::for_record` binds the fields to a struct of yours (a database row, say) through typed fields, required fields, rules and a save step, and shows errors in the dialog. Always available, no feature flag; date and time fields (`NaiveDate`, `NaiveTime`) need `chrono`, on by default. [docs/forms.md](docs/forms.md) has the rest, and `cargo run --example form_layout --features native`, `form_labels` and `form_record` show it.
 
 ## DualList
 
@@ -231,7 +235,8 @@ let server = SshServer::new(config, || {
 
 | Feature | Enables | Implies |
 | --- | --- | --- |
-| *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `dual_list`, `keys` — builds for `wasm32-wasip1` | |
+| *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `dual_list`, `forms`, `keys` — builds for `wasm32-wasip1` | |
+| `chrono` (default) | date and time fields in record forms | |
 | `native` | a real terminal in turbo-vision (crossterm, OS clipboard) | |
 | `csv` | the `csv` module: the CSV table editor | |
 | `log` | the `log` module: `LogWindow`, `TerminalWidget` | |
@@ -247,7 +252,7 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
-cargo test --example gallery --features native,csv,log,graphics
+cargo test --example gallery --features native,csv,log,graphics,json
 cargo clippy --all-features --all-targets -- -D warnings
 sh scripts/check-wasm.sh
 ```
