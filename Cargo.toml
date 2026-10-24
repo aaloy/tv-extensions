@@ -31,6 +31,7 @@ tracing = { version = "0.1", optional = true }
 base64 = { version = "0.22", optional = true }
 chrono = { version = "0.4.45", optional = true }
 serde_json = { version = "1", features = ["preserve_order"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 log = { version = "0.4.33", optional = true }
 russh = { version = "0.48", optional = true }
 russh-keys = { version = "0.48", optional = true }
@@ -55,6 +56,9 @@ default = ["chrono"]
 # Forms described as JSON and answered as JSON (`forms::json`), for an agent or
 # an MCP tool that needs a person to fill something in.
 json = ["dep:serde_json"]
+# Dialogs designed with the dialog designer, saved as JSON and loaded at run
+# time (`dialog_spec`), with validation rules and actions bound in code.
+dialog = ["json", "dep:serde"]
 # A real terminal (crossterm, OS clipboard) in turbo-vision.
 native = ["turbo-vision/native"]
 # LogWindow and TerminalWidget, with a tracing subscriber.
@@ -124,6 +128,14 @@ required-features = ["native"]
 name = "forms_json"
 required-features = ["json"]
 
+[[test]]
+name = "dialog_spec"
+required-features = ["dialog"]
+
+[[test]]
+name = "json_dialog"
+required-features = ["dialog"]
+
 [[example]]
 name = "form_layout"
 required-features = ["native"]
@@ -139,6 +151,27 @@ required-features = ["native"]
 [[example]]
 name = "form_json"
 required-features = ["native", "json"]
+
+[[example]]
+name = "dialog_designer"
+required-features = ["native", "dialog"]
+test = true
+
+[[example]]
+name = "dialog_from_json"
+required-features = ["native", "dialog"]
+
+[[example]]
+name = "dialog_check"
+required-features = ["native", "dialog"]
+
+[[example]]
+name = "dialog_order"
+required-features = ["native", "dialog"]
+
+[[example]]
+name = "dialog_on_change"
+required-features = ["native", "dialog"]
 
 [[example]]
 name = "form_json_agent"
@@ -162,10 +195,10 @@ required-features = ["native"]
 
 # The component gallery. Its tests (every demo builds and fits, every
 # module has a demo) run with
-# `cargo test --example gallery --features native,csv,log,graphics,json`.
+# `cargo test --example gallery --features native,csv,log,graphics,dialog`.
 [[example]]
 name = "gallery"
-required-features = ["native", "csv", "log", "graphics", "json"]
+required-features = ["native", "csv", "log", "graphics", "dialog"]
 test = true
 
 [lints.clippy]

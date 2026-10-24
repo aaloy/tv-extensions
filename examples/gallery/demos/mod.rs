@@ -18,6 +18,7 @@
 pub mod ansi_background;
 pub mod autocomplete;
 pub mod csv_editor;
+pub mod dialog_spec;
 pub mod dual_list;
 pub mod forms;
 pub mod forms_json;

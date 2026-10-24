@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "Find and replace",
+  "width": 58,
+  "height": 15,
+  "controls": [
+    { "type": "label", "x": 2, "y": 1, "w": 12, "h": 1, "text": "~F~ind", "link": "find" },
+    { "type": "input", "name": "find", "x": 15, "y": 1, "w": 38, "h": 1, "max_len": 120, "required": true, "history": 1 },
+    { "type": "label", "x": 2, "y": 3, "w": 12, "h": 1, "text": "Re~p~lace", "link": "replace" },
+    { "type": "input", "name": "replace", "x": 15, "y": 3, "w": 38, "h": 1, "max_len": 120, "history": 2 },
+    { "type": "check_boxes", "name": "options", "x": 15, "y": 6, "w": 24, "h": 3, "items": ["Match ~c~ase", "~W~hole words", "Regular e~x~pression"] },
+    { "type": "group_box", "x": 41, "y": 5, "w": 13, "h": 4, "title": "Direction", "controls": [
+      { "type": "radio_buttons", "name": "direction", "x": 1, "y": 0, "w": 9, "h": 2, "items": ["~U~p", "Do~w~n"], "selected": 1 }
+    ] },
+    { "type": "button", "x": 2, "y": 10, "w": 14, "h": 2, "text": "Find ~n~ext", "command": "find_next", "default": true },
+    { "type": "button", "x": 17, "y": 10, "w": 11, "h": 2, "text": "~R~eplace", "command": "replace_one" },
+    { "type": "button", "x": 29, "y": 10, "w": 15, "h": 2, "text": "Replace ~a~ll", "command": "replace_all" },
+    { "type": "button", "x": 45, "y": 10, "w": 10, "h": 2, "text": "Close", "command": "cancel" }
+  ]
+}

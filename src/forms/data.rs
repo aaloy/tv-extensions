@@ -907,7 +907,7 @@ thread_local! {
 }
 
 /// A combo box id for a form's choice field.
-fn next_combo_id() -> u16 {
+pub(crate) fn next_combo_id() -> u16 {
     NEXT_COMBO_ID.with(|next| {
         let id = next.get();
         next.set(if id <= 0xC000 { u16::MAX } else { id - 1 });
@@ -1174,13 +1174,13 @@ fn summary(errors: &ValidationErrors, focused: Option<FieldId>) -> String {
 }
 
 /// The row above an editor's buttons that shows the current error, in red.
-struct ErrorLine {
+pub(crate) struct ErrorLine {
     core: ViewCore,
-    text: String,
+    pub(crate) text: String,
 }
 
 impl ErrorLine {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             core: ViewCore {
                 bounds: size(0, 1),

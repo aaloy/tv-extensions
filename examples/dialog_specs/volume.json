@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "title": "Volume",
+  "width": 46,
+  "height": 14,
+  "controls": [
+    { "type": "label", "x": 2, "y": 1, "w": 8, "h": 1, "text": "~M~ode", "link": "mode" },
+    { "type": "radio_buttons", "name": "mode", "x": 11, "y": 1, "w": 20, "h": 2, "items": ["~Q~uiet", "~L~oud"] },
+    { "type": "label", "x": 2, "y": 4, "w": 8, "h": 1, "text": "~V~olume", "link": "volume" },
+    { "type": "slider", "name": "volume", "x": 11, "y": 4, "w": 30, "h": 1, "min": 0, "max": 100, "value": 20, "step": 5 },
+    { "type": "label", "x": 2, "y": 6, "w": 8, "h": 1, "text": "Level" },
+    { "type": "progress_bar", "name": "meter", "x": 11, "y": 6, "w": 30, "h": 1, "max": 100, "value": 20 },
+    { "type": "button", "x": 10, "y": 9, "w": 10, "h": 2, "text": "~O~K", "command": "ok", "default": true },
+    { "type": "button", "x": 24, "y": 9, "w": 10, "h": 2, "text": "Cancel", "command": "cancel" }
+  ]
+}

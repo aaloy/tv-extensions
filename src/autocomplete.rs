@@ -358,6 +358,21 @@ impl AutoComplete {
         self.text.borrow().clone()
     }
 
+    /// Replace the field text, as code filling a form does: the cursor
+    /// goes to its end, the list closes, and any error line clears.
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        *self.text.borrow_mut() = text.into();
+        self.cursor_pos = char_len(&self.text.borrow());
+        self.first_pos = 0;
+        self.sel_start = 0;
+        self.sel_end = 0;
+        self.open = false;
+        self.refused = None;
+        self.dirty = false;
+        self.refilter();
+        self.sync_height();
+    }
+
     /// True while the suggestion list is showing.
     #[must_use]
     pub fn is_open(&self) -> bool {

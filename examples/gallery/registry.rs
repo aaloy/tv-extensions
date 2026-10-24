@@ -88,6 +88,15 @@ pub const DEMOS: &[Demo] = &[
         handle: None,
     },
     Demo {
+        name: "Dialog from JSON",
+        group: Group::Views,
+        module: "dialog_spec",
+        source: include_str!("demos/dialog_spec.rs"),
+        height: 3,
+        build: demos::dialog_spec::build,
+        handle: Some(demos::dialog_spec::handle),
+    },
+    Demo {
         name: "DualList",
         group: Group::Views,
         module: "dual_list",

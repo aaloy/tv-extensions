@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "title": "Contact",
+  "width": 56,
+  "height": 20,
+  "controls": [
+    { "type": "label", "x": 2, "y": 1, "w": 10, "h": 1, "text": "~N~ame", "link": "name" },
+    { "type": "input", "name": "name", "x": 13, "y": 1, "w": 38, "h": 1, "max_len": 60, "required": true },
+    { "type": "label", "x": 2, "y": 3, "w": 10, "h": 1, "text": "~E~mail", "link": "email" },
+    { "type": "input", "name": "email", "x": 13, "y": 3, "w": 38, "h": 1, "max_len": 80 },
+    { "type": "label", "x": 2, "y": 5, "w": 10, "h": 1, "text": "Pho~n~e", "link": "phone" },
+    { "type": "input", "name": "phone", "x": 13, "y": 5, "w": 20, "h": 1, "max_len": 20, "validator": { "type": "filter", "chars": "0123456789+-() " } },
+    { "type": "label", "x": 2, "y": 7, "w": 10, "h": 1, "text": "~C~ountry", "link": "country" },
+    { "type": "combo_box", "name": "country", "x": 13, "y": 7, "w": 24, "h": 1, "items": ["Spain", "France", "Italy", "Germany", "United Kingdom", "United States"], "selected": 0 },
+    { "type": "label", "x": 2, "y": 9, "w": 10, "h": 1, "text": "K~i~nd", "link": "kind" },
+    { "type": "radio_buttons", "name": "kind", "x": 13, "y": 9, "w": 24, "h": 2, "items": ["Pe~r~sonal", "~B~usiness"] },
+    { "type": "label", "x": 2, "y": 12, "w": 10, "h": 1, "text": "No~t~es", "link": "notes" },
+    { "type": "memo", "name": "notes", "x": 13, "y": 12, "w": 38, "h": 3 },
+    { "type": "error_line", "x": 2, "y": 15, "w": 50, "h": 1 },
+    { "type": "button", "x": 13, "y": 16, "w": 10, "h": 2, "text": "~O~K", "default": true },
+    { "type": "button", "x": 24, "y": 16, "w": 12, "h": 2, "text": "Cancel", "command": "cancel" }
+  ]
+}

@@ -19,6 +19,9 @@
 //!   suggestion list as you type.
 //! - [`keys`]: key events from key names such as "ctrl-s" or "enter", the
 //!   form a host that is not a terminal reports keys in.
+//! - `dialog_spec` (feature `dialog`): dialogs laid out in the dialog
+//!   designer and saved as JSON, built at run time with validation rules
+//!   and actions bound in code.
 //! - `csv` (feature `csv`): a CSV table editor, host-driven like [`host`].
 //! - `log` (feature `log`): a scrolling output pane and a window that
 //!   shows `tracing` events in it.
@@ -28,7 +31,7 @@
 //!   for automation.
 //! - `ssh` (feature `ssh`): serving a turbo-vision application over SSH.
 //!
-//! The four feature-gated module names above are plain code spans, not
+//! The feature-gated module names above are plain code spans, not
 //! links: with any one feature off, the module does not exist to link to,
 //! and an intra-doc link that resolves only with that feature enabled would
 //! make `cargo doc` (built with the crate's default, empty feature set)
@@ -43,6 +46,9 @@ pub mod autocomplete;
 #[cfg(feature = "csv")]
 #[cfg_attr(docsrs, doc(cfg(feature = "csv")))]
 pub mod csv;
+#[cfg(feature = "dialog")]
+#[cfg_attr(docsrs, doc(cfg(feature = "dialog")))]
+pub mod dialog_spec;
 pub mod dual_list;
 pub mod forms;
 #[cfg(feature = "graphics")]

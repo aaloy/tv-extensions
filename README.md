@@ -20,7 +20,7 @@ tv-extensions = "0.4"
 ## Component gallery
 
 ```sh
-cargo run --example gallery --features native,csv,log,graphics,json
+cargo run --example gallery --features native,csv,log,graphics,dialog
 ```
 
 Every component, live, beside how it works, its parameters and the code that built it, as in turbo-vision's own gallery. The list on the left is grouped by kind; F6 moves into the panel to try a component, and F6 again goes back. The code shown is the demo's own source file (`examples/gallery/demos/`), so what you read is what runs. The CSV editor and the host-driven demo run a second, host-driven application inside a view of the gallery.
@@ -127,6 +127,27 @@ let fruit_field = AutoCompleteBuilder::new()
 ## Forms
 
 `Form` lays a dialog out from labelled fields, with no coordinates: labels in one column, fields in the next, lines of fields, titled groups, label placement, and buttons along the bottom, the dialog sized to fit and centred. `Form::<T>::for_record` binds the fields to a struct of yours (a database row, say) through typed fields, required fields, rules and a save step, and shows errors in the dialog. Always available, no feature flag; date and time fields (`NaiveDate`, `NaiveTime`) need `chrono`, on by default. [docs/forms.md](docs/forms.md) has the rest, and `cargo run --example form_layout --features native`, `form_labels` and `form_record` show it.
+
+## Dialog designer and JSON dialogs (feature `dialog`)
+
+Lay a dialog out with the mouse in the dialog designer, in the spirit of TV Dialog Design, try it, and save it as JSON; then load it in the application and give it its rules and actions in code. Every core dialog control is there, plus `AutoComplete`, `DualList`, tab pages, group boxes and an error line. Dialogs can be kept as templates (samples are in `templates/`). [docs/dialog-designer.md](docs/dialog-designer.md) has the designer's keys, the JSON format, and how to extend a dialog with validation and actions. [docs/dialog-tutorial.md](docs/dialog-tutorial.md) walks through building a working order form from JSON (events, an action, rules; run it with `cargo run --example dialog_order --features native,dialog`). [docs/dialog-json.md](docs/dialog-json.md) is a self-contained reference to the JSON (every control, layout rules, the Rust side, common mistakes), written so a person or a coding agent can write a dialog from it alone; `cargo run --example dialog_check --features native,dialog -- FILE.json --render` checks a file and draws it as text.
+
+```sh
+cargo run --example dialog_designer --features native,dialog -- customer.json
+```
+
+```rust,ignore
+use serde_json::json;
+use tv_extensions::dialog_spec::{Flow, JsonDialog};
+
+let mut dialog = JsonDialog::load("customer.json")?;
+dialog.set_data(&json!({ "name": "Ada" }))?;
+dialog.rule("email", |v| if v.as_str().is_some_and(|e| e.contains('@')) { Ok(()) } else { Err("Email must contain @".into()) });
+dialog.on("lookup", |ctx| { ctx.set_value("email", &json!("ada@example.org")).unwrap(); Flow::Stay });
+if let Some(answer) = dialog.run(&mut app) {
+    println!("{} {}", answer.action, answer.data); // ok {"name":"Ada","email":"ada@example.org",...}
+}
+```
 
 ## DualList
 
@@ -237,6 +258,8 @@ let server = SshServer::new(config, || {
 | --- | --- | --- |
 | *(none)* | `host`, `scroll_pane`, `popup_menu`, `autocomplete`, `dual_list`, `forms`, `keys` — builds for `wasm32-wasip1` | |
 | `chrono` (default) | date and time fields in record forms | |
+| `json` | `forms::json`: forms described and answered as JSON | |
+| `dialog` | the `dialog_spec` module: designed dialogs saved as JSON, the dialog designer example | `json` |
 | `native` | a real terminal in turbo-vision (crossterm, OS clipboard) | |
 | `csv` | the `csv` module: the CSV table editor | |
 | `log` | the `log` module: `LogWindow`, `TerminalWidget` | |
@@ -252,7 +275,7 @@ let server = SshServer::new(config, || {
 
 ```sh
 cargo test
-cargo test --example gallery --features native,csv,log,graphics,json
+cargo test --example gallery --features native,csv,log,graphics,dialog
 cargo clippy --all-features --all-targets -- -D warnings
 sh scripts/check-wasm.sh
 ```

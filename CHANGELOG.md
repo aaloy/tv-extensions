@@ -6,6 +6,34 @@ Requires turbo-vision 4.1.0.
 
 ### Added
 
+- `dialog_spec` (feature `dialog`): dialogs designed with the mouse, saved as
+  JSON, and brought to life at run time. `DialogSpec` is the file: the
+  dialog's size and title and its controls, each a flat object (`type`,
+  `name`, `x`, `y`, `w`, `h`, `hint`, then its own keys), for every core
+  dialog control (label, static text, button, input with validator and
+  history, memo, check box(es), radio buttons, combo box, list box, spinner,
+  slider, progress bar, table, group box, tabs with pages of controls), plus
+  `AutoComplete`, `DualList` and an error line. Unknown types and keys are
+  refused, defaults are left out when saved, and `check` enforces unique
+  names, label links, no nested tabs and in-range selections.
+  `JsonDialog` builds it: data in and out as one flat JSON object keyed by
+  control name, controls reached by name as their turbo-vision type, the
+  spec's own checks plus rules bound in code (`rule`, `validate_data`) shown
+  in the dialog (red labels, the error line, focus on the first fault),
+  custom validators bound by name, and actions on buttons and `on_change`
+  bound with `on` that stay, submit or close (`Flow`). `unbound` lists what
+  the spec names and no code has bound. Tests in `tests/dialog_spec.rs` and
+  `tests/json_dialog.rs`; guide in `docs/dialog-designer.md`. Gallery:
+  Dialog from JSON.
+- `examples/dialog_designer`: the dialog designer. The dialog being
+  designed is drawn by its real controls; click, drag and resize with the
+  mouse or the keyboard, insert any control (Ins or a right click), edit
+  properties in generated property sheets (Enter or a double click), undo
+  and redo, reorder and show the tab order, fill tab pages, test the dialog
+  for real (F9), see its JSON (F4) and the Rust that loads it and binds its
+  actions (Ctrl+G). `examples/dialog_from_json` uses a designed dialog in an
+  application.
+- `AutoComplete::set_text`, so code can fill the field.
 - `forms::json` (feature `json`): a form described as JSON and answered as
   JSON, for an agent or an MCP tool that needs a person to fill something
   in. `forms::json::run(&mut app, &spec)` builds a record form from the spec
