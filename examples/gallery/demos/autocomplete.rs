@@ -1,8 +1,8 @@
 //! A text field that filters a suggestion list as you type, with the
 //! matched text picked out. Down opens the list or moves the highlight, Up
 //! moves it back, Enter or a click accepts a suggestion, Esc closes the
-//! list and keeps the text. Matching ignores case and takes Latin-1
-//! letters such as é or ñ.
+//! list and keeps the text. Matching ignores case, and any character one
+//! cell wide can be typed: é, ñ, €, ł, Greek, Cyrillic.
 //!
 //! Parameters:
 //! - `AutoCompleteBuilder::new().bounds(r)`: one row; while the list is

@@ -20,7 +20,7 @@ The host-driven hooks this crate builds on (`Backend::is_host_driven`,
 consumes them from crates.io. The pin is `turbo-vision >= 4.1.0` (4.0.1/4.0.2
 carry the `update_cursor`/flush fixes `HostInput::cursor()` depends on;
 4.1.0 adds the `GroupBox` and public `Dialog::prepare_modal` that `forms`
-uses).
+uses, and the `Event::typed_char` that `autocomplete` reads).
 
 ## Commands
 

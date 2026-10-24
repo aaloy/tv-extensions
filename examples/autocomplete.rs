@@ -23,7 +23,7 @@
 //! Run with:
 //!   `cargo run --example autocomplete --features native`
 //!
-//! Type to filter (accented Latin-1 letters work too); Up/Down move the
+//! Type to filter (accented and non-Latin letters work too); Up/Down move the
 //! highlight, Enter or a click accepts a suggestion, Esc closes the list.
 //! Tab moves between the fields and buttons. The values are printed when
 //! the dialog closes.

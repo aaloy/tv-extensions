@@ -4,6 +4,13 @@
 
 Requires turbo-vision 4.1.0.
 
+### Changed
+
+- `autocomplete`: any character one cell wide types and matches, through
+  turbo-vision's `Event::typed_char`, not only ASCII and Latin-1: `ł`, `ň`,
+  `€`, Greek and Cyrillic, case-insensitively. `ě` (U+011B, the value of
+  `KB_ESC`) types instead of closing the list.
+
 ### Added
 
 - `dialog_spec` (feature `dialog`): dialogs designed with the mouse, saved as
