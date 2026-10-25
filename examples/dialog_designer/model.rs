@@ -706,6 +706,121 @@ impl Design {
         sel
     }
 
+    /// The selected controls as a control template called `name`: a dialog
+    /// just big enough to hold them, with them moved to its corner, in their
+    /// tab order. A label keeps its link only to a control of the group.
+    /// `None` when the dialog is selected.
+    pub fn selection_template(&self, name: &str) -> Option<DialogSpec> {
+        let mut paths: Vec<Place> = self.selection().iter().filter_map(|s| s.path()).collect();
+        if paths.len() != self.selection().len() {
+            return None;
+        }
+        paths.sort_by_key(Place::index);
+        let mut controls: Vec<Control> =
+            paths.iter().filter_map(|&p| self.at(p).cloned()).collect();
+        let left = controls.iter().map(|c| c.x).min()?;
+        let top = controls.iter().map(|c| c.y).min()?;
+        let right = controls.iter().map(|c| c.x + c.w).max()?;
+        let bottom = controls.iter().map(|c| c.y + c.h.max(1)).max()?;
+        for c in &mut controls {
+            c.x -= left;
+            c.y -= top;
+        }
+        let mut inside = Vec::new();
+        visit_all(&controls, &mut |c| inside.push(c.name.clone()));
+        for_each_mut(&mut controls, &mut |c| {
+            if let Kind::Label { link, .. } = &mut c.kind
+                && link.as_ref().is_some_and(|l| !inside.contains(l))
+            {
+                *link = None;
+            }
+        });
+        let mut spec = DialogSpec::new(name, right - left + 2, bottom - top + 2);
+        spec.controls = controls;
+        Some(spec)
+    }
+
+    /// Insert the controls of a control template, as one undo step: where a
+    /// control of that type would go (below the selection, or at the top
+    /// left), kept together inside the container, with names not in use and
+    /// the links among them kept. They come selected together, to be moved
+    /// into place. `false` when the template holds no controls.
+    pub fn insert_template(&mut self, template: &DialogSpec) -> bool {
+        let mut group = template.controls.clone();
+        if group.is_empty() {
+            return false;
+        }
+        let (into, at) = self.insert_point("");
+        let (cw, ch) = self.geometry(into).1;
+        let anchor = match self.sel {
+            Sel::At(p) if p.container() == into => {
+                self.selected().map(|a| (a.x, a.y + a.h.max(1) + 1))
+            }
+            _ => None,
+        };
+        let (x, y) = anchor.unwrap_or(match into {
+            Container::In { owner, .. }
+                if matches!(self.at(owner).map(|c| &c.kind), Some(Kind::GroupBox { .. })) =>
+            {
+                (1, 0)
+            }
+            _ => (2, 1),
+        });
+        // The whole group fits where it can, so it keeps its shape.
+        let width = group.iter().map(|c| c.x + c.w).max().unwrap_or(1);
+        let height = group.iter().map(|c| c.y + c.h.max(1)).max().unwrap_or(1);
+        let x = x.min(cw - width).max(0);
+        let y = y.min(ch - height).max(0);
+        self.rename_group(&mut group);
+        for c in &mut group {
+            c.x += x;
+            c.y += y;
+            fit(c, cw, ch);
+        }
+        self.snapshot();
+        let n = group.len();
+        let list = self.list_mut(into).expect("the container exists");
+        let at = at.min(list.len());
+        for (k, c) in group.into_iter().enumerate() {
+            list.insert(at + k, c);
+        }
+        let placed: Vec<Place> = (at..at + n).filter_map(|i| into.at(i)).collect();
+        self.sel = Sel::At(placed[0]);
+        self.also = placed[1..].to_vec();
+        self.changed();
+        true
+    }
+
+    /// Give the controls of `group`, and those inside them, names not in
+    /// use, keeping the label links among them and dropping the others.
+    fn rename_group(&self, group: &mut [Control]) {
+        let mut taken = self.names();
+        let mut renames: Vec<(String, String)> = Vec::new();
+        for_each_mut(group, &mut |c| {
+            if c.name.is_empty() {
+                return;
+            }
+            let stem = c.name.trim_end_matches(|ch: char| ch.is_ascii_digit());
+            let stem = if stem.is_empty() { "control" } else { stem };
+            let new = if taken.contains(&c.name) {
+                first_free(stem, |n| taken.iter().any(|t| t == n))
+            } else {
+                c.name.clone()
+            };
+            taken.push(new.clone());
+            renames.push((c.name.clone(), new.clone()));
+            c.name = new;
+        });
+        for_each_mut(group, &mut |c| {
+            if let Kind::Label { link, .. } = &mut c.kind {
+                *link = link
+                    .as_ref()
+                    .and_then(|l| renames.iter().find(|(old, _)| old == l))
+                    .map(|(_, new)| new.clone());
+            }
+        });
+    }
+
     /// The list a new `type_name` control goes in, and where in it.
     fn insert_point(&self, type_name: &str) -> (Container, usize) {
         let len_of = |c: Container| self.list(c).map_or(0, Vec::len);

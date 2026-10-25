@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "title": "Label and input",
+  "width": 36,
+  "height": 3,
+  "controls": [
+    { "type": "label", "x": 0, "y": 0, "w": 8, "h": 1, "text": "~N~ame", "link": "name" },
+    { "type": "input", "name": "name", "x": 9, "y": 0, "w": 25, "h": 1 }
+  ]
+}

@@ -14,6 +14,7 @@
 //! click) edits its properties, F9 runs the dialog for real. Help > Keys
 //! lists every key.
 
+mod control_templates;
 mod help;
 mod keys;
 mod model;
@@ -44,7 +45,9 @@ use turbo_vision::views::dialog::Dialog;
 use turbo_vision::views::file_dialog::FileDialog;
 use turbo_vision::views::listbox::ListBox;
 use turbo_vision::views::menu_bar::{MenuBar, SubMenu};
-use turbo_vision::views::msgbox::{confirmation_box, input_box, message_box_error, message_box_ok};
+use turbo_vision::views::msgbox::{
+    confirmation_box, confirmation_box_yes_no, input_box, message_box_error, message_box_ok,
+};
 use turbo_vision::views::static_text::StaticText;
 use turbo_vision::views::status_line::StatusLine;
 use turbo_vision::views::text_viewer::TextViewer;
@@ -91,6 +94,8 @@ const CM_SAME_WIDTH: CommandId = CM_USER + 36;
 const CM_SAME_HEIGHT: CommandId = CM_USER + 37;
 const CM_DISTRIBUTE_ACROSS: CommandId = CM_USER + 38;
 const CM_DISTRIBUTE_DOWN: CommandId = CM_USER + 39;
+const CM_SAVE_CONTROLS: CommandId = CM_USER + 40;
+const CM_CONTROL_TEMPLATES: CommandId = CM_USER + 41;
 const ALIGNMENTS: [Arrange; 6] = [
     Arrange::Left,
     Arrange::Right,
@@ -234,7 +239,7 @@ impl Designer {
         }
         if path.exists() && known != Some(path.as_path()) {
             let question = format!("{} exists. Replace it?", path.display());
-            if confirmation_box(app, &question) != CM_YES {
+            if confirmation_box_yes_no(app, &question) != CM_YES {
                 return None;
             }
         }
@@ -263,6 +268,59 @@ impl Designer {
         }
     }
 
+    /// Keep the selected controls as a control template in `dir`, under a
+    /// name asked for.
+    fn save_controls(&mut self, app: &mut Application, dir: &Path) {
+        if self.design.borrow().selection_template("").is_none() {
+            message_box_ok(
+                app,
+                "Select the controls to keep first: click one, then Ctrl+click or drag a band for more.",
+            );
+            return;
+        }
+        let Some(name) = input_box(app, "Save as control template", "Template ~n~ame", "", 60)
+        else {
+            return;
+        };
+        let name = name.trim();
+        if control_templates::is_sample(name) {
+            message_box_error(
+                app,
+                &format!("\"{name}\" is the name of a sample. Pick another name."),
+            );
+            return;
+        }
+        if control_templates::exists(dir, name) {
+            let question = format!("A control template called \"{name}\" exists. Replace it?");
+            if confirmation_box_yes_no(app, &question) != CM_YES {
+                return;
+            }
+        }
+        let spec = self
+            .design
+            .borrow()
+            .selection_template(name)
+            .expect("checked above");
+        match control_templates::save(dir, name, &spec) {
+            Ok(path) => {
+                message_box_ok(
+                    app,
+                    &format!("Control template saved in {}", path.display()),
+                );
+            }
+            Err(e) => {
+                message_box_error(app, &e);
+            }
+        }
+    }
+
+    /// Insert the controls of a control template picked in the manager.
+    fn insert_controls(&mut self, app: &mut Application, dir: &Path) {
+        if let Some(spec) = manage_control_templates(app, dir) {
+            self.design.borrow_mut().insert_template(&spec);
+        }
+    }
+
     /// Keep the dialog as a template, under a name asked for.
     fn save_template(&mut self, app: &mut Application) {
         self.save_template_in(app, &templates::folder());
@@ -286,7 +344,7 @@ impl Designer {
         };
         if templates::exists(dir, &name) {
             let question = format!("A template called \"{}\" exists. Replace it?", name.trim());
-            if confirmation_box(app, &question) != CM_YES {
+            if confirmation_box_yes_no(app, &question) != CM_YES {
                 return;
             }
         }
@@ -326,7 +384,7 @@ impl Designer {
         }
         if path.exists() {
             let question = format!("{} exists. Replace it?", path.display());
-            if confirmation_box(app, &question) != turbo_vision::core::command::CM_YES {
+            if confirmation_box_yes_no(app, &question) != turbo_vision::core::command::CM_YES {
                 return;
             }
         }
@@ -542,6 +600,8 @@ impl AppHandler for Designer {
             }
             CM_NEW_TEMPLATE => self.new_from_template(app),
             CM_SAVE_TEMPLATE => self.save_template(app),
+            CM_SAVE_CONTROLS => self.save_controls(app, &control_templates::folder()),
+            CM_CONTROL_TEMPLATES => self.insert_controls(app, &control_templates::folder()),
             CM_OPEN_SPEC => self.open(app),
             CM_SAVE_SPEC => {
                 self.save(app, false);
@@ -962,8 +1022,93 @@ fn manage_templates(app: &mut Application, dir: &Path) -> Option<DialogSpec> {
             }
             CM_NO => {
                 let question = format!("Delete the template \"{}\"?", template.name);
-                if confirmation_box(app, &question) == CM_YES
+                if confirmation_box_yes_no(app, &question) == CM_YES
                     && let Err(e) = templates::delete(dir, &template.name)
+                {
+                    message_box_error(app, &e);
+                }
+            }
+            _ => return None,
+        }
+    }
+}
+
+/// The control templates manager: the samples and the person's own, to
+/// insert, rename or delete (the samples are only inserted). Returns the
+/// template picked to insert.
+fn manage_control_templates(app: &mut Application, dir: &Path) -> Option<DialogSpec> {
+    const ROWS: i16 = 11;
+    let mut at = 0;
+    loop {
+        let all = control_templates::list(dir);
+        let (sw, sh) = app.terminal.size();
+        let w: i16 = 56.min(sw);
+        let h: i16 = (ROWS + 6).min(sh);
+        let mut dialog = Dialog::new(centred(Rect::new(0, 0, sw, sh), w, h), "Control templates");
+        let header = format!("{:<26} {:<7} {}", "Name", "Kind", "Controls");
+        dialog.add(StaticText::new(Rect::new(1, 0, w - 3, 1), &header));
+        let mut list = ListBox::new(Rect::new(1, 1, w - 3, ROWS), CM_OK);
+        list.set_items(
+            all.iter()
+                .map(control_templates::ControlTemplate::summary)
+                .collect(),
+        );
+        if !all.is_empty() {
+            list.set_selection(at.min(all.len() - 1));
+        }
+        let list = dialog.add_typed(list);
+        dialog.add(StaticText::new(
+            Rect::new(1, ROWS + 1, w - 3, ROWS + 2),
+            &format!("Yours are in {}", dir.display()),
+        ));
+        let buttons = [
+            ("~I~nsert", CM_OK, 10, true),
+            ("~R~ename", CM_YES, 12, false),
+            ("~D~elete", CM_NO, 12, false),
+            ("Close", CM_CANCEL, 10, false),
+        ];
+        let total: i16 = buttons.iter().map(|b| b.2 + 2).sum::<i16>() - 2;
+        let mut x = ((w - 2 - total) / 2).max(0);
+        for (text, command, width, default) in buttons {
+            dialog.add(Button::new(
+                Rect::new(x, ROWS + 2, x + width, ROWS + 4),
+                text,
+                command,
+                default,
+            ));
+            x += width + 2;
+        }
+        dialog.set_initial_focus();
+        let command = dialog.execute(app);
+        let picked = dialog
+            .get(list)
+            .and_then(ListBox::get_selection)
+            .and_then(|i| all.get(i).map(|t| (i, t.clone())));
+        let (index, template) = picked?;
+        at = index;
+        let sample = || {
+            format!(
+                "\"{}\" is a sample that comes with the designer: it can be inserted, not renamed or deleted.",
+                template.name
+            )
+        };
+        match command {
+            CM_OK => return Some(template.spec),
+            CM_YES | CM_NO if template.sample => {
+                message_box_ok(app, &sample());
+            }
+            CM_YES => {
+                if let Some(name) =
+                    input_box(app, "Rename control template", "~N~ame", &template.name, 60)
+                    && let Err(e) = control_templates::rename(dir, &template.name, &name)
+                {
+                    message_box_error(app, &e);
+                }
+            }
+            CM_NO => {
+                let question = format!("Delete the control template \"{}\"?", template.name);
+                if confirmation_box_yes_no(app, &question) == CM_YES
+                    && let Err(e) = control_templates::delete(dir, &template.name)
                 {
                     message_box_error(app, &e);
                 }
@@ -1186,6 +1331,8 @@ fn menu_bar(width: i16) -> MenuBar {
             MenuItem::separator(),
             item("~M~ove to container...", CM_MOVE_MENU, Some(k.move_to)),
             item("~S~et tab order...", CM_SET_ORDER, Some(k.set_order)),
+            MenuItem::separator(),
+            item("Sa~v~e as control template...", CM_SAVE_CONTROLS, None),
         ]),
     ));
     bar.add_submenu(SubMenu::new(
@@ -1209,6 +1356,7 @@ fn menu_bar(width: i16) -> MenuBar {
     // Ins, and each section opens its own small menu.
     let mut insert = vec![
         item("C~h~oose...", CM_INSERT_MENU, Some(k.insert)),
+        item("Control te~m~plate...", CM_CONTROL_TEMPLATES, None),
         MenuItem::separator(),
     ];
     insert.extend(

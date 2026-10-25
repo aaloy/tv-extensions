@@ -2,3 +2,5 @@
 Cargo.lock
 /website/site
 .DS_Store
+# The dialog designer keeps your control templates here
+/templates/controls

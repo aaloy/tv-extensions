@@ -48,6 +48,14 @@ Requires turbo-vision 4.1.0.
   them evenly (one or two over their container). A selected line drawn as
   a box is marked by its edge. Save as asks for the file in a file dialog
   of `.json` files.
+- `examples/dialog_designer`: control templates. Edit > Save as control
+  template keeps the selected controls under a name (in
+  `templates/controls`); Insert > Control template opens a manager to
+  insert one (fresh names, its label links kept, selected together), or
+  rename and delete your own. Seven built-in samples: OK / Cancel,
+  OK / Cancel / Help, Yes / No / Cancel, Label and input, Search, Sign in
+  fields and Address. Yes-or-no questions (delete, replace) ask with Yes
+  and No only.
 - `AutoComplete::set_text`, so code can fill the field.
 - `forms::json` (feature `json`): a form described as JSON and answered as
   JSON, for an agent or an MCP tool that needs a person to fill something

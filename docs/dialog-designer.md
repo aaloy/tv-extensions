@@ -248,6 +248,27 @@ from: `login`, `contact_form`, `find_replace`, `settings` (tabs),
 `confirm`, `about`, `list_picker` (a dual list), `table_browser` (a table
 with Add, Edit and Delete) and `progress`.
 
+### Control templates
+
+A control template is a group of controls kept to insert again: OK and
+Cancel, a label with its input, a search field with its button. Select
+the controls (Ctrl+click or a band), then Edit > Save as control
+template... asks for a name. Insert > Control template... opens the
+control template manager: Insert puts the one selected into the dialog,
+below the selected control or at the top left, kept together, with names
+not in use and the label links among them kept. The inserted controls
+come selected together, ready to drag or arrange into place.
+
+The designer comes with samples: OK / Cancel, OK / Cancel / Help,
+Yes / No / Cancel, Label and input, Search, Sign in fields and Address
+(a group box with street, city and ZIP). They are built in: they can be
+inserted, not renamed or deleted, and their names cannot be reused. Your
+own are files in the `controls` folder of the templates folder
+(`templates/controls`), where Rename and Delete look after them.
+
+A label linked to a control outside the selection loses its link in the
+template.
+
 ### Testing
 
 F9 runs the dialog as an application would: type, tab, press its buttons.

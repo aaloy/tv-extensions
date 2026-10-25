@@ -380,6 +380,22 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              and progress.",
         ),
         topic(
+            "Control templates",
+            "A control template is a group of controls to insert again, such\n\
+             as OK and Cancel, or a label with its input. Select them\n\
+             (Ctrl+click or a band), then Edit > Save as control template\n\
+             and give it a name.\n\
+             \n\
+             Insert > Control template lists them: Insert puts one in the\n\
+             dialog, below the selection, with fresh names and its label\n\
+             links kept, all selected to drag into place. Rename and Delete\n\
+             look after your own, kept in templates/controls.\n\
+             \n\
+             The samples come with the designer: OK / Cancel, OK / Cancel /\n\
+             Help, Yes / No / Cancel, Label and input, Search, Sign in\n\
+             fields and Address. They cannot be renamed or deleted.",
+        ),
+        topic(
             "Testing and using it",
             "Dialog > Test runs the dialog as an application would: type, tab,\n\
              press its buttons, and see what it answers. Dialog > Show JSON\n\
@@ -603,7 +619,7 @@ mod tests {
     #[test]
     fn the_contents_lists_the_topics_then_every_control() {
         let all = topics(&crate::keys::PC);
-        assert_eq!(all.len(), 10 + KINDS.len());
+        assert_eq!(all.len(), 11 + KINDS.len());
         assert!(
             all.iter()
                 .all(|t| !t.title.is_empty() && !t.text.is_empty())

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "title": "Address",
+  "width": 44,
+  "height": 9,
+  "controls": [
+    { "type": "group_box", "x": 0, "y": 0, "w": 42, "h": 7, "title": "Address", "controls": [
+      { "type": "label", "x": 1, "y": 0, "w": 8, "h": 1, "text": "~S~treet", "link": "street" },
+      { "type": "input", "name": "street", "x": 10, "y": 0, "w": 29, "h": 1 },
+      { "type": "label", "x": 1, "y": 2, "w": 8, "h": 1, "text": "~C~ity", "link": "city" },
+      { "type": "input", "name": "city", "x": 10, "y": 2, "w": 18, "h": 1 },
+      { "type": "label", "x": 1, "y": 4, "w": 8, "h": 1, "text": "~Z~IP", "link": "zip" },
+      { "type": "input", "name": "zip", "x": 10, "y": 4, "w": 10, "h": 1 }
+    ] }
+  ]
+}

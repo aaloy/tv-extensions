@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "title": "Sign in fields",
+  "width": 41,
+  "height": 5,
+  "controls": [
+    { "type": "label", "x": 0, "y": 0, "w": 10, "h": 1, "text": "~U~ser", "link": "user" },
+    { "type": "input", "name": "user", "x": 11, "y": 0, "w": 28, "h": 1, "max_len": 60, "required": true },
+    { "type": "label", "x": 0, "y": 2, "w": 10, "h": 1, "text": "~P~assword", "link": "password" },
+    { "type": "input", "name": "password", "x": 11, "y": 2, "w": 28, "h": 1, "max_len": 60, "required": true }
+  ]
+}

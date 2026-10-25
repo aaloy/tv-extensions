@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "title": "Yes / No / Cancel",
+  "width": 38,
+  "height": 4,
+  "controls": [
+    { "type": "button", "x": 0, "y": 0, "w": 10, "h": 2, "text": "~Y~es", "command": "yes", "default": true },
+    { "type": "button", "x": 12, "y": 0, "w": 10, "h": 2, "text": "~N~o", "command": "no" },
+    { "type": "button", "x": 24, "y": 0, "w": 12, "h": 2, "text": "Cancel", "command": "cancel" }
+  ]
+}

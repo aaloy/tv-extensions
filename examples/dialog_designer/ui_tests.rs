@@ -1104,3 +1104,145 @@ fn save_as_asks_for_the_file_in_a_file_dialog() {
         Some(second.as_path())
     );
 }
+
+/// A label linked to its input, and a button, in the dialog; a label
+/// linked to something else.
+fn form_design() -> Design {
+    let spec = DialogSpec::from_json(
+        r#"{ "title": "F", "width": 50, "height": 16, "controls": [
+            { "type": "label", "x": 4, "y": 3, "w": 6, "h": 1, "text": "~N~ame", "link": "name" },
+            { "type": "input", "name": "name", "x": 11, "y": 3, "w": 20, "h": 1 },
+            { "type": "label", "x": 4, "y": 5, "w": 6, "h": 1, "text": "~A~ge", "link": "age" },
+            { "type": "input", "name": "age", "x": 11, "y": 5, "w": 6, "h": 1 }
+        ] }"#,
+    )
+    .unwrap();
+    Design::new(spec, None)
+}
+
+#[test]
+fn the_selection_becomes_a_template_at_its_corner() {
+    let mut design = form_design();
+    design.select(Sel::top(1));
+    design.toggle(Sel::top(0));
+    design.toggle(Sel::top(2)); // the age label, without its input
+    let t = design.selection_template("Pair").unwrap();
+    assert_eq!(t.title, "Pair");
+    // In tab order, moved to the corner; just big enough, with the frame.
+    let at: Vec<(i16, i16)> = t.controls.iter().map(|c| (c.x, c.y)).collect();
+    assert_eq!(at, [(0, 0), (7, 0), (0, 2)]);
+    assert_eq!((t.width, t.height), (29, 5));
+    let links: Vec<Option<String>> = t
+        .controls
+        .iter()
+        .map(|c| match &c.kind {
+            Kind::Label { link, .. } => link.clone(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(links, [Some("name".to_string()), None, None]);
+    t.check().unwrap();
+
+    design.select(Sel::Dialog);
+    assert!(design.selection_template("x").is_none());
+}
+
+#[test]
+fn a_template_is_inserted_below_the_selection_renamed_and_selected() {
+    let mut design = form_design();
+    let template = {
+        let mut d = form_design();
+        d.select(Sel::top(0));
+        d.toggle(Sel::top(1));
+        d.selection_template("Pair").unwrap()
+    };
+    design.select(Sel::top(3)); // the age input, at (11, 5)
+    assert!(design.insert_template(&template));
+    let c = &design.spec.controls;
+    assert_eq!(c.len(), 6);
+    // After the age input, below it, keeping their shape.
+    assert_eq!((c[4].x, c[4].y, c[5].x, c[5].y), (11, 7, 18, 7));
+    // A name not in use, and the label follows it.
+    assert_eq!(c[5].name, "name1");
+    assert!(matches!(&c[4].kind, Kind::Label { link: Some(l), .. } if l == "name1"));
+    assert_eq!(design.selection(), [Sel::top(4), Sel::top(5)]);
+    design.spec.check().unwrap();
+    // One undo step.
+    assert!(design.undo());
+    assert_eq!(design.spec.controls.len(), 4);
+}
+
+#[test]
+fn a_template_too_far_down_moves_up_to_fit_whole() {
+    let mut design = form_design();
+    let tall = control_templates::list(Path::new("/nonexistent"))
+        .into_iter()
+        .find(|t| t.name == "Address")
+        .unwrap()
+        .spec;
+    design.set_place(Sel::top(3), (11, 12, 6, 1));
+    design.select(Sel::top(3));
+    assert!(design.insert_template(&tall));
+    // 14 rows inside; the group box is 7 high, so it starts at 7.
+    let group = &design.spec.controls[4];
+    assert_eq!((group.y, group.h), (7, 7));
+}
+
+#[test]
+fn the_selection_is_saved_as_a_control_template() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, form_design());
+    designer.design.borrow_mut().select(Sel::top(0));
+    designer.design.borrow_mut().toggle(Sel::top(1));
+    let tmp = tempfile::tempdir().unwrap();
+    queue_text(&mut app, "Name field");
+    queue(&mut app, &[KB_ENTER, KB_ENTER]);
+    designer.save_controls(&mut app, tmp.path());
+    let mine: Vec<_> = control_templates::list(tmp.path())
+        .into_iter()
+        .filter(|t| !t.sample)
+        .collect();
+    assert_eq!(mine.len(), 1);
+    assert_eq!(mine[0].name, "Name_field");
+    assert_eq!(mine[0].spec.controls.len(), 2);
+}
+
+#[test]
+fn the_control_template_manager_inserts_the_one_picked() {
+    let mut app = app();
+    let mut designer = open_designer(&mut app, Design::default());
+    let tmp = tempfile::tempdir().unwrap();
+    // The first is OK / Cancel.
+    queue(&mut app, &[KB_ENTER]);
+    designer.insert_controls(&mut app, tmp.path());
+    let design = designer.design.borrow();
+    let texts: Vec<String> = design
+        .spec
+        .controls
+        .iter()
+        .filter_map(|c| match &c.kind {
+            Kind::Button { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, ["~O~K", "Cancel"]);
+    assert_eq!(design.selection().len(), 2);
+}
+
+#[test]
+fn the_manager_does_not_delete_a_sample_but_deletes_yours() {
+    use turbo_vision::core::event::{KB_ALT_D, KB_ESC};
+    let mut app = app();
+    let tmp = tempfile::tempdir().unwrap();
+    control_templates::save(tmp.path(), "zz mine", &DialogSpec::new("m", 20, 4)).unwrap();
+    // Delete on the first (a sample): told no. Then on the last (yours):
+    // asked, Yes; then close.
+    let mut keys = vec![KB_ALT_D, KB_ENTER];
+    keys.extend([KB_DOWN; 7]);
+    keys.extend([KB_ALT_D, KB_ENTER, KB_ESC]);
+    queue(&mut app, &keys);
+    assert!(manage_control_templates(&mut app, tmp.path()).is_none());
+    let left = control_templates::list(tmp.path());
+    assert!(left.iter().all(|t| t.sample), "{left:?}");
+    assert_eq!(left.len(), 7);
+}

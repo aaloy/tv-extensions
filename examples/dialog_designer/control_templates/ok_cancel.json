@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "title": "OK / Cancel",
+  "width": 26,
+  "height": 4,
+  "controls": [
+    { "type": "button", "x": 0, "y": 0, "w": 10, "h": 2, "text": "~O~K", "default": true },
+    { "type": "button", "x": 12, "y": 0, "w": 12, "h": 2, "text": "Cancel", "command": "cancel" }
+  ]
+}

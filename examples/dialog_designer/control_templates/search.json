@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "title": "Search",
+  "width": 46,
+  "height": 4,
+  "controls": [
+    { "type": "label", "x": 0, "y": 0, "w": 6, "h": 1, "text": "~F~ind", "link": "query" },
+    { "type": "input", "name": "query", "x": 7, "y": 0, "w": 24, "h": 1 },
+    { "type": "button", "x": 32, "y": 0, "w": 12, "h": 2, "text": "~S~earch", "command": "search", "default": true }
+  ]
+}

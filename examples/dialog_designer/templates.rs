@@ -183,8 +183,15 @@ mod tests {
             t.spec.check().unwrap_or_else(|e| panic!("{}: {e}", t.name));
             JsonDialog::new(&t.spec).unwrap_or_else(|e| panic!("{}: {e}", t.name));
         }
-        // Every file in the folder is a valid template.
-        let files = std::fs::read_dir(&dir).unwrap().count();
+        // Every JSON file in the folder is a valid template (`controls`, the
+        // control templates' folder, may be there too).
+        let files = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .is_ok_and(|e| e.path().extension().is_some_and(|x| x == "json"))
+            })
+            .count();
         assert_eq!(files, list(&dir).len(), "a sample is not a valid dialog");
     }
 }
