@@ -255,7 +255,12 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
                 JsonDialog::load reads.\n\
              \n\
              Give a control a name and its value comes back under that name\n\
-             when the dialog is accepted.",
+             when the dialog is accepted.\n\
+             \n\
+             Ctrl+click or a band selects several controls, to move them\n\
+             together or line them up with the Arrange menu. Insert >\n\
+             Control template inserts ready-made groups, such as OK and\n\
+             Cancel; Edit > Save as control template keeps your own.",
         ),
         topic("Keys", &crate::keys::help(keys)),
         topic(

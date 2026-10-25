@@ -9,7 +9,9 @@ every control of turbo-vision core plus this crate's `AutoComplete` and
 Two parts, feature `dialog`:
 
 - **The designer**, `examples/dialog_designer`: a Turbo Vision application
-  that edits a dialog spec.
+  that edits a dialog spec. Select one control or several, line them up
+  with the Arrange menu, and keep dialogs and groups of controls as
+  templates to start from or insert again.
 - **The runtime**, `tv_extensions::dialog_spec`: `DialogSpec`, the JSON
   file, and `JsonDialog`, the live dialog built from it.
 
@@ -27,7 +29,7 @@ cargo run --example dialog_designer --features native,dialog -- customer.json
 The file is opened if it exists and created on the first save if not.
 
 ```text
-  File  Edit  Insert  Dialog  View  Help
+  File  Edit  Arrange  Insert  Dialog  View  Help
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░╔═[■]══════ Inspector ═════[▲]═╗░░
 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║(not saved)                   ║░░
 ░░░╔═[■]═════════════════ Customer ═══════════════════╗░║                             ▲║░░
@@ -78,13 +80,16 @@ saving it for use in code. Try each step in the designer behind the window.
 |----|-------|------|
 | Select a control | click it | Tab / Shift+Tab, in tab order |
 | Select the container | click empty space | Esc (a page's control → its tabs → the dialog) |
-| Select several | Ctrl+click (or Shift or Alt) each, or drag a band over empty space | |
+| Select several | Ctrl+click (or Shift or Alt) each, or drag a band over empty space (in the dialog, a group box or a tab page) | |
 | Move it (or all those selected) | drag it | arrows |
 | Resize it | drag its yellow corner | Shift+arrows or Ctrl+arrows |
 | Resize the dialog | drag the frame's bottom-right corner | select the dialog, then Shift+arrows |
 | Insert a control | right click | Ins, or the Insert menu |
 | Edit its properties | double click | Enter |
+| Align, size or space them | | the Arrange menu |
 | Delete (all those selected) / duplicate | | Del / Ctrl+D |
+| Keep them as a control template | | Edit > Save as control template... |
+| Insert a control template | | Insert > Control template... |
 | Earlier / later in tab order | | F7 / F8 |
 | Set the whole tab order | | F5 |
 | Show the tab order | | Ctrl+O |
@@ -162,7 +167,8 @@ undo step, and keeps the controls inside their container.
 ### Inserting
 
 A new control goes after the selected one in tab order, just below it, and
-gets a name of its type (`input1`, `combo2`). Two shortcuts follow how
+gets a name of its type (`input1`, `combo2`). To insert a whole group at
+once, such as OK and Cancel, use a [control template](#control-templates). Two shortcuts follow how
 dialogs are built:
 
 - **After a label**, a control with a value goes to the label's right on the

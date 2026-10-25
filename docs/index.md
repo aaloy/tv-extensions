@@ -37,7 +37,7 @@ let cells = app.terminal.buffer();
 - [AutoComplete](autocomplete.md): a text field that filters a suggestion list as you type, taking free text or requiring one of the items (always available, no feature flag).
 - [DualList](dual-list.md): two lists side by side for picking a subset of items, with filters (always available, no feature flag).
 - [Forms](forms.md): dialogs laid out from labelled fields with no coordinates, and record forms that edit a struct of yours with validation (always available; date fields need the default `chrono` feature).
-- [Dialog designer and JSON dialogs](dialog-designer.md) (feature `dialog`): lay a dialog out with the mouse, save it as JSON, load it at run time and bind validation and actions to its controls by name.
+- [Dialog designer and JSON dialogs](dialog-designer.md) (feature `dialog`): lay a dialog out with the mouse (select several controls, align and distribute them, insert ready-made groups such as OK / Cancel), save it as JSON, load it at run time and bind validation and actions to its controls by name.
 - [Dialog tutorial](dialog-tutorial.md) (feature `dialog`): build a working order form from a JSON file, with events, an action and rules; the finished program is `examples/dialog_order.rs`.
 - [Dialog JSON reference](dialog-json.md) (feature `dialog`): the whole JSON format on one page, for writing dialogs by hand or by an agent, with `dialog_check` to validate and draw a file.
 - [CSV editor](csv.md) (feature `csv`): a table editor, host-driven like `host`.

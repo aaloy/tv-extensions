@@ -89,7 +89,11 @@ pub fn help(k: &Keys) -> String {
         "\
 Mouse
   Click            select a control
-  Drag             move it
+  Ctrl+click       add it to the selection, or take it out
+    (Shift, Alt)
+  Drag on empty    a band: select the controls inside it
+    space
+  Drag             move it (or all those selected)
   Drag the yellow  resize it (or the dialog)
     corner
   Drag the frame   move the dialog about the desktop
@@ -105,8 +109,9 @@ Keys
   Shift/Ctrl+Arrow resize one cell
   Enter            properties
   {insert:<16} insert a control
-  {delete:<16} delete
+  {delete:<16} delete (all those selected)
   Ctrl+D           duplicate
+  Arrange menu     align, size or space the selection
   {tab_order:<16} earlier / later in tab order
   {move_to:<16} move to another container
   {set_order:<16} set the tab order
