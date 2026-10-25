@@ -1258,7 +1258,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use turbo_vision::core::command::CM_OK;
-    use turbo_vision::core::event::{KB_ALT_O, KB_ESC};
+    use turbo_vision::core::event::{KB_ALT_O, KB_ESC, KB_TAB};
 
     #[derive(Debug, Clone, Default, PartialEq)]
     enum Kind {
@@ -1663,6 +1663,55 @@ mod tests {
             }
         });
         assert_eq!(attempts, 2);
+        assert_eq!(saved, Some(ada()));
+    }
+
+    #[test]
+    fn edit_synced_shows_what_sync_changes_when_the_focus_leaves_a_field() {
+        let mut app = app();
+        let (mut e, ids) = editor();
+        let tx = app.terminal.event_injector();
+        tx.send(Event::keyboard(KB_TAB)).unwrap(); // from Name to Email
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        let mut calls = 0;
+        let saved = e.edit_synced(
+            &mut app,
+            ada(),
+            |c| {
+                calls += 1;
+                let half = Some(c.age / 2);
+                let changed = c.discount != half;
+                c.discount = half;
+                changed
+            },
+            |_| Ok(()),
+        );
+        assert!(calls >= 1);
+        assert_eq!(
+            text(&e, ids.discount),
+            "18",
+            "the field shows the new value"
+        );
+        assert_eq!(saved.map(|c| c.discount), Some(Some(18)));
+    }
+
+    #[test]
+    fn edit_synced_leaves_the_fields_when_sync_says_nothing_changed() {
+        let mut app = app();
+        let (mut e, ids) = editor();
+        let tx = app.terminal.event_injector();
+        tx.send(Event::keyboard(KB_TAB)).unwrap();
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        let saved = e.edit_synced(
+            &mut app,
+            ada(),
+            |c| {
+                c.discount = Some(99);
+                false
+            },
+            |_| Ok(()),
+        );
+        assert_eq!(text(&e, ids.discount), "");
         assert_eq!(saved, Some(ada()));
     }
 }
