@@ -40,6 +40,12 @@ Requires turbo-vision 4.1.0.
   for real (F9), see its JSON (F4) and the Rust that loads it and binds its
   actions (Ctrl+G). `examples/dialog_from_json` uses a designed dialog in an
   application.
+- `examples/dialog_designer`: several controls selected at once, with
+  Ctrl+click (or Shift or Alt) or a band dragged over the empty space of
+  the dialog, a group box or a tab page, to move or delete together. An
+  Arrange menu aligns their edges or centres (one control alone aligns to
+  its container), gives them the same width or height, and distributes
+  them evenly. A selected line drawn as a box is marked by its edge.
 - `AutoComplete::set_text`, so code can fill the field.
 - `forms::json` (feature `json`): a form described as JSON and answered as
   JSON, for an agent or an MCP tool that needs a person to fill something
