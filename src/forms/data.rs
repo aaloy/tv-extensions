@@ -986,6 +986,22 @@ impl<R: Clone + 'static> Editor<R> {
         &mut self,
         app: &mut Application,
         record: R,
+        submit: impl FnMut(&R) -> Result<(), ValidationErrors>,
+    ) -> Option<R> {
+        self.edit_synced(app, record, |_| false, submit)
+    }
+
+    /// Like [`edit_with`](Self::edit_with), and calls `sync` each time the
+    /// focus leaves a field, with the record as the fields now describe it
+    /// (only when every field reads). `sync` may change the record, for
+    /// fields that depend on each other (the end of one stretch is the
+    /// start of the next); it returns whether it did, and the fields then
+    /// show the new values.
+    pub fn edit_synced(
+        &mut self,
+        app: &mut Application,
+        record: R,
+        mut sync: impl FnMut(&mut R) -> bool,
         mut submit: impl FnMut(&R) -> Result<(), ValidationErrors>,
     ) -> Option<R> {
         self.load(record);
@@ -1022,14 +1038,23 @@ impl<R: Clone + 'static> Editor<R> {
                         focus = focused_view(dialog);
                     }
                 }
-            } else if live {
+            } else {
                 let now = focused_view(dialog);
                 if now != focus {
                     focus = now;
-                    *errors = read_record(bindings, rules, base, dialog)
-                        .err()
-                        .unwrap_or_default();
-                    display(dialog, bindings, *error_line, errors);
+                    if let Ok(mut current) = read_record(bindings, rules, base, dialog)
+                        && sync(&mut current)
+                    {
+                        for binding in bindings.iter() {
+                            binding.load(&mut current, dialog);
+                        }
+                    }
+                    if live {
+                        *errors = read_record(bindings, rules, base, dialog)
+                            .err()
+                            .unwrap_or_default();
+                        display(dialog, bindings, *error_line, errors);
+                    }
                 }
             }
             ModalTick::Continue
