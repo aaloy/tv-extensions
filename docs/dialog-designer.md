@@ -123,6 +123,11 @@ arrows) is the same. The designer picks the set from the operating system;
 `DIALOG_DESIGNER_KEYS=mac` or `=pc` overrides it, for a Mac with a full
 keyboard or a PC terminal that sends Ctrl+letters.
 
+Save asks for a file the first time, and File > Save as every time, in a
+file dialog that lists the `.json` files and starts in the folder of the
+last save. A name typed without an extension gets `.json`, and another
+file already there is replaced only after asking.
+
 A drag is one undo step. Moves and resizes keep a control inside its
 container, the dialog or its tab page.
 
@@ -149,7 +154,7 @@ The Arrange menu lines the selection up, as drawing programs do:
 | Align top / bottom edges | to its top or bottom | to the container's top or bottom |
 | Center vertically | to its middle, down | centred down the container |
 | Same width / Same height | the size of the first one selected | |
-| Distribute across / down | three or more spaced evenly; the outermost two stay | |
+| Distribute across / down | three or more spaced evenly; the outermost two stay | one or two spread over the container, the gaps to its edges equal too |
 
 The container is the dialog, a group box or a tab page. Each item is one
 undo step, and keeps the controls inside their container.

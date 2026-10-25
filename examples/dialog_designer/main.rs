@@ -195,17 +195,9 @@ impl Designer {
         let path = match known {
             Some(path) if !ask => path,
             _ => {
-                let start = known.as_ref().and_then(|p| p.file_name()).map_or_else(
-                    || "dialog.json".to_string(),
-                    |n| n.to_string_lossy().into_owned(),
-                );
-                let Some(name) = input_box(app, "Save as", "~F~ile name", &start, 200) else {
+                let Some(path) = Self::ask_save_path(app, known.as_deref()) else {
                     return false;
                 };
-                let mut path = PathBuf::from(name.trim());
-                if path.extension().is_none() {
-                    path.set_extension("json");
-                }
                 path
             }
         };
@@ -220,6 +212,33 @@ impl Designer {
                 false
             }
         }
+    }
+
+    /// Ask where to save the JSON, in a file dialog that starts in the
+    /// folder of the file it was last saved to. A name without an extension
+    /// gets `.json`; another file already there is replaced only if the
+    /// person says so.
+    fn ask_save_path(app: &mut Application, known: Option<&Path>) -> Option<PathBuf> {
+        let start = known
+            .and_then(Path::parent)
+            .filter(|p| p.is_dir())
+            .map(Path::to_path_buf);
+        let (w, h) = app.terminal.size();
+        let bounds = centred(Rect::new(0, 0, w, h), 60.min(w), 20.min(h));
+        let mut dialog = FileDialog::new(bounds, "Save dialog as", "*.json", start)
+            .with_button_label("~S~ave")
+            .build();
+        let mut path = dialog.execute(app)?;
+        if path.extension().is_none() {
+            path.set_extension("json");
+        }
+        if path.exists() && known != Some(path.as_path()) {
+            let question = format!("{} exists. Replace it?", path.display());
+            if confirmation_box(app, &question) != CM_YES {
+                return None;
+            }
+        }
+        Some(path)
     }
 
     fn open(&mut self, app: &mut Application) {

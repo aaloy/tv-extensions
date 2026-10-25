@@ -4,7 +4,9 @@
 //! and the screen checked.
 
 use super::*;
-use turbo_vision::core::event::{KB_DOWN, KB_ENTER, KB_LEFT, KB_RIGHT, KB_UP, MB_LEFT_BUTTON};
+use turbo_vision::core::event::{
+    KB_DEL, KB_DOWN, KB_ENTER, KB_HOME, KB_LEFT, KB_RIGHT, KB_UP, MB_LEFT_BUTTON,
+};
 use turbo_vision::core::palette::Attr;
 use turbo_vision::test_util::test_terminal;
 use turbo_vision::views::button::set_press_animation;
@@ -959,13 +961,15 @@ fn distribute_makes_the_gaps_equal_and_keeps_the_outermost() {
 }
 
 #[test]
-fn same_size_and_distribute_need_enough_controls() {
+fn same_size_needs_two_and_the_dialog_is_not_arranged() {
     let mut design = three_inputs();
+    design.set_place(Sel::top(1), (5, 5, 16, 1));
     design.select(Sel::top(0));
     assert!(!design.same_size(true));
     design.toggle(Sel::top(1));
-    assert!(!design.distribute(true));
+    assert!(design.same_size(true));
     design.select(Sel::Dialog);
+    assert!(!design.distribute(true));
     assert!(!design.align(Arrange::Left));
 }
 
@@ -1051,4 +1055,52 @@ fn a_band_selects_several_in_a_group_box_and_on_a_tab_page() {
         mouse(&mut app, &mut designer, EventType::MouseUp, to);
         assert_eq!(names_selected(&designer), [one, two]);
     }
+}
+
+#[test]
+fn one_or_two_controls_distribute_over_their_container() {
+    // Inside the default dialog's frame: 48 x 12.
+    let mut design = three_inputs();
+    design.select(Sel::top(0));
+    design.toggle(Sel::top(1));
+    // 28 columns to share out, a gap before, between and after: 10, 9, 9.
+    assert!(design.distribute(true));
+    assert_eq!(xs(&design)[..2], [10, 29]);
+    // Down: 10 rows, 4, 3, 3.
+    assert!(design.distribute(false));
+    assert_eq!(ys(&design)[..2], [4, 8]);
+    assert!(!design.distribute(false), "already even");
+
+    // One alone: centred.
+    design.select(Sel::top(2));
+    assert!(design.distribute(true));
+    assert_eq!(xs(&design)[2], 19);
+}
+
+#[test]
+fn save_as_asks_for_the_file_in_a_file_dialog() {
+    let tmp = tempfile::tempdir().unwrap();
+    let first = tmp.path().join("first.json");
+    let mut design = Design::default();
+    design.saved(first.clone());
+    let mut app = app();
+    let mut designer = open_designer(&mut app, design);
+    // The dialog starts in the folder of the file; type a name, no extension.
+    queue_key(&mut app, KB_HOME);
+    for _ in 0..10 {
+        queue_key(&mut app, KB_DEL);
+    }
+    queue_text(&mut app, "second");
+    queue_key(&mut app, KB_ENTER);
+    command(&mut app, &mut designer, CM_SAVE_AS);
+    let second = tmp.path().join("second.json");
+    assert!(
+        second.exists(),
+        "{:?}",
+        std::fs::read_dir(tmp.path()).unwrap().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        designer.design.borrow().path.as_deref(),
+        Some(second.as_path())
+    );
 }

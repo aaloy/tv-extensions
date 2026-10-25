@@ -292,7 +292,8 @@ pub fn topics(keys: &Keys) -> Vec<Topic> {
              Same width and Same height give them all the size of the first\n\
              one selected. Distribute across or down spaces three or more\n\
              evenly: the outermost two stay, and the gaps between them all\n\
-             become equal. Each is one undo step.",
+             become equal. One or two are spread over the container, with\n\
+             equal gaps to its edges too. Each is one undo step.",
         ),
         topic(
             "Containers",

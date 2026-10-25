@@ -1206,27 +1206,36 @@ impl Design {
         self.place_all(&all, &at, Some(&sizes))
     }
 
-    /// Space the selected controls evenly, across or down: the first and
-    /// the last stay, the others go so the gaps between them are equal.
-    /// Needs three or more.
+    /// Space the selected controls evenly, across or down. Three or more:
+    /// the first and the last stay, the others go so the gaps between them
+    /// are equal. One or two: they spread over the container, with equal
+    /// gaps between them and to its edges.
     pub fn distribute(&mut self, across: bool) -> bool {
         let all = self.selection();
         let Some(rects) = self.places_of(&all) else {
             return false;
         };
         let n = rects.len();
-        if n < 3 {
-            return false;
-        }
         // Start and length along the axis, in order along it.
         let span = |&(x, y, w, h): &(i16, i16, i16, i16)| if across { (x, w) } else { (y, h) };
         let mut order: Vec<usize> = (0..n).collect();
         order.sort_by_key(|&i| span(&rects[i]).0);
-        let (first, _) = span(&rects[order[0]]);
-        let (last, last_len) = span(&rects[order[n - 1]]);
         let lengths: i16 = order.iter().map(|&i| span(&rects[i]).1).sum();
-        let room = last + last_len - first - lengths;
-        let gaps = i16::try_from(n - 1).unwrap_or(i16::MAX);
+        let (cw, ch) = self.container_size(self.sel);
+        let (first, room, gaps) = if n >= 3 {
+            let (first, _) = span(&rects[order[0]]);
+            let (last, last_len) = span(&rects[order[n - 1]]);
+            let gaps = i16::try_from(n - 1).unwrap_or(i16::MAX);
+            (first, last + last_len - first - lengths, gaps)
+        } else {
+            // The edges count as gaps too; the cells left over go to the
+            // gaps nearest the start, so the first gap comes before the first.
+            let room = if across { cw } else { ch } - lengths;
+            let gaps = i16::try_from(n + 1).unwrap_or(i16::MAX);
+            let first = room / gaps + i16::from(room % gaps > 0);
+            let room = room - first;
+            (first, room, gaps - 1)
+        };
         let mut moved: Vec<(i16, i16)> = rects.iter().map(|&(x, y, _, _)| (x, y)).collect();
         let mut at = first;
         for (k, &i) in order.iter().enumerate() {
