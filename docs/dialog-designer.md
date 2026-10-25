@@ -15,9 +15,11 @@ Two parts, feature `dialog`:
 - **The runtime**, `tv_extensions::dialog_spec`: `DialogSpec`, the JSON
   file, and `JsonDialog`, the live dialog built from it.
 
+The `dialog` feature is not in a release yet, so depend on `main`:
+
 ```toml
 [dependencies]
-tv-extensions = { version = "0.3", features = ["dialog"] }
+tv-extensions = { git = "https://github.com/aovestdipaperino/tv-extensions", branch = "main", features = ["dialog"] }
 ```
 
 ## The designer
