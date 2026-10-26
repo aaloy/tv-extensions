@@ -986,6 +986,22 @@ impl<R: Clone + 'static> Editor<R> {
         &mut self,
         app: &mut Application,
         record: R,
+        submit: impl FnMut(&R) -> Result<(), ValidationErrors>,
+    ) -> Option<R> {
+        self.edit_synced(app, record, |_| false, submit)
+    }
+
+    /// Like [`edit_with`](Self::edit_with), and calls `sync` each time the
+    /// focus leaves a field, with the record as the fields now describe it
+    /// (only when every field reads). `sync` may change the record, for
+    /// fields that depend on each other (the end of one stretch is the
+    /// start of the next); it returns whether it did, and the fields then
+    /// show the new values.
+    pub fn edit_synced(
+        &mut self,
+        app: &mut Application,
+        record: R,
+        mut sync: impl FnMut(&mut R) -> bool,
         mut submit: impl FnMut(&R) -> Result<(), ValidationErrors>,
     ) -> Option<R> {
         self.load(record);
@@ -1022,14 +1038,23 @@ impl<R: Clone + 'static> Editor<R> {
                         focus = focused_view(dialog);
                     }
                 }
-            } else if live {
+            } else {
                 let now = focused_view(dialog);
                 if now != focus {
                     focus = now;
-                    *errors = read_record(bindings, rules, base, dialog)
-                        .err()
-                        .unwrap_or_default();
-                    display(dialog, bindings, *error_line, errors);
+                    if let Ok(mut current) = read_record(bindings, rules, base, dialog)
+                        && sync(&mut current)
+                    {
+                        for binding in bindings.iter() {
+                            binding.load(&mut current, dialog);
+                        }
+                    }
+                    if live {
+                        *errors = read_record(bindings, rules, base, dialog)
+                            .err()
+                            .unwrap_or_default();
+                        display(dialog, bindings, *error_line, errors);
+                    }
                 }
             }
             ModalTick::Continue
@@ -1233,7 +1258,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use turbo_vision::core::command::CM_OK;
-    use turbo_vision::core::event::{KB_ALT_O, KB_ESC};
+    use turbo_vision::core::event::{KB_ALT_O, KB_ESC, KB_TAB};
 
     #[derive(Debug, Clone, Default, PartialEq)]
     enum Kind {
@@ -1638,6 +1663,55 @@ mod tests {
             }
         });
         assert_eq!(attempts, 2);
+        assert_eq!(saved, Some(ada()));
+    }
+
+    #[test]
+    fn edit_synced_shows_what_sync_changes_when_the_focus_leaves_a_field() {
+        let mut app = app();
+        let (mut e, ids) = editor();
+        let tx = app.terminal.event_injector();
+        tx.send(Event::keyboard(KB_TAB)).unwrap(); // from Name to Email
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        let mut calls = 0;
+        let saved = e.edit_synced(
+            &mut app,
+            ada(),
+            |c| {
+                calls += 1;
+                let half = Some(c.age / 2);
+                let changed = c.discount != half;
+                c.discount = half;
+                changed
+            },
+            |_| Ok(()),
+        );
+        assert!(calls >= 1);
+        assert_eq!(
+            text(&e, ids.discount),
+            "18",
+            "the field shows the new value"
+        );
+        assert_eq!(saved.map(|c| c.discount), Some(Some(18)));
+    }
+
+    #[test]
+    fn edit_synced_leaves_the_fields_when_sync_says_nothing_changed() {
+        let mut app = app();
+        let (mut e, ids) = editor();
+        let tx = app.terminal.event_injector();
+        tx.send(Event::keyboard(KB_TAB)).unwrap();
+        tx.send(Event::keyboard(KB_ALT_O)).unwrap();
+        let saved = e.edit_synced(
+            &mut app,
+            ada(),
+            |c| {
+                c.discount = Some(99);
+                false
+            },
+            |_| Ok(()),
+        );
+        assert_eq!(text(&e, ids.discount), "");
         assert_eq!(saved, Some(ada()));
     }
 }

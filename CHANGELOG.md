@@ -13,6 +13,10 @@ Requires turbo-vision 4.1.0.
 
 ### Added
 
+- `forms`: `Editor::edit_synced`, `edit_with` with one more closure, called
+  each time the focus leaves a field with the record as the fields describe
+  it. It may change the record, for fields that depend on each other, and
+  when it says it did the fields show the new values.
 - `dialog_spec` (feature `dialog`): dialogs designed with the mouse, saved as
   JSON, and brought to life at run time. `DialogSpec` is the file: the
   dialog's size and title and its controls, each a flat object (`type`,

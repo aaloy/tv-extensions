@@ -646,6 +646,25 @@ while let Some(c) = editor.edit_with(&mut app, Customer::default(), |c| db.inser
 }
 ```
 
+**Fields that depend on each other**: `edit_synced` takes one more closure,
+called each time the focus leaves a field, with the record as the fields now
+describe it (only when every field reads). Change the record there and
+return `true`, and the fields show the new values; return `false` to leave
+them alone. For example, the end of one stretch is the start of the next:
+
+```rust
+let saved = editor.edit_synced(
+    &mut app,
+    trip,
+    |t| {
+        let changed = t.second.start != t.first.end;
+        t.second.start = t.first.end;
+        changed
+    },
+    |t| db.save(t),
+);
+```
+
 `cargo run --example form_record --features native` runs a complete example. An in-memory table
 plays the database and rejects a duplicate email. The example covers optional
 fields, a date, an enum choice, rules within one field and across fields, and
@@ -772,6 +791,7 @@ Record forms (`Form::<R>::for_record`) add:
 | `form.build_editor()` | Lay out and return the editor (`R: Clone`). | `Editor<R>` |
 | `editor.edit(&mut app, record)` | Run it; the edited record once valid. | `Option<R>` |
 | `editor.edit_with(&mut app, record, \|r\| save(r))` | The same, saving before closing. | `Option<R>` |
+| `editor.edit_synced(&mut app, record, \|r\| sync(r), \|r\| save(r))` | The same, and `sync` may change the record each time the focus leaves a field. | `Option<R>` |
 | `editor.load(record)` / `editor.read()` (needs `&mut`) | Fill the fields / check and read them, without running. | `()` / `Result<R, ValidationErrors>` |
 | `editor.show_errors(errors)` / `editor.errors()` | Show errors / the errors shown. | |
 | `editor.command()` | The button that closed the dialog last. | `CommandId` |
